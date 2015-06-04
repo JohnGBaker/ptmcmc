@@ -1,0 +1,11 @@
+ptMCMC: A parallel-tempering MCMC code.
+Package written by John Baker at NASA-GSFC (2014).
+	
+This code is currently in experimental development.  Users interested in applying the code for research applications should work in coordinated collaboration with the primary developers until the first formal release, documented in a scientific publication.
+
+------------------------------------------------------------------------------
+OTHER PEOPLE'S CODE
+
+The code applies the "NewRan" random number generation package (c) R.B Davies (http://www.robertnz.net/nr02doc.htm).
+
+
