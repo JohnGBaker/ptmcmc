@@ -2,7 +2,7 @@
 ///
 ///state objects are tied to a stateSpace object which specifies to domain.
 ///boundary objects allow specification of the domain bounraies in each dimension.
-///John G Baker - NASA-GSFC (2013-2014)
+///Written by John G Baker - NASA-GSFC (2013-2014)
 
 #ifndef PTMCMC_PROPOSAL_HH
 #define PTMCMC_PROPOSAL_HH
