@@ -31,15 +31,15 @@ docs:
 	doxygen dox.cfg
 
 testMH: testMH.cpp ${LIB}/libprobdist.a ${LIB}/libptmcmc.a
-	${CXX} $(CXXFLAGS) -o testMH -lprobdist -lptmcmc -L${LIB} $<
+	${CXX} $(CFLAGS) -o testMH -lprobdist -lptmcmc -L${LIB} $<
 
 testPT: testPT.cpp ${LIB}/libprobdist.a ${LIB}/libptmcmc.a
-	${CXX} $(CXXFLAGS) -o testPT -lprobdist -lptmcmc -L${LIB} $<
+	${CXX} $(CFLAGS) -o testPT -lprobdist -lptmcmc -L${LIB} $<
 
-.SUFFIXES: .c .cxx .o
+.SUFFIXES: .c .cc .o
 
-.cxx.o: 
-	${CXX} -c ${CFLAGS} $<
+.cc.o: 
+	${CXX} -c ${CFLAGS} -std=c++11 $<
 
 .c.o: 
 	${CC} -c ${CFLAGS} $<

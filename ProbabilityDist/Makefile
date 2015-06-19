@@ -14,9 +14,10 @@ ${INCLUDE}/ProbabilityDist.h: ProbabilityDist.h include.h newran.h myexcept.h ex
 
 
 testProbDist: ${NEWRAN_OFILES} testProbDist.cxx ProbabilityDist.o
-	$(CXX) -o testProbDist testProbDist.cxx ProbabilityDist.o ${NEWRAN_OFILES}
+	${CXX} ${CFLAGS} -o testProbDist testProbDist.cxx ProbabilityDist.o ${NEWRAN_OFILES}
 
 clean:
+	@echo "Cleaning ProbabilityDist"
 	rm -f *.o *.a 
 
 ProbabilityDist.o: ProbabilityDist.cxx ProbabilityDist.h
