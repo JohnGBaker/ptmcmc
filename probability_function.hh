@@ -6,7 +6,7 @@
 
 #ifndef PTMCMC_PROBABILITY_HH
 #define PTMCMC_PROBABILITY_HH
-#include "mcmc.hh"
+#include "bayesian.hh"
 //#include <valarray>
 //#include <vector>
 //#include <sstream>
@@ -20,8 +20,6 @@
 using namespace std;
 
 typedef unsigned int uint;
-
-class chain;
 
 //********* DERIVED CLASSES *************
 
@@ -95,9 +93,7 @@ class chain_distribution: public sampleable_probability_function{
   int istart;
   int last_sample;
 public:
-  chain_distribution(chain &c, int istart=0):c(c),istart(istart),sampleable_probability_function(c.getState().getSpace()){
-    last_sample=-1;
-  };
+  chain_distribution(chain &c, int istart=0);
   state drawSample(Random &rng);
   double evaluate_log(state &s);
   double evaluate(state &s){return exp(evaluate_log(s));};

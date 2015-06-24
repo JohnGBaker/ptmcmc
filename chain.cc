@@ -3,6 +3,10 @@
 ///The base class chain, is not useful, but MH_chain and parallel_tempering_chain should be.
 ///John G Baker - NASA-GSFC (2013-2014)
 #include "chain.hh"
+#include "proposal_distribution.hh"
+
+// Static data
+int chain::idcount=0;
 
 
 //** CHAIN Classes *******

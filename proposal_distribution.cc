@@ -1,8 +1,8 @@
-///States for MCMC
+///Proposal distirbutions for MCMC
 ///
 ///state objects are tied to a stateSpace object which specifies to domain.
 ///boundary objects allow specification of the domain bounraies in each dimension.
-///Written by John G Baker - NASA-GSFC (2013-2014)
+///Written by John G Baker - NASA-GSFC (2013-2015)
 
 #include "proposal_distribution.hh"
 #include <algorithm>
@@ -10,8 +10,6 @@
 using namespace std;
 
 //************** PROPOSAL DISTRIBUTION classes ******************************
-
-
 
 
 proposal_distribution_set* proposal_distribution_set::clone()const{//need a deep clone...

@@ -6,12 +6,36 @@
 
 #ifndef PTMCMC_PROPOSAL_HH
 #define PTMCMC_PROPOSAL_HH
-#include "mcmc.hh"
+#include "bayesian.hh"
+#include "chain.hh"
 #include "probability_function.hh"
 
 using namespace std;
 
 //************** PROPOSAL DISTRIBUTION classes ******************************
+
+
+///A class for defining proposal distributions.
+///Useful proposal distributions often reference a chain.
+class proposal_distribution {
+protected:
+  double log_hastings;
+  int last_type;
+public:
+  virtual ~proposal_distribution(){};
+  proposal_distribution(){log_hastings=0;last_type=0;};
+  virtual double log_hastings_ratio(){return log_hastings;};//(proposal part of Hasting ratio for most recent draw;
+  virtual void set_chain(chain *c){};//Not always needed.
+  //virtual state draw(state &s,Random &rng){return s;};//The base class won't be useful.
+  virtual state draw(state &s,chain *caller){return s;};//The base class won't be useful.
+  ///Some proposals require some set-up, such as a chain of sufficient length.
+  virtual bool is_ready() {return true;};
+  virtual proposal_distribution* clone()const{return new proposal_distribution(*this);};
+  virtual string show(){return "UnspecifiedProposal()";};
+  ///Return type of draw (where that is relevant, otherwise 0)
+  virtual int type(){return last_type;}
+  virtual bool support_mixing(){return false;}
+};
 
 
 //Draw from a distribution

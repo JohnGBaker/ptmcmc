@@ -4,8 +4,7 @@
 ///boundary objects allow specification of the domain bounraies in each dimension.
 ///Written by John G Baker - NASA-GSFC (2013-2014)
 #include "probability_function.hh"
-
-
+#include "chain.hh"
 
 gaussian_dist_product::gaussian_dist_product(stateSpace *space,unsigned int N):sampleable_probability_function(space){
   dim=N;
@@ -213,6 +212,12 @@ string mixed_dist_product::show(){
 
 //Draw samples from a chain
 //This base version provides support only on the chain points themselves (no interpolation) interpolative variants (eg using approximate nearest neighbor approach) could be developed if needed.  With chain support this can be used as prior as long as the proposal distribution is strictly compatible (in particular only proposing points in the reference chain).
+
+chain_distribution::chain_distribution(chain &c, int istart):c(c),istart(istart),sampleable_probability_function(c.getState().getSpace()){
+    last_sample=-1;
+  };
+
+
 state chain_distribution::drawSample(Random &rng){
     double xrand=rng.Next();
     //rngout<<xrand<<" 2"<<endl;

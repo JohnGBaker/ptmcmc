@@ -3,9 +3,11 @@
 ///The base class chain, is not useful, and is defined in mcmc.hh
 ///The Metropolis-Hastings MH_chain and parallel_tempering_chains types should be useful.
 ///John G Baker - NASA-GSFC (2013-2014)
+#ifndef CHAIN_HH
+#define CHAIN_HH
 
-#include "mcmc.hh"
-#include "probability_function.hh"
+#include "bayesian.hh"
+//#include "probability_function.hh"
 //#include <memory>
 //#include "include/ProbabilityDist.h"
 //#include "include/newran.h"
@@ -16,9 +18,122 @@
 //#include <iostream>
 
 
-class parallel_tempering_chains;
+class proposal_distribution;
+
+/// A generalized chain has results like a chain, but we specify
+/// anything about *how* those results are produced.  Standard analysis can be applied. 
+class chain {
+  //TODO?
+  //autocorrelation
+  //convergence,MAP,...
+  static int idcount;
+protected:
+  int id;
+  int Nsize,Ninit; //Maybe move this history stuff to a subclass
+  int Nfrozen;
+  int dim;
+  shared_ptr<Random> rng; //Random number generator for this chain. Each chain has its own so that the results can be threading invariant
+  //This function is defined for just for sorting below
+  //static bool AgtB(const pair<double,double> & A,const pair<double,double>&B){return A.second>B.second;};
+  double get_uniform(){
+    double x=rng->Next(); //pick a number
+    //rngout<<x<<" 1"<<endl;
+    //#pragma omp critical
+    //cout<<id<<":"<<x<<" 1 rng="<<rng<<endl;
+    return x;
+  };
+public:
+  virtual ~chain(){};
+  chain():
+    rng(new MotherOfAll(ProbabilityDist::getPRNG()->Next()))
+    //rng(ProbabilityDist::getPRNG())//This should recover identical results to pre_omp version...?
+    //rng(globalRNG)
+  {
+    id=idcount;idcount++;
+    //cout<<"chain::chain():Set  id="<<id<<" one of "<<idcount<<" instance(s)."<<endl;//debug
+    //cout<<"chain::chain():Set rng="<<rng.get()<<" one of "<<rng.use_count()<<" instance(s)."<<endl;//debug
+    //Each chain has its own pseudo (newran) random number generator seeded with a seed drawn from the master PRNG
+    //As long as the chains are created in a fixed order, this should allow threading independence of the result.
+    Nfrozen=-1;
+  };
+  virtual shared_ptr<Random> getPRNG(){return rng;};
+  virtual string show(){
+    ostringstream s;
+    s<<"chain(id="<<id<<"size="<<Nsize<<")\n";
+    return s.str();
+  };
+  virtual string status(){
+    ostringstream s;
+    s<<"chain(id="<<id<<"N="<<Nsize<<"):"<<this->getState().get_string();
+    return s.str();
+  };
+  virtual void reserve(int nmore){};//If you know how long you are going to run, it can be more efficient to reserve up front, rather than resizing ever step
+  virtual int capacity(){return -1;};//If you know how long you are going to run, it can be more efficient to reserve up front, rather than resizing ever step
+  virtual int size(){if(Nfrozen==-1)return Nsize;else return Nfrozen;};
+  virtual state getState(int elem=-1,bool raw_indexing=false){cout<<"chain::getState: Warning. You've called a dummy function."<<endl;state s;return s;};//base class is not useful
+  virtual double getLogPost(int elem=-1,bool raw_indexing=false){cout<<"chain::getLogPost: Warning. You've called a dummy function."<<endl;return 0;};//get log posterior from a chain sample
+  virtual double getLogLike(int elem=-1,bool raw_indexing=false){cout<<"chain::getLogLike: Warning. You've called a dummy function."<<endl;return 0;};//get log prior from a chain sample
+  //virtual double getLogPrior(int elem=-1,bool raw_indexing=false){cout<<"chain::getLogPrior: Warning. You've called a dummy function."<<endl;return 0;};//get log prior from a chain sample
+  virtual int getDim(){return dim;};
+  ///Test the expectation value for some test function.
+  ///This could be, for example:
+  ///1. An expected parameter value (test_func should return the parameter value)
+  ///2. Probability of being in some bin region of param space (test_func returns 1 iff in that region)
+  virtual double  Pcond(bool (*test_func)(state s)){return dim;};
+  virtual int i_after_burn(int nburn=0){return nburn;}
+  virtual void inNsigma(int Nsigma,vector<int> & indicies,int nburn=0){
+    //cout<<" inNsigma:this="<<this->show()<<endl;
+    int ncount=size()-this->i_after_burn(nburn);
+    //cout<<"size="<<size()<<"   nburn="<<nburn<<"   i_after_burn="<<this->i_after_burn(nburn)<<endl;
+    int inNstd_count=(int)(erf(Nsigma/sqrt(2.))*ncount);
+    vector<pair<double,double> > lpmap;
+    //double zero[2]={0,0};
+    //lpmap.resize(ncount,zero);
+    //cout<<"ncount="<<ncount<<"   inNstd_count="<<inNstd_count<<endl;
+    lpmap.resize(ncount);
+    for(uint i=0;i<ncount;i++){
+      int idx=i+this->i_after_burn(nburn);
+      //cout<<idx<<" state:"<<this->getState(idx,true).get_string()<<endl;
+      lpmap[i]=make_pair(-this->getLogPost(idx,true),idx);
+    }
+    //sort(lpmap.begin(),lpmap.end(),chain::AgtB);
+    sort(lpmap.begin(),lpmap.end());
+    indicies.resize(inNstd_count);
+    for(uint i=0;i<inNstd_count;i++){
+      indicies[i]=lpmap[i].second;
+      //cout<<"  :"<<lpmap[i].first<<" "<<lpmap[i].second<<endl;
+    }
+    return;
+  };
+  virtual void set_proposal(proposal_distribution &proposal){
+    cout<<"chain::step: No base-class set_proposal operation defined!"<<endl;
+    exit(1);
+  };
+  virtual void step(){
+    cout<<"chain::step: No base-class step() operation defined!"<<endl;
+    exit(1);
+  };
+  virtual void dumpChain(ostream &os,int Nburn=0,int ievery=1){
+    cout<<"chain::step: No base-class dumpChain() operation defined!"<<endl;
+    exit(1);
+  };
+  //Interface for optional features of derived clases.
+  ///This function should be overloaded to indicate the number of subchains in a hierarchical chain;
+  virtual int multiplicity(){return 1;};
+  ///subchains should be indexed from 0 to multiplicity-1
+  virtual chain* subchain(int index){return this;};
+  ///return the inverse temperature for this chain
+  virtual double invTemp(){return 1.0;};
+  ///Temporarily freeze the length of the chain as reported by size()
+  void history_freeze(){Nfrozen=Nsize;};
+  void history_thaw(){Nfrozen=-1;};
+  int get_id(){return id;};
+};
+
+
 //** useful CHAIN Classes *******
 
+class parallel_tempering_chains;
 /// A markov (or non-Markovian) chain based on some variant of the Metropolis-Hastings algorithm
 /// May add "burn-in" distinction later.
 class MH_chain: public chain{
@@ -156,4 +271,4 @@ class parallel_tempering_chains: public chain{
     cout<<"Will reboot every "<<" aggression="<<reboot_aggression<<endl;
   };
 };  
-    
+#endif    
