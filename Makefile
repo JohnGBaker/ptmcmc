@@ -1,4 +1,4 @@
-MCMC_OFILES = bayesian.o chain.o probability_function.o proposal_distribution.o 
+MCMC_OFILES = bayesian.o chain.o probability_function.o proposal_distribution.o  ptmcmc.o
 
 test: testMH
 
@@ -17,6 +17,7 @@ ${LIB}/libprobdist.a: DUMMY ${LIB}
 chain.o: chain.cc chain.hh bayesian.hh probability_function.hh proposal_distribution.hh
 proposal_distribution.o: proposal_distribution.cc bayesian.hh probability_function.hh proposal_distribution.hh
 probability_function.o: probability_function.cc bayesian.hh probability_function.hh
+ptmcmc.o: ptmcmc.cc bayesian.hh ptmcmc.hh chain.hh options.hh
 
 ${LIB}/libptmcmc.a: ${MCMC_OFILES}
 	@echo "archiving"

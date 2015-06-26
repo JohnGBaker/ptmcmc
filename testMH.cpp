@@ -1,7 +1,7 @@
 #include <valarray>
 #include <iostream>
 #include <fstream>
-#include "mcmc.hh"
+#include "bayesian.hh"
 #include "chain.hh"
 #include "probability_function.hh"
 #include "proposal_distribution.hh"
