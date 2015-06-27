@@ -1,10 +1,10 @@
-///General structures for Bayesian analysis
+///State and state space structures for Bayesian analysis
 ///
 ///state objects are tied to a stateSpace object which specifies to domain.
 ///boundary objects allow specification of the domain bounraies in each dimension.
 ///John G Baker - NASA-GSFC (2013-2014)
 
-#include "bayesian.hh"
+#include "states.hh"
 
 bool boundary::enforce(double &x){
     //cout<<"boundary::enforce: testing value "<<x<<" in range "<<show()<<endl;//debug

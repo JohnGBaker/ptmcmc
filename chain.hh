@@ -6,7 +6,8 @@
 #ifndef CHAIN_HH
 #define CHAIN_HH
 
-#include "bayesian.hh"
+#include "states.hh"
+#include "probability_function.hh"
 //#include "probability_function.hh"
 //#include <memory>
 //#include "include/ProbabilityDist.h"
@@ -266,9 +267,10 @@ class parallel_tempering_chains: public chain{
   bool evolve_temps(double rate=0.01){
     do_evolve_temps=1;
     evolve_temp_rate=rate;
+    return true;
   };
   void do_reboot(double rate,double threshhold,double thermal,int every,int grace=0,bool graduate=false,double aggression=0){max_reboot_rate=rate;reboot_thresh=threshhold;reboot_thermal_thresh=thermal;test_reboot_every=every;reboot_grace=grace;reboot_aggression=aggression;reboot_graduate=graduate;
     cout<<"Will reboot every "<<" aggression="<<reboot_aggression<<endl;
   };
-};  
+}; 
 #endif    

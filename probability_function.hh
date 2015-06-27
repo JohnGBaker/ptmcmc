@@ -6,20 +6,56 @@
 
 #ifndef PTMCMC_PROBABILITY_HH
 #define PTMCMC_PROBABILITY_HH
-#include "bayesian.hh"
+#include "states.hh"
 //#include <valarray>
 //#include <vector>
 //#include <sstream>
 //#include <cmath>
 //#include <iostream>
 //#include <utility>
-//#include <memory>
-//#include "include/ProbabilityDist.h"
-//#include "include/newran.h"
+#include <memory>
+#include "include/ProbabilityDist.h"
+#include "include/newran.h"
 
 using namespace std;
 
-typedef unsigned int uint;
+extern shared_ptr<Random>globalRNG;
+
+class probability_function;
+
+
+//** Base probability function classes
+
+/// Base class for defining likelihoods/priors/etc (nonnormalized)
+/// Default version is flat.
+class probability_function {
+protected:
+  stateSpace *space;
+public:
+  virtual ~probability_function(){};
+  probability_function(stateSpace *space):space(space){};
+  virtual double evaluate(state &s){return exp(evaluate_log(s));};
+  virtual double evaluate_log(state &s){return 0;};
+  virtual string show(){return "UnspecifiedProb()";};
+};
+
+// A general (abstract) class for defining eg priors/etc 
+// from which we can draw samples.
+class sampleable_probability_function: public probability_function{
+  ///Sometimes we need to know the largest relevant dimension
+  void fail(){cout<<"sampleable_probability_function: This should be used strictly as a parent class, and it's virtual functions should be overridden in a base clas object.  Instances of this parent class should not be referenced."<<endl;exit(1);};
+protected:
+  unsigned int dim;
+public:
+  virtual ~sampleable_probability_function(){};
+  sampleable_probability_function(stateSpace *space):probability_function(space){};
+  virtual state drawSample(Random &rng){fail();return state();}
+  virtual double evaluate(state &s){fail();return -1;};
+  virtual double evaluate_log(state &s){fail();return -INFINITY;};
+  virtual int getDim(){return dim;};
+  virtual string show(){return "UnspecifiedSampleableProb()";};
+};
+
 
 //********* DERIVED CLASSES *************
 

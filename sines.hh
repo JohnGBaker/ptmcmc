@@ -1,6 +1,6 @@
 #include <valarray>
 #include <cmath>
-#include "MCMC.hh"
+#include "probability_function.hh"
 
 ///Idea:
 /// For more vigorous testing.  It would be nice to have a model where the peaks do not all have the same shape,
@@ -63,6 +63,7 @@ class sines: public probability_function{
 // Prior implementing step levels that are flat, but differing discontinuously in the vicinity of each peak.
 // The prior implements the *same* manner of stair-step offseting as is provided in the sines class.
 // This allows experiments testing the effect of likelihood vs prior changes between peaks.
+/*
 class stepped_prior: public sampleable_probability_function{
   int Ndim,Npeaks;
   valarray<double> mins;
@@ -71,9 +72,9 @@ class stepped_prior: public sampleable_probability_function{
   double lognorm;
   valarray<double> cuts;
   valarray<valarray<int> > c_idxs;
-
+  
 public:
-  stepped_prior(stateSpace *space,valarray<int>&ks,valarray<double>&mins,valarray<double>&maxs,double stepscale=0):ks(ks),mins(mins),maxs(maxs),step_scale(stepscale),sampleable_probability_function(space){
+  stepped_prior(stateSpace *space,valarray<int>&ks,valarray<double>&mins,valarray<double>&maxs,double stepscale=0):mins(mins),maxs(maxs),step_scale(stepscale),sampleable_probability_function(space){
     Ndim=ks.size();
     compute_cuts();
   };
@@ -146,5 +147,6 @@ public:
     lognorm=log(sum);
     valarray<int> result(idxs,Ndim);
     return result;
+  };
 };
-
+*/

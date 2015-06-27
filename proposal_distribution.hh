@@ -6,7 +6,7 @@
 
 #ifndef PTMCMC_PROPOSAL_HH
 #define PTMCMC_PROPOSAL_HH
-#include "bayesian.hh"
+#include "states.hh"
 #include "chain.hh"
 #include "probability_function.hh"
 
@@ -144,7 +144,7 @@ public:
   state draw(state &s,chain *caller);
   virtual differential_evolution* clone()const{return new differential_evolution(*this);};
   string show();
-  bool support_mixing(bool do_it){do_support_mixing=do_it;};
+  bool support_mixing(bool do_it){do_support_mixing=do_it;return do_it;};
   bool support_mixing(){return do_support_mixing;};
 }; 
 #endif

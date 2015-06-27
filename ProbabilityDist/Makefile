@@ -5,10 +5,11 @@ all: ${LIB}/libprobdist.a  ${INCLUDE}/ProbabilityDist.h
 
 headers: ProbabilityDist.h
 
-${LIB}/libprobdist.a: ${PROBDIST_OFILES} ${NEWRAN_OFILES}
+${LIB}/libprobdist.a: ${PROBDIST_OFILES} ${NEWRAN_OFILES} ${INCLUDE}/ProbabilityDist.h
 	ar rv ${LIB}/libprobdist.a ${PROBDIST_OFILES} ${NEWRAN_OFILES}
 
 ${INCLUDE}/ProbabilityDist.h: ProbabilityDist.h include.h newran.h myexcept.h extreal.h simpstr.h
+	@echo "Installing headers in "${INCLUDE}
 	cp ProbabilityDist.h include.h newran.h myexcept.h extreal.h simpstr.h ${INCLUDE}/
 
 

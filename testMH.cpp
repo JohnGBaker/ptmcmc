@@ -1,13 +1,13 @@
 #include <valarray>
 #include <iostream>
 #include <fstream>
-#include "bayesian.hh"
+#include <string>
+#include <sstream>
+#include "states.hh"
 #include "chain.hh"
 #include "probability_function.hh"
 #include "proposal_distribution.hh"
 #include "sines.hh"
-#include <string>
-#include <sstream>
 
 using namespace std;
 
