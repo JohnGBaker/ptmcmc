@@ -14,8 +14,8 @@
 //#include <iostream>
 //#include <utility>
 #include <memory>
-#include "include/ProbabilityDist.h"
-#include "include/newran.h"
+#include "ProbabilityDist.h"
+#include "newran.h"
 
 using namespace std;
 
