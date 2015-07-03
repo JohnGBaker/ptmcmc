@@ -277,7 +277,7 @@ int ptmcmc_sampler::run(const string & base, int ic){
 ///folding together stuff that was in the main routine before.  The "generic" interface was then expanded to
 ///include all the necessary args to make this work.  The basic issue is that we need some details of both class
 ///chain, and new signal class.
-int ptmcmc_sampler::analyze(const string & base, int ic,int Nsigma,int Nbest, bayes_signal &data, double tfinestart, double tfineend){
+int ptmcmc_sampler::analyze(const string & base, int ic,int Nsigma,int Nbest, bayes_old_signal &data, double tfinestart, double tfineend){
   if(!have_cc){
     cout<<"ptmcmc_sampler::analyze.  Must call initialize() before analyze()!"<<endl;
     exit(1);
