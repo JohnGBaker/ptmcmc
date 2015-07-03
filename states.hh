@@ -138,6 +138,7 @@ public:
 class stateSpaceInterface {
 public:
   virtual void defWorkingStateSpace(const stateSpace &sp)=0;
+  //virtual stateSpace getObjectStateSpace()const{return stateSpace();};
   virtual stateSpace getObjectStateSpace()const=0;
 };
 
