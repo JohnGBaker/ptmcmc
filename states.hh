@@ -6,6 +6,7 @@
 
 #ifndef PTMCMC_STATES_HH
 #define PTMCMC_STATES_HH
+#include <map>
 #include <valarray>
 #include <vector>
 #include <sstream>
@@ -42,15 +43,17 @@ public:
 /// Can provide support for boundary conditions, maybe special flows that can be used in proposals...
 /// Should inner product be defined here?  probably...
 class stateSpace {
-  const int dim;
-  valarray<boundary> bounds;
-  valarray<string> names;
+  int dim;
+  vector<boundary> bounds;
+  vector<string> names;
+  map<string,int> index;
   bool have_names;
 public:
   stateSpace(int dim=0):dim(dim){
     bounds.resize(dim,boundary());//default to default boundaries (ie allow all reals)
     have_names=false;    
   };
+  int size(){return dim;};
   void set_bound(int i, const boundary &b){
     if(i<dim)bounds[i]=b;
     else{
@@ -58,18 +61,43 @@ public:
       exit(1);
     }
   };      
+  boundary get_bound(int i)const{
+    if(i<0||i>=dim){
+      cout<<"stateSpace::set_bound: Index out of range, "<<i<<">="<<dim<<"."<<endl;
+      exit(1);
+    }
+    return bounds[i];
+  };      
   void set_names(string stringnames[]){
     names.resize(dim,"");
-    for(uint i=0;i<dim;i++)names[i]=stringnames[i];
+    for(uint i=0;i<dim;i++){
+      names[i]=stringnames[i];
+      index[names[i]]=i;
+    }
     have_names=true;
   };
-  string get_name(int i){
+  string get_name(int i)const {
     if(have_names&&i<dim)return names[i];
     else return "[unnamed]";
+  };      
+  int get_index(string name)const{
+    if(have_names&&index.count(name)>0)return index.at(name);
+    else return -1;
   };      
   bool enforce(valarray<double> &params);
   ///Show structural info
   string show();
+  ///replace a parameter in one space dimension
+  void replaceParam(int i, const string &newname, const boundary &newbound){
+    if(!have_names){
+      cout<<"stateSpaceTransform::replaceParam: Cannot apply transform to a space for which names are not defined."<<endl;
+      exit(1);
+    }
+    index.erase(names[i]);
+    index[newname]=i;
+    names[i]=newname;
+    bounds[i]=newbound;
+  };
 };
       
 ///Class for holding and manipulating bayesian parameter states
@@ -98,10 +126,148 @@ public:
   }
   virtual valarray<double> get_params()const{return params;};
   virtual vector<double> get_params_vector(){vector<double> v;v.assign(begin(params),end(params));return v;};
-  stateSpace * getSpace(){return space;};
+  int get_param(const int i)const{return params[i];};
+  void set_param(const int i,const double v){params[i]=v;};
+  stateSpace * getSpace()const{return space;};
   ///Show param info
   string show();
   bool invalid()const{return !valid;};
+};
+
+///Interface class for objects using stateSpace to describe their content
+class stateSpaceInterface {
+public:
+  virtual void defWorkingStateSpace(const stateSpace &sp)=0;
+  virtual stateSpace getObjectStateSpace()const=0;
+};
+
+///Base class for stateSpace transformations
+class stateSpaceTransform {
+public:
+  stateSpaceTransform(){};
+  virtual stateSpace transform(const stateSpace &sp)const=0;
+  virtual state transformState(const state &s)const=0;
+  virtual void defWorkingStateSpace(const stateSpace &sp)=0;
+};
+
+///Dynamically generated one-to-one generic state space transform class
+///
+///Perhaps a way to do this dynamically, rather than hand-coding each one as a separate derived class..
+///This is just an idea, not yet developed for use....
+class stateSpaceTransform1D : public stateSpaceTransform {
+  string in;
+  string out;
+  double (*func)(double);
+  boundary bound;
+  bool have_bound;
+  int idx_inout;
+  bool have_working;
+  public:
+  stateSpaceTransform1D(string in="",string out="",double (*func)(double)=[](double a){return a;}):in(in),out(out),func(func){have_bound=false;have_working=false;};
+  void set_bound(const boundary &b){
+    have_bound=true;
+    bound=b;
+  }
+  virtual stateSpace transform(const stateSpace &sp)const{
+    stateSpace outsp=sp;
+    int ind=sp.get_index(in);
+    if(ind<0){
+      cout<<"stateSpaceTransform1D::transform: Parameter name '"<<in<<"' not found."<<endl;
+      exit(1);
+    } else {
+      boundary b;
+      if(have_bound)b=bound;
+      else b=sp.get_bound(ind);
+      outsp.replaceParam(ind, out, b);
+    }
+    return outsp;    
+  };
+  virtual state transformState(const state &s)const{
+    if(!have_working){
+      cout<<"stateSpaceTransform1D::transformParams: Must call deWorkingStateSpace before transformParams."<<endl;
+      exit(1);
+    }
+    state st=s;
+    st.set_param(idx_inout,(*func)(s.get_param(idx_inout)));
+    return st;
+  };
+  virtual void defWorkingStateSpace(const stateSpace &sp){
+    int ind=sp.get_index(in);
+    if(ind<0){
+      cout<<"stateSpaceTransform1D::defWorkingStateSpace: Parameter name '"<<in<<"' not found."<<endl;
+      exit(1);
+    } else {
+      idx_inout=ind;
+      have_working=true;
+    }
+  };
+};
+
+///Dynamically generated n-to-n generic state space transform class
+///
+///Perhaps a way to do this dynamically, rather than hand-coding each one as a separate derived class..
+///This is just an idea, not yet developed for use....
+class stateSpaceTransformND : public stateSpaceTransform {
+  int dim;
+  vector<string> ins;
+  vector<string> outs;
+  vector<double> (*func)(vector<double>&a);
+  vector<boundary> bounds;
+  bool have_bounds;
+  int idxs[2];
+  bool have_working;
+  public:
+  stateSpaceTransformND(int dim=0,vector<string> ins={},vector<string> outs={},vector<double> (*func)(vector<double>&a)=[](vector<double> &a){return a;}):ins(ins),outs(outs),func(func),dim(dim){
+    have_bounds=false;have_working=false;
+    if(ins.size()!=dim||outs.size()!=dim){
+      cout<<"stateSpaceTransformND::stateSpaceTransformND: Dimensions do not match."<<endl;
+      exit(1);
+    }
+  };
+  void set_bounds(const vector<boundary> &b){
+    have_bounds=true;
+    bounds=b;
+  }
+  virtual stateSpace transform(const stateSpace &sp)const{
+    stateSpace outsp=sp;
+    for(int i=0;i<dim;i++){
+      int ind=sp.get_index(ins[i]);
+      if(ind<0){
+	cout<<"stateSpaceTransform1D::transform: Parameter name '"<<ins[i]<<"' not found."<<endl;
+	exit(1);
+      } else {
+	boundary b;
+	if(have_bounds)b=bounds[i];
+	else b=sp.get_bound(ind);
+	outsp.replaceParam(ind, outs[i], b);
+      }
+    }
+    return outsp;    
+  };
+  virtual state transformState(const state &s)const{
+    if(!have_working){
+      cout<<"stateSpaceTransform1D::transformParams: Must call deWorkingStateSpace before transformParams."<<endl;
+      exit(1);
+    }
+    state st=s;
+    vector<double>inpars(2),outpars(2);
+    for(int i=0;i<dim;i++)inpars[i]=s.get_param(idxs[i]);
+    outpars=(*func)(inpars);
+    for(int i=0;i<dim;i++)st.set_param(idxs[i],outpars[i]);
+    return st;
+  };
+  virtual void defWorkingStateSpace(const stateSpace &sp){
+    for(int i=0;i<dim;i++){
+      int ind=sp.get_index(ins[i]);
+      if(ind<0){
+	cout<<"stateSpaceTransform1D::defWorkingStateSpace: Parameter name '"<<ins[i]<<"' not found."<<endl;
+	exit(1);
+      } else {
+	idxs[i]=ind;
+      }
+    }
+    have_working=true;
+  };
 };
 
 #endif
