@@ -41,7 +41,7 @@ public:
 ///The label space is treated as one-dimensional, though this may be 2-D as
 ///for image data, it could also be time or freq.
 ///dvalue is a scale for errors.
-class bayes_data : public stateSpaceInterface, Optioned {
+class bayes_data : public stateSpaceInterface, public Optioned {
 public:
 protected:
   vector<double>labels,values,dvalues;
