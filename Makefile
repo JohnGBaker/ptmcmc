@@ -27,8 +27,7 @@ chain.o: chain.cc chain.hh states.hh probability_function.hh proposal_distributi
 proposal_distribution.o: proposal_distribution.cc states.hh probability_function.hh proposal_distribution.hh ${LIB}/libprobdist.a
 probability_function.o: probability_function.cc states.hh probability_function.hh ${INCLUDE}/newran.h
 ptmcmc.o: ptmcmc.cc bayesian.hh states.hh ptmcmc.hh chain.hh options.hh probability_function.hh proposal_distribution.hh
-states.o: states.hh
-
+states.o: states.hh options.hh
 
 ${LIB}/libptmcmc.a: ${MCMC_OFILES}
 	@echo "archiving"

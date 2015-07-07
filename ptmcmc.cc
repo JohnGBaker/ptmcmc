@@ -277,7 +277,7 @@ int ptmcmc_sampler::run(const string & base, int ic){
 ///folding together stuff that was in the main routine before.  The "generic" interface was then expanded to
 ///include all the necessary args to make this work.  The basic issue is that we need some details of both class
 ///chain, and new signal class.
-int ptmcmc_sampler::analyze(const string & base, int ic,int Nsigma,int Nbest, bayes_old_signal &data, double tfinestart, double tfineend){
+int ptmcmc_sampler::analyze(const string & base, int ic,int Nsigma,int Nbest, bayes_likelihood &like){
   if(!have_cc){
     cout<<"ptmcmc_sampler::analyze.  Must call initialize() before analyze()!"<<endl;
     exit(1);
@@ -315,18 +315,17 @@ int ptmcmc_sampler::analyze(const string & base, int ic,int Nsigma,int Nbest, ba
   out1sigma<<endl;
   outsamples.precision(output_precision);
   outfinesamples.precision(output_precision);
-  double nfine=data.size()*2;
-  
+
   for(int i=0;i<Nbest;i++){  
     int idx=idx_in_Nsigma[(rand()*idx_in_Nsigma.size())/RAND_MAX];
     state st=cc->getState(idx,true);
     //state st=cc->getState(idx);
     //vector<double> p=st.get_params_vector();
     outsamples<<"#"<<st.get_string()<<endl;
-    data.write(outsamples,st);
+    like.write(outsamples,st);
     outsamples<<endl;
     outfinesamples<<"#"<<st.get_string()<<endl;
-    data.write(outfinesamples,st,nfine,tfinestart,tfineend);
+    like.writeFine(outfinesamples,st);
     outfinesamples<<endl;
   }
 
@@ -337,10 +336,10 @@ int ptmcmc_sampler::analyze(const string & base, int ic,int Nsigma,int Nbest, ba
   //state st=cc->getState(idx);
   //vector<double> p=st.get_params_vector();
   outbest<<"#"<<st.get_string()<<endl;
-  data.write(outbest,st);
+  like.write(outbest,st);
   outbest<<endl;
   outfinebest<<"#"<<st.get_string()<<endl;
-  data.write(outfinebest,st,nfine,tfinestart,tfineend);
+  like.writeFine(outfinebest,st);
   outfinebest<<endl;
   
   cout<<"chain "<<ic<<": best_post "<<chain_llike->bestPost()<<", state="<<chain_llike->bestState().get_string()<<endl;

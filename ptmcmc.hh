@@ -30,7 +30,7 @@ public:
   int run(const string & base, int ic=0);
   void setup(int Ninit, bayes_likelihood &llike, sampleable_probability_function &prior, proposal_distribution &prop,int output_precision=15);
   int initialize();
-  int analyze(const string & base, int ic, int Nsigma, int Nbest, bayes_old_signal &data, double tfinestart, double tfineend);
+  int analyze(const string & base, int ic, int Nsigma, int Nbest, bayes_likelihood &like);
   bayes_sampler * clone(){
     cout<<"cloning:"<<this<<")"<<endl;
     if(have_cc||have_cprop){

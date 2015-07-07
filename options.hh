@@ -115,18 +115,29 @@ class Optioned{
 private:
   string prefix;
   Options *opt;
+  bool have_options;
 protected:
-  void copyOptioned(Optioned &other){prefix=other.prefix;opt=other.opt;};
+  void copyOptioned(Optioned &other){prefix=other.prefix;opt=other.opt;have_options=other.have_options;};
   void addOption(const char * name, const char * info, const char * vdefault="<no default>"){
-    opt->add(Option((prefix+name).c_str(),info,vdefault));};
+    check_opt();opt->add(Option((prefix+name).c_str(),info,vdefault));};
+  void check_opt(){
+    if(!this){
+      cout<<"Optioned::check_opt: You've called this from a null pointer."<<endl;
+      exit(1);
+    }
+    if(!have_options){
+      cout<<"Optioned::check_opt: Must call Optioned::addOptions() before using options."<<endl;
+      exit(1);
+    }
+  };
 public:
   ///Add options to the program's option list.
-  Optioned(){};
-  virtual void addOptions(Options &opts,const string &prefix_){opt=&opts,prefix=prefix_;};
+  Optioned(){have_options=false;};
+  virtual void addOptions(Options &opts,const string &prefix_){opt=&opts,prefix=prefix_;have_options=true;};
   //set the options for processing.
   unique_ptr<istringstream> optValue(const string & name){
-    return unique_ptr<istringstream>(new istringstream(opt->value((prefix+name).c_str())));
+    check_opt();return unique_ptr<istringstream>(new istringstream(opt->value((prefix+name).c_str())));
   };
-  bool optSet(const string & name){return opt->set((prefix+name).c_str());};
+  bool optSet(const string & name){check_opt();return opt->set((prefix+name).c_str());};
 };
 #endif
