@@ -6,7 +6,7 @@
 
 #include "states.hh"
 
-bool boundary::enforce(double &x){
+bool boundary::enforce(double &x)const{
     //cout<<"boundary::enforce: testing value "<<x<<" in range "<<show()<<endl;//debug
     //check wrapping first
     if(lowertype==wrap^uppertype==wrap){//can't have just one wrap 
@@ -56,7 +56,7 @@ bool boundary::enforce(double &x){
   };
 
 ///Show structural info
-string boundary::show(){
+string boundary::show()const{
   ostringstream s;
   if(lowertype==wrap)s<<"w["<<xmin<<","<<xmax<<")w";
   else {
@@ -75,7 +75,7 @@ string boundary::show(){
 /// Can provide support for boundary conditions, maybe special flows that can be used in proposals...
 /// Should inner product be defined here?  probably...
 
-bool stateSpace::enforce(valarray<double> &params){
+bool stateSpace::enforce(valarray<double> &params)const{
     if(params.size()!=dim){
       cout<<"stateSpace::enforce:  Dimension error.  Expected "<<dim<<" params, but given "<<params.size()<<"."<<endl;
       exit(1);
@@ -92,7 +92,7 @@ bool stateSpace::enforce(valarray<double> &params){
 };
 
 ///Show structural info
-string stateSpace::show(){
+string stateSpace::show()const{
     ostringstream s;
     s<<"StateSpace:(dim="<<dim<<")\n";
     for(uint i=0;i<dim;i++){
@@ -109,7 +109,7 @@ void state::enforce(){
   //cout<<"state::enforce:State was "<<(valid?"":"not ")<<"valid."<<endl;//debug
 };
 
-state::state(stateSpace *space,int n):space(space){
+state::state(const stateSpace *space,int n):space(space){
   params.resize(n,0);
   valid=false;
   //cout<<"state::state():space="<<this->space<<endl;    
@@ -118,7 +118,7 @@ state::state(stateSpace *space,int n):space(space){
     enforce();
   }
 };
-state::state(stateSpace *sp, const valarray<double>&array):space(sp),params(array){
+state::state(const stateSpace *sp, const valarray<double>&array):space(sp),params(array){
   //cout<<"state::state(stuff):space="<<this->space<<endl;
   valid=false;
   if(space)valid=true;
@@ -171,7 +171,7 @@ string state::get_string()const{
     return s.str();
 };
 
-string state::show(){
+string state::show()const{
     ostringstream s;
     s<<"(\n";
     for(uint i=0;i<params.size();i++)s<<"  "<<(space?space->get_name(i):"[???]")<<" = "<<params[i]<<"\n";

@@ -30,10 +30,10 @@ class probability_function;
 /// Default version is flat.
 class probability_function {
 protected:
-  stateSpace *space;
+  const stateSpace *space;
 public:
   virtual ~probability_function(){};
-  probability_function(stateSpace *space):space(space){};
+  probability_function(const stateSpace *space):space(space){};
   virtual double evaluate(state &s){return exp(evaluate_log(s));};
   virtual double evaluate_log(state &s){return 0;};
   virtual string show(){return "UnspecifiedProb()";};
@@ -48,7 +48,7 @@ protected:
   unsigned int dim;
 public:
   virtual ~sampleable_probability_function(){};
-  sampleable_probability_function(stateSpace *space):probability_function(space){};
+  sampleable_probability_function(const stateSpace *space):probability_function(space){};
   virtual state drawSample(Random &rng){fail();return state();}
   virtual double evaluate(state &s){fail();return -1;};
   virtual double evaluate_log(state &s){fail();return -INFINITY;};

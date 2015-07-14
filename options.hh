@@ -27,6 +27,9 @@ class Option {
     have_default=false;
     if(string(vdefault).compare("<no default>")!=0)have_default=true;
   };
+  string describe()const{
+    return string(name)+"('"+info+"')="+(have_default?string(value):"<no value>");
+  };
 };
 
 
@@ -35,7 +38,17 @@ private:
   map<string,Option> flags;
 public:
   Options(){};
-  void add(Option opt){  flags[ opt.name ] = opt;};
+  void add(const Option opt){  
+    if(exists(opt.name)){
+      if(opt.describe().compare(flags[opt.name].describe())!=0)
+	cout<<"Options::add: Warning! Attempt to re-add an option with same name but non-idential information.\n  Retaining original option ("<<flags[opt.name].describe()<<")\n  Discarding new option ("<<opt.describe()<<") is discarded."<<endl;
+      return;
+    }
+    flags[ opt.name ] = opt;
+  };
+  bool exists(const string &name)const{
+    return flags.count(name)>0;
+  };
   bool set(const string &name, string &return_value)const{
     const Option *opt =&flags.find(name)->second;
     if(flags.count(name)==0){
@@ -119,7 +132,8 @@ private:
 protected:
   void copyOptioned(Optioned &other){prefix=other.prefix;opt=other.opt;have_options=other.have_options;};
   void addOption(const char * name, const char * info, const char * vdefault="<no default>"){
-    check_opt();opt->add(Option((prefix+name).c_str(),info,vdefault));};
+    check_opt();
+    opt->add(Option((prefix+name).c_str(),info,vdefault));};
   void check_opt(){
     if(!this){
       cout<<"Optioned::check_opt: You've called this from a null pointer."<<endl;
@@ -139,5 +153,6 @@ public:
     check_opt();return unique_ptr<istringstream>(new istringstream(opt->value((prefix+name).c_str())));
   };
   bool optSet(const string & name){check_opt();return opt->set((prefix+name).c_str());};
+  string reportOptions(){return opt->report();};
 };
 #endif

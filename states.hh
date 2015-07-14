@@ -34,9 +34,9 @@ public:
   static const int wrap=3;
   boundary(int lowertype=open,int uppertype=open,double min=-INFINITY,double max=INFINITY):lowertype(lowertype),uppertype(uppertype),xmin(min),xmax(max){};
   ///enforce boundary condition. If consistent enforcement was achieved return true.
-  bool enforce(double &x);
+  bool enforce(double &x)const;
   ///Show structural info
-  string show();
+  string show()const;
 };
 
 /// State space class allows reference to overall limits and structure of the space.
@@ -80,13 +80,22 @@ public:
     if(have_names&&i<dim)return names[i];
     else return "[unnamed]";
   };      
-  int get_index(string name)const{
+  int get_index(const string &name)const{
     if(have_names&&index.count(name)>0)return index.at(name);
     else return -1;
   };      
-  bool enforce(valarray<double> &params);
+  ///This is the same as get_index but fails with an error message if not found.
+  int requireIndex(const string &name)const{
+    int idx=get_index(name);
+    if(idx<0){
+      cout<<"stateSpace::checkNames(): Name '"<<name<<"' not found in state:"<<show()<<endl;
+      exit(1);
+    }
+    return idx;
+  };     
+  bool enforce(valarray<double> &params)const;
   ///Show structural info
-  string show();
+  string show()const;
   ///replace a parameter in one space dimension
   void replaceParam(int i, const string &newname, const boundary &newbound){
     if(!have_names){
@@ -103,14 +112,14 @@ public:
 ///Class for holding and manipulating bayesian parameter states
 class state {
   bool valid;
-  stateSpace *space;
+  const stateSpace *space;
   valarray<double> params;
   void enforce();
 public:
   //Need assignment operator since default valarray assignment is problematic
-  const state& operator=(const state model){space=model.space;valid=model.valid,params.resize(model.size(),0);params=model.params;return *this;};
-  state(stateSpace *space=nullptr,int n=0);
-  state(stateSpace *sp, const valarray<double>&array);
+  const state& operator=(const state model){space=model.space,valid=model.valid,params.resize(model.size(),0);params=model.params;return *this;};
+  state(const stateSpace *space=nullptr,int n=0);
+  state(const stateSpace *sp, const valarray<double>&array);
   int size()const{return params.size();}
   //some algorithms rely on using the states as a vector space
   virtual state add(const state &other)const;
@@ -125,28 +134,39 @@ public:
     return;
   }
   virtual valarray<double> get_params()const{return params;};
-  virtual vector<double> get_params_vector(){vector<double> v;v.assign(begin(params),end(params));return v;};
-  int get_param(const int i)const{return params[i];};
+  virtual vector<double> get_params_vector()const{vector<double> v;v.assign(begin(params),end(params));return v;};
+  double get_param(const int i)const{return params[i];};
   void set_param(const int i,const double v){params[i]=v;};
-  stateSpace * getSpace()const{return space;};
+  const stateSpace * getSpace()const{return space;};
   ///Show param info
-  string show();
+  string show()const;
   bool invalid()const{return !valid;};
 };
 
 ///Interface class for objects using stateSpace to describe their content
 class stateSpaceInterface {
+  bool have_working_space;
 public:
+  stateSpaceInterface(){have_working_space=0;};
   virtual void defWorkingStateSpace(const stateSpace &sp)=0;
+  virtual void haveWorkingStateSpace(){have_working_space=true;};
   //virtual stateSpace getObjectStateSpace()const{return stateSpace();};
   virtual stateSpace getObjectStateSpace()const=0;
+  void checkWorkingStateSpace()const{
+    if(!have_working_space){
+      cout<<"stateSpaceTransform::checkWorkingSpace: Must define working space (defWorkingStateSpace) before applying it."<<endl;
+      exit(1);
+    }
+  };
 };
 
 ///Base class for stateSpace transformations
 class stateSpaceTransform {
+protected:
+  bool have_working_space;
 public:
-  stateSpaceTransform(){};
-  virtual stateSpace transform(const stateSpace &sp)const=0;
+  stateSpaceTransform(){have_working_space=false;};
+  virtual stateSpace transform(const stateSpace &sp)=0;
   virtual state transformState(const state &s)const=0;
   virtual void defWorkingStateSpace(const stateSpace &sp)=0;
 };
@@ -162,14 +182,13 @@ class stateSpaceTransform1D : public stateSpaceTransform {
   boundary bound;
   bool have_bound;
   int idx_inout;
-  bool have_working;
   public:
-  stateSpaceTransform1D(string in="",string out="",double (*func)(double)=[](double a){return a;}):in(in),out(out),func(func){have_bound=false;have_working=false;};
+  stateSpaceTransform1D(string in="",string out="",double (*func)(double)=[](double a){return a;}):in(in),out(out),func(func){have_bound=false;};
   void set_bound(const boundary &b){
     have_bound=true;
     bound=b;
   }
-  virtual stateSpace transform(const stateSpace &sp)const{
+  virtual stateSpace transform(const stateSpace &sp){
     stateSpace outsp=sp;
     int ind=sp.get_index(in);
     if(ind<0){
@@ -181,10 +200,11 @@ class stateSpaceTransform1D : public stateSpaceTransform {
       else b=sp.get_bound(ind);
       outsp.replaceParam(ind, out, b);
     }
+    defWorkingStateSpace(sp);
     return outsp;    
   };
   virtual state transformState(const state &s)const{
-    if(!have_working){
+    if(!have_working_space){
       cout<<"stateSpaceTransform1D::transformParams: Must call deWorkingStateSpace before transformParams."<<endl;
       exit(1);
     }
@@ -199,7 +219,7 @@ class stateSpaceTransform1D : public stateSpaceTransform {
       exit(1);
     } else {
       idx_inout=ind;
-      have_working=true;
+      have_working_space=true;
     }
   };
 };
@@ -216,10 +236,9 @@ class stateSpaceTransformND : public stateSpaceTransform {
   vector<boundary> bounds;
   bool have_bounds;
   int idxs[2];
-  bool have_working;
   public:
   stateSpaceTransformND(int dim=0,vector<string> ins={},vector<string> outs={},vector<double> (*func)(vector<double>&a)=[](vector<double> &a){return a;}):ins(ins),outs(outs),func(func),dim(dim){
-    have_bounds=false;have_working=false;
+    have_bounds=false;
     if(ins.size()!=dim||outs.size()!=dim){
       cout<<"stateSpaceTransformND::stateSpaceTransformND: Dimensions do not match."<<endl;
       exit(1);
@@ -229,12 +248,12 @@ class stateSpaceTransformND : public stateSpaceTransform {
     have_bounds=true;
     bounds=b;
   }
-  virtual stateSpace transform(const stateSpace &sp)const{
+  virtual stateSpace transform(const stateSpace &sp){
     stateSpace outsp=sp;
     for(int i=0;i<dim;i++){
       int ind=sp.get_index(ins[i]);
       if(ind<0){
-	cout<<"stateSpaceTransform1D::transform: Parameter name '"<<ins[i]<<"' not found."<<endl;
+	cout<<"stateSpaceTransformND::transform: Parameter name '"<<ins[i]<<"' not found."<<endl;
 	exit(1);
       } else {
 	boundary b;
@@ -243,11 +262,12 @@ class stateSpaceTransformND : public stateSpaceTransform {
 	outsp.replaceParam(ind, outs[i], b);
       }
     }
+    defWorkingStateSpace(sp);
     return outsp;    
   };
   virtual state transformState(const state &s)const{
-    if(!have_working){
-      cout<<"stateSpaceTransform1D::transformParams: Must call deWorkingStateSpace before transformParams."<<endl;
+    if(!have_working_space){
+      cout<<"stateSpaceTransformND::transformParams: Must call defWorkingStateSpace before transformParams."<<endl;
       exit(1);
     }
     state st=s;
@@ -261,13 +281,13 @@ class stateSpaceTransformND : public stateSpaceTransform {
     for(int i=0;i<dim;i++){
       int ind=sp.get_index(ins[i]);
       if(ind<0){
-	cout<<"stateSpaceTransform1D::defWorkingStateSpace: Parameter name '"<<ins[i]<<"' not found."<<endl;
+	cout<<"stateSpaceTransformND::defWorkingStateSpace: Parameter name '"<<ins[i]<<"' not found."<<endl;
 	exit(1);
       } else {
 	idxs[i]=ind;
       }
     }
-    have_working=true;
+    have_working_space=true;
   };
 };
 
