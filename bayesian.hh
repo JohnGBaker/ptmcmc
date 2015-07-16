@@ -193,8 +193,8 @@ public:
   //virtual void set_model(state &st){};
   //virtual void write(ostream &out,state &st, int nsamples=-1, double tstart=0, double tend=0)=0;
   virtual void write(ostream &out,state &st)=0;
-  virtual void writeFine(ostream &out,state &st)=0;
-  virtual void getFineGrid(double & nfine, double &tstart, double &tend)const=0;
+  virtual void writeFine(ostream &out,state &st,int ns=-1, double ts=0, double te=0)=0;
+  virtual void getFineGrid(int & nfine, double &tstart, double &tend)const=0;
   protected:
   ///A largely cosmetic adjustment to yield conventional likelihood level with noise_mag=0;
   void set_like0(){
