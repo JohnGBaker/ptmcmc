@@ -136,6 +136,7 @@ public:
   virtual valarray<double> get_params()const{return params;};
   virtual vector<double> get_params_vector()const{vector<double> v;v.assign(begin(params),end(params));return v;};
   double get_param(const int i)const{return params[i];};
+  double get_param(const string name)const{if(space)return params[space->requireIndex(name)];else{cout<<"state::get_param(name):Need a stateSpace to get param by name."<<endl;exit(1);};};
   void set_param(const int i,const double v){params[i]=v;};
   const stateSpace * getSpace()const{return space;};
   ///Show param info
