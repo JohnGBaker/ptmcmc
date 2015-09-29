@@ -37,6 +37,7 @@ public:
   bool enforce(double &x)const;
   ///Show structural info
   string show()const;
+  void getDomainLimits(double &xmin_, double &xmax_)const{xmin_=xmin;xmax_=xmax;};
 };
 
 /// State space class allows reference to overall limits and structure of the space.

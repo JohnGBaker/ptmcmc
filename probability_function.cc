@@ -57,7 +57,25 @@ double gaussian_dist_product::evaluate(state &s){
   return result;
 };
 
-string gaussian_dist_product::show(){
+///Given a unit hypercube point with uniform distribution
+///return corresponding parameter state with this distribution
+state gaussian_dist_product::invcdf(const state &s)const{
+  vector<double> pars=s.get_params_vector();
+  valarray<double> v(dim);    
+  for(uint i=0;i<dim;i++){
+    //If the "boundary" limits the domain of the  distribution, then we take that into account here
+    //Could make this faster by precomputing the range...
+    double min,max;
+    space->get_bound(i).getDomainLimits(min,max);
+    double cdfmin=dists[i]->cdf(min);//zero maps to here before calling generic invcdf
+    double cdfmax=dists[i]->cdf(max);//one maps to here before calling generic invcdf
+    double val=cdfmin+pars[i]*(cdfmax-cdfmin);
+    v[i]=dists[i]->invcdf(val);
+  }
+  return state(space,v);
+};
+  
+string gaussian_dist_product::show()const{
   ostringstream s;
   s<<"GaussianSampleableProb(\n";
   for( int i=0;i<dim;i++)
@@ -115,7 +133,25 @@ double uniform_dist_product::evaluate(state &s){
   return result;
 };
 
-string uniform_dist_product::show(){
+///Given a unit hypercube point with uniform distribution
+///return corresponding parameter state with this distribution
+state uniform_dist_product::invcdf(const state &s)const{
+  vector<double> pars=s.get_params_vector();
+  valarray<double> v(dim);    
+  for(uint i=0;i<dim;i++){
+    //If the "boundary" limits the domain of the  distribution, then we take that into account here
+    //Could make this faster by precomputing the range...
+    double min,max;
+    space->get_bound(i).getDomainLimits(min,max);
+    double cdfmin=dists[i]->cdf(min);//zero maps to here before calling generic invcdf
+    double cdfmax=dists[i]->cdf(max);//one maps to here before calling generic invcdf
+    double val=cdfmin+pars[i]*(cdfmax-cdfmin);
+    v[i]=dists[i]->invcdf(val);
+  }
+  return state(space,v);
+};
+  
+string uniform_dist_product::show()const{
   ostringstream s;
   s<<"UniformSampleableProb(\n";
   for( int i=0;i<dim;i++)
@@ -200,7 +236,25 @@ double mixed_dist_product::evaluate(state &s){
   return result;
 };
 
-string mixed_dist_product::show(){
+///Given a unit hypercube point with uniform distribution
+///return corresponding parameter state with this distribution
+state mixed_dist_product::invcdf(const state &s)const{
+  vector<double> pars=s.get_params_vector();
+  valarray<double> v(dim);    
+  for(uint i=0;i<dim;i++){
+    //If the "boundary" limits the domain of the  distribution, then we take that into account here
+    //Could make this faster by precomputing the range...
+    double min,max;
+    space->get_bound(i).getDomainLimits(min,max);
+    double cdfmin=dists[i]->cdf(min);//zero maps to here before calling generic invcdf
+    double cdfmax=dists[i]->cdf(max);//one maps to here before calling generic invcdf
+    double val=cdfmin+pars[i]*(cdfmax-cdfmin);
+    v[i]=dists[i]->invcdf(val);
+  }
+  return state(space,v);
+};
+  
+string mixed_dist_product::show()const{
   ostringstream s;
   s<<"SampleableProb(\n";
   for( int i=0;i<dim;i++)

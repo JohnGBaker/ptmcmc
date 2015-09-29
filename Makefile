@@ -1,6 +1,7 @@
 MCMC_OFILES = states.o chain.o probability_function.o proposal_distribution.o  ptmcmc.o
 LIB ?= ${CURDIR}/lib
 INCLUDE ?= ${CURDIR}/include
+INCLUDE ?= ${CURDIR}/include
 export LIB INCLUDE
 
 default:test
@@ -17,9 +18,9 @@ ${INCLUDE}:
 	mkdir ${INCLUDE}
 
 #Hacky way to handle subdirectories
-${LIB}/libprobdist.a: ${LIB} ${INC}
+${LIB}/libprobdist.a: ${LIB} ${INCLUDE}
 	@echo "LIB="${LIB}
-	@echo "INC="${INC}
+	@echo "INCLUDE="${INCLUDE}
 	@echo "Descending to ProbabilityDist"
 	@cd ProbabilityDist;${MAKE} ${MFLAGS}
 
@@ -43,15 +44,15 @@ docs:
 	doxygen dox.cfg
 
 testMH: testMH.cpp ${LIB}/libprobdist.a ${LIB}/libptmcmc.a
-	${CXX} $(CFLAGS) -std=c++11 -o testMH -lprobdist -lptmcmc -L${LIB} $<
+	${CXX} $(CFLAGS) -std=c++11 -o testMH -lprobdist -lptmcmc -L${LIB} -I${INCLUDE} $<
 
 testPT: testPT.cpp ${LIB}/libprobdist.a ${LIB}/libptmcmc.a
-	${CXX} $(CFLAGS) -std=c++11 -o testPT -lprobdist -lptmcmc -L${LIB} $<
+	${CXX} $(CFLAGS) -std=c++11 -o testPT -lprobdist -lptmcmc -L${LIB} -I${INCLUDE} $<
 
 .SUFFIXES: .c .cc .o
 
 .cc.o: 
-	${CXX} -c ${CFLAGS} -std=c++11 $<
+	${CXX} -c ${CFLAGS} -std=c++11 -I${INCLUDE} $<
 
 .c.o: 
 	${CC} -c ${CFLAGS} $<

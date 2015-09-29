@@ -230,6 +230,7 @@ class parallel_tempering_chains: public chain{
   vector<double> log_eratio_up,log_eratio_down,tryrate,swaprate,up_frac;
   bool do_evolve_temps;
   double evolve_temp_rate;
+  int maxswapsperstep;
   //internal function
   void pry_temps(int ipry, double rate);
   

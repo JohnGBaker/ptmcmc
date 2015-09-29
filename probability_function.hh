@@ -53,7 +53,8 @@ public:
   virtual double evaluate(state &s){fail();return -1;};
   virtual double evaluate_log(state &s){fail();return -INFINITY;};
   virtual int getDim(){return dim;};
-  virtual string show(){return "UnspecifiedSampleableProb()";};
+  virtual state invcdf(const state &s)const{cout<<"probability_function::invcdf: No invcdf is defined for this probability function: "<<show()<<endl;exit(1);};
+  virtual string show()const{return "UnspecifiedSampleableProb()";};
 };
 
 
@@ -75,7 +76,8 @@ public:
   state drawSample(Random &rng);
   double evaluate(state &s);
   double evaluate_log(state &s){return log(evaluate(s));};
-  string show();
+  state invcdf(const state &s)const;    
+  string show()const;
 };
 
 // An example class for defining likelihoods/priors/etc
@@ -92,7 +94,8 @@ public:
   state drawSample(Random &rng);
   double evaluate(state &s);
   double evaluate_log(state &s){return log(evaluate(s));};
-  string show();
+  state invcdf(const state &s)const;    
+  string show()const;
 };
 
 
@@ -117,7 +120,8 @@ public:
   state drawSample(Random &rng);
   double evaluate(state &s);
   double evaluate_log(state &s){return log(evaluate(s));};
-  string show();
+  state invcdf(const state &s)const;    
+  string show()const;
 };
 
 class chain;

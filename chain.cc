@@ -297,6 +297,7 @@ parallel_tempering_chains::parallel_tempering_chains(int Ntemps,int Tmax,double 
     reboot_thresh=100;
     reboot_thermal_thresh=0;
     reboot_aggression=0;
+    maxswapsperstep=1+2*swap_rate*Ntemps;
 };
 
 void parallel_tempering_chains::initialize( probability_function *log_likelihood, sampleable_probability_function *log_prior,int n){
@@ -343,15 +344,44 @@ void parallel_tempering_chains::set_proposal(proposal_distribution &proposal){
 };
 
 void parallel_tempering_chains::step(){
-  int iswap=-2;
+  int iswaps[maxswapsperstep];
   double x;
-  bool accept=true;
-  if(Ntemps>1&&get_uniform()<(Ntemps-1)*swap_rate){//do swap 
+
+  //diagnostics and steering: set up
+  const int ireport=10000;//should make this user adjustable.
+  static int icount=0;
+  static vector< int > swapcounts;
+  static vector< int > trycounts;
+  if(icount==0){
+    trycounts.clear();
+    trycounts.resize(Ntemps,0);
+    swapcounts.clear();
+    swapcounts.resize(Ntemps,0);
+  }
+  
+  //Determine which chains to try for swaps
+  for(int i=0;i<maxswapsperstep;i++){
+    iswaps[i]=-2;
+    if(Ntemps>1&&get_uniform()<(Ntemps-1)*swap_rate/maxswapsperstep){//do swap 
+      iswaps[i]=int(get_uniform()*(Ntemps-1));
+      //cout<<"trying "<<iswaps[i]<<endl;
+      for(int j=0;j<i;j++)//Don't allow adjacent swaps in same step;
+	if(iswaps[j]==iswaps[i]||iswaps[j]+1==iswaps[i])iswaps[i]=-2;
+    }
+  }
+  //for(int j=0;j<maxswapsperstep;j++)cout<<"\t"<<iswaps[j];
+  //cout<<endl;
+  //Now perform the swap trials:
+  for(int j=0;j<maxswapsperstep;j++)if(iswaps[j]>=0){
+      bool accept=true;
+      trycounts[iswaps[j]]++;
+      //cout<<"iswaps["<<j<<"]="<<iswaps[j]<<endl;
+    //do swap 
     //This algorithm assumes swap_rate<1/Ntemps, which isn't always true.
     //It maybe should be that Nswaps (per step) = int(swap_rate*Ntemps*get_uniform) (possibly/2 as well to get perchain rate)
     //(above, if Ntemps==1,we avoid calling RNG for equivalent behavior to single chain)
     //pick a chain
-    int i=iswap=int(get_uniform()*(Ntemps-1));
+    int i=iswaps[j];
     //diagnostic records first
     if(i>0){
       if(directions[i]>0)ups[i]++;
@@ -386,6 +416,7 @@ void parallel_tempering_chains::step(){
       if(i==0)directions[i]=1;
       if(i+1==Ntemps-1)directions[i+1]=-1;
       swap_accept_count[i]++;
+      swapcounts[iswaps[j]]++;
       if(do_evolve_temps){
 	pry_temps(i,evolve_temp_rate);
       }
@@ -411,7 +442,10 @@ void parallel_tempering_chains::step(){
     chains[i].history_freeze();
     //cout<<"Calling ("<<this<<")ptchain::step() for chain="<<&chains[i]<<" with prop="<<props[i]<<endl;
     //cout<<"Calling step() for chain "<<i<<endl;
-    if(i==iswap||i==iswap+1)continue;//skip additional steps from chains that were already tested for swapping.
+    bool skip_this=false;;
+    for(int j=0;j<maxswapsperstep;j++)
+      if(i==iswaps[j]||i==iswaps[j]+1)skip_this=true;//skip additional steps from chains that were already tested for swapping.
+    if(skip_this)continue;
     chains[i].step(*props[i]);
   }
   
@@ -420,22 +454,7 @@ void parallel_tempering_chains::step(){
   //cout<<status()<<endl;
   
   //diagnostics and steering:
-  const int ireport=10000;//should make this user adjustable.
-  static int icount=0;
-  static vector< int > swapcounts;
-  static vector< int > trycounts;
-  
-  if(icount==0){
-    trycounts.clear();
-    trycounts.resize(Ntemps,0);
-    swapcounts.clear();
-    swapcounts.resize(Ntemps,0);
-  }
   icount++;
-  if(iswap>=0){
-    trycounts[iswap]++;
-    if(accept)swapcounts[iswap]++;
-  }
   if(icount>=ireport){
     for(int i=0;i<Ntemps-1;i++){
       tryrate[i]=trycounts[i]/(double)icount;

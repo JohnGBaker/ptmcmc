@@ -55,8 +55,7 @@ proposal_distribution* ptmcmc_sampler::new_proposal_distribution(int Npar, int &
   }
   case 3:{
     cout<<"Selected differential evolution proposal option"<<endl;
-    //differential_evolution(bool snooker=false, double gamma_one_frac=0.1,double b_small=0.0001,double ignore_frac=0.3):snooker(snooker),gamma_one_frac(gamma_one_frac),b_small(b_small),ignore_frac(ignore_frac)
-    //prop=new differential_evolution();
+    //c.f. differential_evolution(double snooker=0.0, double gamma_one_frac=0.1,double b_small=0.0001,double ignore_frac=0.3);    vector<proposal_distribution*>props(2);
     differential_evolution *de=new differential_evolution(0.0,0.3,de_eps,0.0);
     de->reduce_gamma(reduce_gamma_by);
     if(de_mixing)de->support_mixing(true);
@@ -68,7 +67,7 @@ proposal_distribution* ptmcmc_sampler::new_proposal_distribution(int Npar, int &
   }
   case 4:{
     cout<<"Selected differential evolution with snooker updates proposal option"<<endl;
-    //differential_evolution(bool snooker=false, double gamma_one_frac=0.1,double b_small=0.0001,double ignore_frac=0.3):snooker(snooker),gamma_one_frac(gamma_one_frac),b_small(b_small),ignore_frac(ignore_frac)
+    //c.f. differential_evolution(double snooker=0.0, double gamma_one_frac=0.1,double b_small=0.0001,double ignore_frac=0.3);    vector<proposal_distribution*>props(2);
     differential_evolution *de=new differential_evolution(0.1,0.3,de_eps,0.0);
     //differential_evolution *de=new differential_evolution(0.1,0.3,0.0);
     de->reduce_gamma(reduce_gamma_by);
@@ -105,8 +104,7 @@ proposal_distribution* ptmcmc_sampler::new_proposal_distribution(int Npar, int &
   }
   case 6:{
     cout<<"Selected differential evolution (with snooker updates) proposal with prior draws option"<<endl;
-    //differential_evolution(bool snooker=false, double gamma_one_frac=0.1,double b_small=0.0001,double ignore_frac=0.3):snooker(snooker),gamma_one_frac(gamma_one_frac),b_small(b_small),ignore_frac(ignore_frac)
-    //prop=new differential_evolution();
+    //c.f. differential_evolution(double snooker=0.0, double gamma_one_frac=0.1,double b_small=0.0001,double ignore_frac=0.3);    
     vector<proposal_distribution*>props(2);
     vector<double>shares(2);
     props[0]=new draw_from_dist(*prior);

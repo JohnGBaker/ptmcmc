@@ -135,30 +135,10 @@ public:
     double sum=0;
     double nsum=0;
     vector<double>tlabels=data->getLabels();
-    //FIXME HACK: The next line is to recove some bugish effects for backward compatibility testing.
-    ///Hack to recover an old bug for testing.
-    ///
-    ///This is to implement old behavior, apparently a bug, which did not seem to make sense.
-    ///The old bug apparently offset the time in the wrong direction, though I can't understand why that wouldn't have shown up. 
-    ///To get the presumably better new behavior use "0" instead.
-    ///See clone_trajectory comment in model_lightcurve
-    ///The idea is that, before, tEs[0] in ml_signal::model_lightcurve -> tstart in ml_signal::clone_trajectory which then impacts the the trajectory's p0
-    ///The ultimate effect is to offset the times effectively by t -> t + tEs[0]*tE = =t + times[0]-tmax
-    //vector<double>params=s.get_params_vector();
-    //double tmax=params[s.size()-1];
-    //double toff=tlabels[0]-tmax;  
-    //for(double &t:tlabels)t=t+toff;
-    ///END HACK
     vector<double>modelData=signal->get_model_signal(transformSignalState(s),tlabels);
     vector<double>S=getVariances(s);
-    //This block is inside omp critical because set_model() sets class members of data, which is a shared object.
-    //alternatively we could clone data, but that would mean actually copying the observation data unnecessarily.
-    //A better solution might be separating the functions of instrument and instrument data, so that we can clone
-    //instrument without copying the data.  All this is only an issue if there are parameters that vary which 
-    //the data object needs to know about in getValue or getVariance.
 #pragma omp critical
     {
-      //set_model(s);
       //cout<<"size="<<tlabels.size()<<endl;
       for(int i=0;i<tlabels.size();i++){
         double d=modelData[i]-data->getValue(i);

@@ -2,6 +2,8 @@ PROBDIST_OFILES = ProbabilityDist.o
 NEWRAN_OFILES   = newran1.o newran2.o myexcept.o simpstr.o extreal.o
 
 all: ${LIB}/libprobdist.a  ${INCLUDE}/ProbabilityDist.h
+	@echo LIB=${LIB}
+	@echo INCLUDE=${INCLUDE}
 
 headers: ProbabilityDist.h
 
