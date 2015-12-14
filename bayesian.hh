@@ -66,8 +66,9 @@ protected:
   double label0;
   bool have_model;
   bool have_data;
+  bool allow_fill;
 public:
-  bayes_data():label0(0),have_model(false),have_data(false){};
+  bayes_data():label0(0),have_model(false),have_data(false),allow_fill(false){};
   vector<double>getLabels()const{return labels;};
   void getDomainLimits(double &start, double &end)const{
     if(labels.size()==0){
@@ -101,6 +102,22 @@ public:
       exit(1);
     }
   };
+  void fill_data(vector<double> &newvalues,vector<double> &newdvalues){ 
+    checkData();
+    if(!allow_fill){
+      cout<<"bayes_data::fill_data: Operation not permitted for this class object/instance."<<endl;
+      exit(-1);
+    }
+    //test the vectors
+    if(newvalues.size()!=labels.size()||newdvalues.size()!=labels.size()){
+      cout<<"bayes_data::fill_data: Input arrays are of the wrong size."<<endl;
+      exit(-1);
+    }
+    for(int i=0;i<labels.size();i++){
+      values[i]=newvalues[i];
+      dvalues[i]=newdvalues[i];
+    }
+  };  
 };
 
 ///Bayes class for a likelihood function object
@@ -193,6 +210,33 @@ public:
   virtual state transformDataState(const state &s)const=0;
   //virtual state transformSignalState(const state &s)const {return s;};
   virtual state transformSignalState(const state &s)const=0;
+  ///This method generates mock data and assigns it to the associated bayes_data object.
+  void mock_data(state &s){
+    checkPointers();
+    checkSetup();
+    GaussianDist normal(0.0,1.0);
+    //here we assume the model data is magnitude as function of time
+    //and that dmags provides a 1-sigma error size.
+    vector<double>labels=data->getLabels();
+    //First we set up instrumental-noise free data. This is so that the data object can estimate noise
+    vector<double>modelData=signal->get_model_signal(transformSignalState(s),labels);
+    vector<double>Sm=signal->getVariances(s,labels);
+    vector<double>values(labels.size());
+    vector<double>dvalues(labels.size());
+    for(int i=0;i<labels.size();i++){
+      values[i]=modelData[i]+sqrt(Sm[i])*normal.draw();
+      dvalues[i]=0;
+    }
+    data->fill_data(values,dvalues);
+    //Now, based on the noise free data object, we estimate the instrumental variance
+    vector<double>Sd=data->getVariances(s);
+    for(int i=0;i<labels.size();i++){
+      double sigma=sqrt(Sd[i]);
+      values[i]+=sigma*normal.draw();
+      dvalues[i]=sigma;
+    }
+    data->fill_data(values,dvalues);
+  };
 };
 
 ///Base class for defining a Bayesian sampler object

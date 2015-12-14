@@ -41,7 +41,7 @@ public:
   void add(const Option opt){  
     if(exists(opt.name)){
       if(opt.describe().compare(flags[opt.name].describe())!=0)
-	cout<<"Options::add: Warning! Attempt to re-add an option with same name but non-idential information.\n  Retaining original option ("<<flags[opt.name].describe()<<")\n  Discarding new option ("<<opt.describe()<<") is discarded."<<endl;
+	cout<<"Options::add: Warning! Attempt to re-add an option with same name but non-identical information.\n  Retaining original option ("<<flags[opt.name].describe()<<")\n  Discarding new option ("<<opt.describe()<<") is discarded."<<endl;
       return;
     }
     flags[ opt.name ] = opt;
@@ -83,7 +83,7 @@ public:
     }
     return os.str();
   };
-  bool parse(int & argc, char* argv[]){
+  bool parse(int & argc, char* argv[],bool verbose=true){
     bool fail=false;
     int count=0;
     for(int i=1;i<argc;i++){
@@ -93,7 +93,7 @@ public:
       unsigned int pos=flag.find_first_of("=",1);
       string name=flag.substr(0,pos);
       if(flags.count(name)==0){
-	cerr<<"Option '"<<name<<"' not recognized."<<endl;
+	if(verbose)cerr<<"Option '"<<name<<"' not recognized."<<endl;
 	fail=true;
       } else {
 	Option *opt=&flags[name];
