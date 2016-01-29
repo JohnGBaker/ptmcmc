@@ -211,6 +211,7 @@ public:
   //virtual state transformSignalState(const state &s)const {return s;};
   virtual state transformSignalState(const state &s)const=0;
   ///This method generates mock data and assigns it to the associated bayes_data object.
+public:
   void mock_data(state &s){
     checkPointers();
     checkSetup();
