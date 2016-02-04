@@ -54,7 +54,7 @@ public:
     bounds.resize(dim,boundary());//default to default boundaries (ie allow all reals)
     have_names=false;    
   };
-  int size(){return dim;};
+  int size()const{return dim;};
   void set_bound(int i, const boundary &b){
     if(i<dim)bounds[i]=b;
     else{
@@ -82,13 +82,22 @@ public:
     else return "[unnamed]";
   };      
   int get_index(const string &name)const{
-    if(have_names&&index.count(name)>0)return index.at(name);
+    //cout<<"get_index: name="<<name<<endl;
+    //cout<<"index.size="<<index.size()<<endl;
+    if(have_names&&index.count(name)>0){
+      //cout<<"index.size()="<<index.size()<<endl;
+      //cout<<"index.at(name)="<<index.at(name)<<endl;
+      return index.at(name);
+    }
     else return -1;
   };      
   ///This is the same as get_index but fails with an error message if not found.
   int requireIndex(const string &name)const{
+    //cout<<"requireIndex:name="<<name<<endl;
     int idx=get_index(name);
+    //cout<<"requireIndex:idx="<<idx<<endl;
     if(idx<0){
+      //cout<<"Oops:name="<<name<<", have_names="<<have_names<<endl;     
       cout<<"stateSpace::checkNames(): Name '"<<name<<"' not found in state:"<<show()<<endl;
       exit(1);
     }
@@ -107,6 +116,27 @@ public:
     index[newname]=i;
     names[i]=newname;
     bounds[i]=newbound;
+  };
+  //join this space to another space
+  void attach(const stateSpace &other){
+    if((!have_names&&dim!=0)||(!other.have_names&&other.dim!=0)){
+      cout<<"stateSpace::attach: Warning attaching stateSpace without parameter names."<<endl;
+      have_names=false;
+      cout<<"have_names="<<have_names<<" dim="<<dim<<endl;
+      cout<<"other:have_names="<<other.have_names<<" dim="<<other.dim<<endl;
+    } else if(dim>0||other.dim>0)have_names=true;
+    for(int i=0;i<other.dim;i++){
+      bounds.push_back(other.bounds[i]);
+      if(have_names){
+	if(index.count(other.names[i])>0){
+	  cout<<"stateSpace::attach: Attempted to attach a stateSpace with an identical name '"<<other.names[i]<<"'!"<<endl;
+	  exit(1);
+	}
+	names.push_back(other.names[i]);
+	index[other.names[i]]=dim;
+      }
+      dim+=1;
+    }
   };
 };
       
@@ -169,6 +199,8 @@ protected:
 public:
   stateSpaceTransform(){have_working_space=false;};
   virtual stateSpace transform(const stateSpace &sp)=0;
+  virtual stateSpace inverse_transform(const stateSpace &sp){cout<<"stateSpaceTransform:No inverse transform available"<<endl;exit(1);};
+  virtual double jacobian(const stateSpace &sp){cout<<"stateSpaceTransform:No Jacobian available"<<endl;exit(1);};
   virtual state transformState(const state &s)const=0;
   virtual void defWorkingStateSpace(const stateSpace &sp)=0;
 };
