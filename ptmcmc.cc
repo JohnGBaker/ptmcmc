@@ -95,7 +95,7 @@ proposal_distribution* ptmcmc_sampler::new_proposal_distribution(int Npar, int &
     de->reduce_gamma(reduce_gamma_by);
     if(de_mixing)de->support_mixing(true);
     de->mix_temperatures_more(tmixfac);
-    cout<<"de="<<de<<endl;
+    //cout<<"de="<<de<<endl;
     props[1]=de;
     shares[1]=0.9;
     prop=new proposal_distribution_set(props,shares);    
@@ -189,7 +189,7 @@ void ptmcmc_sampler::processOptions(){
 ///Setup specific for the ptmcmc sampler
 ///
 void ptmcmc_sampler::setup(int Ninit,bayes_likelihood &llike, sampleable_probability_function &prior, proposal_distribution &prop, int output_precision_){
-  cout<<"SETUP("<<this<<")"<<endl;
+  //cout<<"SETUP("<<this<<")"<<endl;
   processOptions();
   chain_Nstep=Nstep;
   chain_Ninit=Ninit;
@@ -203,7 +203,7 @@ void ptmcmc_sampler::setup(int Ninit,bayes_likelihood &llike, sampleable_probabi
 ///Initialization for the ptmcmc sampler
 ///
 int ptmcmc_sampler::initialize(){
-  cout<<"INIT("<<this<<")"<<endl;
+  //cout<<"INIT("<<this<<")"<<endl;
 
   if(!have_setup){
     cout<<"ptmcmc_sampler::initialize.  Must call setup() before initialization!"<<endl;

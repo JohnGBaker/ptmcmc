@@ -32,7 +32,7 @@ public:
   int initialize();
   int analyze(const string & base, int ic, int Nsigma, int Nbest, bayes_likelihood &like);
   bayes_sampler * clone(){
-    cout<<"cloning:"<<this<<")"<<endl;
+    //cout<<"cloning:"<<this<<")"<<endl;
     if(have_cc||have_cprop){
       cout<<"ptmcmc_sampler::clone(): Cannot clone after instantiating chain/prop."<<endl;
       exit(1);
