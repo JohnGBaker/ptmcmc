@@ -157,8 +157,9 @@ double state::innerprod(state other)const{
     return result;
 };
 
-string state::get_string()const{
+string state::get_string(int prec)const{
     ostringstream s;
+    if(prec>-1)s.precision(prec);
     int n=params.size();
     //cout<<"n="<<n<<endl;//debug
     for(int i=0;i<n-1;i++){

@@ -157,7 +157,7 @@ public:
   virtual state scalar_mult(double x)const;
   ///For some applications it is necessary to have an inner product on the state space. Probably should move this out to stateSpace.
   virtual double innerprod(state other)const;
-  virtual string get_string()const;
+  virtual string get_string(int prec=-1)const;
   virtual void get_params_array(valarray<double> &outarray)const{
     //outarray.resize(params.size());
     //for(size_t i=0;i<size();i++)outarray[i]=params[i];

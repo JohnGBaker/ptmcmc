@@ -144,7 +144,7 @@ public:
   virtual void reset()=0;
   virtual double bestPost()=0;
   virtual state bestState()=0;
-  double log_chi_squared(state &s){
+  double log_chi_squared(state &s)const{
     checkPointers();
     checkSetup();
     //here we assume the model data is magnitude as function of time
