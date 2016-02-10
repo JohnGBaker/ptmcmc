@@ -36,8 +36,9 @@ class Option {
 class Options {
 private:
   map<string,Option> flags;
+  bool dash_dash;//if true expect two dashes to indicate flags
 public:
-  Options(){};
+  Options(bool dash_dash=true):dash_dash(dash_dash){};
   void add(const Option opt){  
     if(exists(opt.name)){
       if(opt.describe().compare(flags[opt.name].describe())!=0)
@@ -92,9 +93,10 @@ public:
     //In this way we work either with a partial list of flags, with others to be processed later
     //or will a presumed full list with errors to be called out.
     while(i<argc){
-      if(argv[i][0]!='-')break;
-      string flag( & argv[i][1] );
-      unsigned int pos=flag.find_first_of("=",1);
+      if(argv[i][0]!='-'||(dash_dash&&(string(argv[i]).length()<=1||argv[i][1]!='-')))break;
+      unsigned int iword=dash_dash?2:1;
+      string flag( & argv[i][iword] );
+      unsigned int pos=flag.find_first_of("=",iword);
       string name=flag.substr(0,pos);
       if(flags.count(name)==0){
 	if(verbose)cerr<<"Option '"<<name<<"' not recognized."<<endl;
