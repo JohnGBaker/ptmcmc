@@ -86,15 +86,20 @@ public:
   bool parse(int & argc, char* argv[],bool verbose=true){
     bool fail=false;
     int count=0;
-    for(int i=1;i<argc;i++){
+    int i=1;
+    //We record any arguments that we understand as flags and remove them from the argv array
+    //otherwise we leave them in place, report if verbose=true, and ultimately return "fail"
+    //In this way we work either with a partial list of flags, with others to be processed later
+    //or will a presumed full list with errors to be called out.
+    while(i<argc){
       if(argv[i][0]!='-')break;
-      count++;
       string flag( & argv[i][1] );
       unsigned int pos=flag.find_first_of("=",1);
       string name=flag.substr(0,pos);
       if(flags.count(name)==0){
 	if(verbose)cerr<<"Option '"<<name<<"' not recognized."<<endl;
 	fail=true;
+	i++;
       } else {
 	Option *opt=&flags[name];
 	opt->is_set=true;
@@ -105,10 +110,12 @@ public:
 	}
 	else
 	  opt->value="true";
+	for(int ic=i;ic<argc-1;ic++)argv[ic]=argv[ic+1];
+	count++;
+	argc--;
       }
     }
-    argc-=count;
-    for(int i=0;i<argc;i++)argv[i+1]=argv[i+1+count];
+    //for(int i=0;i<argc;i++)argv[i+1]=argv[i+1+count];
     //cout<<"Counted "<<count<<" flags."<<endl;
     //cout<<"And "<<argc<<" arguments."<<endl;
     return fail;
