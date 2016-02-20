@@ -4,3 +4,5 @@ lib
 include
 doc
 *.o
+ProbabilityDist/testProbDist
+ProbabilityDist/*.dat

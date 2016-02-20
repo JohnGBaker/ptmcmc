@@ -121,7 +121,7 @@ state differential_evolution::draw_standard(state &s, chain *caller){
   gaussian_dist_product edist(nullptr,dim);
   //cout<<"edist:"<<edist.show();
   state e=edist.drawSample(rng);
-  //cout<<"e:"<<e.show();
+  //if(caller->get_id()==1)cout<<"e:"<<e.show();
   /*state prop=e.scalar_mult(b_small);
   //cout<<"x=("<<s.get_string()<<")"<<endl;
   //cout<<"e=("<<prop.get_string()<<")"<<endl;
@@ -141,7 +141,6 @@ state differential_evolution::draw_standard(state &s, chain *caller){
   prop=prop.add(s1.scalar_mult(gamma));
   prop=prop.add(s2.scalar_mult(-gamma));
   //#pragma omp critical(gleamout)
-  //cout<<"draw_standard("<<caller->get_id()<<"): x*=("<<prop.get_string()<<")"<<endl;
     
   //may be faster to do this with vectors instead of "states"
   log_hastings=0;

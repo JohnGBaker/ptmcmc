@@ -51,13 +51,23 @@ public:
   string show(){return "DrawFrom["+dist.show()+"]()";};
 };
 
+///A multidimensional gaussian step proposal distribution.
+///The constructor argument sigmas specifies the standard deviation width in each dimension.
+///The optional constructor argument oneDfrac indicates a fraction of times that the Gaussian
+///draw should be restricted to one randomly and uniformly selected dimension.
+///
 class gaussian_prop: public proposal_distribution{
   valarray<double>sigmas;
   gaussian_dist_product *dist;
+  double oneDfrac;
 public:
-  gaussian_prop(valarray<double> sigmas):sigmas(sigmas){
+  gaussian_prop(valarray<double> sigmas,double oneDfrac=0.0):sigmas(sigmas),oneDfrac(oneDfrac){
     valarray<double> zeros(0.0,sigmas.size());
     dist = new gaussian_dist_product(nullptr,zeros, sigmas);
+    if(oneDfrac<0||oneDfrac>1){
+      cout<<"gaussian_prop(constructor): We require 0<=oneDfrac<=1. "<<endl;
+      exit(1);
+    }
   };
   virtual ~gaussian_prop(){delete dist;};
   //state draw(state &s,Random &rng){
@@ -67,10 +77,20 @@ public:
   //};
   state draw(state &s,chain *caller){
     state offset=dist->drawSample(*(caller->getPRNG()));;
+    double x=caller->getPRNG()->Next();
+    if(x<oneDfrac){
+      int ndim=offset.size();
+      int i=ndim*caller->getPRNG()->Next();
+      valarray<double>vals(0.0,ndim);
+      vals[i]=offset.get_param(i);
+      offset=state(offset.getSpace(),vals);
+      //cout<<"gaussian_prop:drew: offset="<<offset.get_string()<<endl;
+      last_type=1;
+    } else last_type=0;
     return s.add(offset);
   };
   gaussian_prop* clone()const{return new gaussian_prop(*this);};
-  string show(){return "StepBy["+dist->show()+"]()";};
+  string show(){ostringstream ss; ss<<"StepBy["<<dist->show()<<"](1Dfrac="<<oneDfrac<<")";return ss.str();};
 };
 
 

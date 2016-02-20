@@ -84,6 +84,7 @@ public:
     return (x-xmin)/(xmax-xmin);
   };
   double pdf(double x)const{
+    //ostringstream ss;ss<<"UniformIntervalDist::pdf: checking "<<xmin<<" < "<<x<<" < "<<xmax<<"\n";cout<<ss.str();
     if(x<xmin)return 0;
     if(x>xmax)return 0;
     return 1/(xmax-xmin);
@@ -153,6 +154,35 @@ public:
   string show()const{
     ostringstream ss;
     ss<<"UniformPolar( ("<<xmin<<","<<xmax<<") )";
+    return ss.str();
+  };
+};
+
+//UniformCoPolarDist
+//Uniform polar projection distribution, with polar angle measured to +/- pi/2 from equator
+class UniformCoPolarDist: public ProbabilityDist {
+  double xmin,xmax;
+public:
+  UniformCoPolarDist():xmin(-M_PI/2),xmax(M_PI/2){};
+  virtual ProbabilityDist* clone(){return new UniformCoPolarDist(*this);};
+  //~UniformPolarDist();
+  double cdf(double x)const{
+    if(x<xmin)return 0;
+    if(x>xmax)return 1;
+    return (1+sin(x))/2;
+  };
+  double pdf(double x)const{
+    if(x<xmin)return 0;
+    if(x>xmax)return 0;
+    return cos(x)/2;
+  }
+  double invcdf(double p)const{
+    if(p<0||p>1)return numeric_limits<double>::signaling_NaN();
+    return asin(2*p-1);
+  };
+  string show()const{
+    ostringstream ss;
+    ss<<"UniformCoPolar( ("<<xmin<<","<<xmax<<") )";
     return ss.str();
   };
 };

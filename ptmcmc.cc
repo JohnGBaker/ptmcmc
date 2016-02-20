@@ -11,9 +11,10 @@ using namespace std;
 ///This can be a static routine of ptmcmc_sampler class...
 proposal_distribution* ptmcmc_sampler::new_proposal_distribution(int Npar, int &Ninit, const Options &opt, sampleable_probability_function * prior, const valarray<double>*halfwidths){
   int proposal_option,SpecNinit;
-  double tmixfac,reduce_gamma_by,de_eps;
+  double tmixfac,reduce_gamma_by,de_eps,gauss_1d_frac;
   bool de_mixing=false;
   istringstream(opt.value("prop"))>>proposal_option;
+  istringstream(opt.value("gauss_1d_frac"))>>gauss_1d_frac;
   istringstream(opt.value("de_ni"))>>SpecNinit;
   istringstream(opt.value("de_eps"))>>de_eps;
   istringstream(opt.value("de_reduce_gamma"))>>reduce_gamma_by;
@@ -36,7 +37,7 @@ proposal_distribution* ptmcmc_sampler::new_proposal_distribution(int Npar, int &
     break;
   case 1:  //gaussian   
     cout<<"Selected Gaussian proposal option"<<endl;
-    prop=new gaussian_prop(sigmas/8.);
+    prop=new gaussian_prop(sigmas/8.,gauss_1d_frac);
     break;
   case 2:  {  //range of gaussians
     int Nprop_set=4;
@@ -46,7 +47,7 @@ proposal_distribution* ptmcmc_sampler::new_proposal_distribution(int Npar, int &
     double fac=1;
     for(int i=0;i<Nprop_set;i++){
       fac*=2;
-      gaussN[i]=new gaussian_prop(sigmas/fac);
+      gaussN[i]=new gaussian_prop(sigmas/fac,gauss_1d_frac);
       shares[i]=fac;
       cout<<"  sigma="<<sigmas[0]/fac<<", weight="<<fac<<endl;
     }
@@ -119,6 +120,35 @@ proposal_distribution* ptmcmc_sampler::new_proposal_distribution(int Npar, int &
     Ninit=SpecNinit*Npar;
     break;
   }
+  case 7:{
+    cout<<"Selected differential evolution with snooker updates proposal option"<<endl;
+    //c.f. differential_evolution(double snooker=0.0, double gamma_one_frac=0.1,double b_small=0.0001,double ignore_frac=0.3);    vector<proposal_distribution*>props(2);
+    differential_evolution *de=new differential_evolution(0.1,0.3,de_eps,0.0);
+    //differential_evolution *de=new differential_evolution(0.1,0.3,0.0);
+    de->reduce_gamma(reduce_gamma_by);
+    if(de_mixing)de->support_mixing(true);
+    de->mix_temperatures_more(tmixfac);
+    Ninit=SpecNinit*Npar;
+    //plus range of gaussians
+    int Nprop_set=7;
+    cout<<"Selected set of Gaussian proposals option"<<endl;
+    vector<proposal_distribution*> set(Nprop_set,nullptr);
+    vector<double>shares(Nprop_set);
+    set[0]=de;
+    double gshare=0.2;
+    shares[0]=1-gshare;
+    //double sum=(pow(2,2*(Nprop_set-1)+1)-2)*2/3.0,stepfac=4.0;
+    double sum=(pow(2,Nprop_set)-2),stepfac=2.0;
+    double fac=1;
+    for(int i=1;i<Nprop_set;i++){
+      fac*=stepfac;
+      set[i]=new gaussian_prop(sigmas/100.0/fac,gauss_1d_frac);
+      shares[i]=fac/sum*gshare;
+      cout<<"  sigmas[0]="<<sigmas[0]/100.0/fac<<", weight="<<shares[i]<<endl;
+    }
+    prop=new proposal_distribution_set(set,shares);
+    break;
+  }
   default:
     cout<<"new_proposal_distribution: Unrecognized value: proposal_option="<<proposal_option<<endl;
     exit(1);
@@ -136,6 +166,7 @@ ptmcmc_sampler::ptmcmc_sampler(){
   chain_llike=nullptr;
   chain_prior=nullptr;
   have_setup=false;
+  dump_n=1;
 };
 
 void ptmcmc_sampler::addOptions(Options &opt,const string &prefix){
@@ -157,7 +188,9 @@ void ptmcmc_sampler::addOptions(Options &opt,const string &prefix){
   addOption("pt_reboot_thermal","Temperature dependent cutoff term in defining poorly performing parallel tempering chains. Default 0","0");
   addOption("pt_reboot_blindly","Do aggressive random rebooting at some level even if no gaps are found. Default 0","0");
   addOption("pt_reboot_grad","Let the reboot grace period depend linearly on temp level with given mean. (colder->longer)");
-  addOption("prop","Proposal type (0-6). Default=4 (DE with Snooker updates w/o prior draws.)","4");
+  addOption("pt_dump_n","How many of the coldest chains to dump; 0 for all. (default 1)","1");
+  addOption("prop","Proposal type (0-7). Default=4 (DE with Snooker updates w/o prior draws.)","4");
+  addOption("gauss_1d_frac","With Gaussian proposal distribution variants, specify a fraction which should be taken in one random parameter direction. Default=0","0");
   addOption("de_ni","Differential-Evolution number of initialization elements per dimension. Default=10.","10");
   addOption("de_eps","Differential-Evolution gaussian scale. Default=1e-4.","1e-4");
   addOption("de_reduce_gamma","Differential Evolution reduce gamma parameter by some factor from nominal value. Default=1.","1");
@@ -184,6 +217,7 @@ void ptmcmc_sampler::processOptions(){
   pt_reboot_grad=optSet("pt_reboot_grad");
   *optValue("pt_swap_rate")>>swap_rate;
   *optValue("pt_Tmax")>>Tmax;  
+  *optValue("pt_dump_n")>>dump_n;if(dump_n>Nptc||dump_n<0)dump_n=Nptc;  
 };
 
 ///Setup specific for the ptmcmc sampler
@@ -238,11 +272,17 @@ int ptmcmc_sampler::run(const string & base, int ic){
   ios_base::openmode mode=ios_base::out;
   if(ic>0)mode=mode|ios_base::app;
 
-  ostringstream ss;
-  ss<<base<<".dat";
-  ofstream out(ss.str().c_str(),mode);
-  out.precision(output_precision);
-
+  //ostringstream ss;
+  //ss<<base<<".dat";
+  ofstream out[dump_n];
+  for(int ich=0;ich<dump_n;ich++){
+    ostringstream ssi;
+    if(parallel_tempering)ssi<<base<<"_t"<<ich<<".dat";
+    else ssi<<base<<".dat";
+    out[ich].open(ssi.str().c_str(),mode);
+    out[ich].precision(output_precision);
+  }
+  
   cout<<"\nRunning chain "<<ic<<endl;
   //FIXME: add this function in "likelihood" class
   chain_llike->reset();
@@ -252,15 +292,16 @@ int ptmcmc_sampler::run(const string & base, int ic){
     if(0==i%Nevery){
       cout<<"chain "<<ic<<" step "<<i;
       cout<<" MaxPosterior="<<chain_llike->bestPost()<<endl;
-      cc->dumpChain(out,i-Nevery+1,Nskip);
+      if(parallel_tempering)for(int ich=0;ich<dump_n;ich++)dynamic_cast<parallel_tempering_chains*>(cc)->dumpChain(ich,out[ich],i-Nevery+1,Nskip);
+      else cc->dumpChain(out[0],i-Nevery+1,Nskip);
       cout<<cc->status()<<endl;
     }
   }
-  out<<"\n"<<endl;
+  for(int ich=0;ich<dump_n;ich++)out[ich]<<"\n"<<endl;
   
   if(parallel_tempering){
     //FIXME  Want to replace this with a generic chain->report() type function...
-    ss.str("");ss<<base<<"_PTstats.dat";
+    ostringstream ss("");ss<<base<<"_PTstats.dat";
     ofstream outp(ss.str().c_str(),mode);
     outp.precision(output_precision);
     dynamic_cast<parallel_tempering_chains*>(cc)->dumpTempStats(outp);

@@ -20,9 +20,10 @@ private:
   //options params
   int chain_Nstep,chain_Ninit,chain_nburn,output_precision;
   double swap_rate,pt_reboot_rate,pt_reboot_cut,pt_reboot_thermal,pt_reboot_blindly,pt_evolve_rate,Tmax;
-  int Nstep,Nskip,Nptc,Nevery,save_every,pt_reboot_every,pt_reboot_grace;
+  int Nstep,Nskip,Nptc,Nevery,save_every,pt_reboot_every,pt_reboot_grace,dump_n;;
   double nburn_frac;
   bool parallel_tempering,pt_reboot_grad;
+
 public:
   static proposal_distribution* new_proposal_distribution(int Npar, int &Ninit, const Options &opt, sampleable_probability_function * prior, const valarray<double>*halfwidths);
   ptmcmc_sampler();

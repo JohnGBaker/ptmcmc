@@ -198,7 +198,7 @@ mixed_dist_product::mixed_dist_product(stateSpace *space,unsigned int N):samplea
   }
 };
 
-mixed_dist_product::mixed_dist_product(stateSpace *space,const valarray<int> &types,const valarray<double>&centers,const valarray<double>&halfwidths):types(types),centers(centers),halfwidths(halfwidths),sampleable_probability_function(space){
+mixed_dist_product::mixed_dist_product(stateSpace *space,const valarray<int> &types,const valarray<double>&centers,const valarray<double>&halfwidths,bool verbose):types(types),centers(centers),halfwidths(halfwidths),verbose(verbose),sampleable_probability_function(space){
   //cout<<"mixed_dist_product::mixed_dist_product("<<space<<",types,centers,halfwidths): Constructing this="<<this<<endl;//debug;
   dim=centers.size();
   if(dim!=halfwidths.size()||dim!=types.size()){
@@ -213,10 +213,12 @@ mixed_dist_product::mixed_dist_product(stateSpace *space,const valarray<int> &ty
       dists[i]=new GaussianDist(centers[i],halfwidths[i]);
     else if(types[i]==polar)
       dists[i]=new UniformPolarDist();//note centers,halfwidths are ignored
+    else if(types[i]==copolar)
+      dists[i]=new UniformCoPolarDist();//note centers,halfwidths are ignored
     else {
       cout<<"mixed_dist_product(constructor): Unrecognized type. types["<<i<<"]="<<types[i]<<endl;
       exit(1);
-      }
+    }
   }
 };
 
@@ -232,6 +234,11 @@ state mixed_dist_product::drawSample(Random &rng){
   for(uint i=0;i<dim;i++){
     double number=dists[i]->draw(&rng);
     v[i]=number;
+    if(verbose){
+      ostringstream ss;
+      ss<<"mixed_dist_product::drawSample "<<space->get_name(i)<<"->"<<v[i]<<"\n";
+      cout<<ss.str();
+    }
   }
   state s(space,v);
   //cout<<"mixed_dist_product::drawSample(): drew state:"<<s.show()<<endl;//debug
@@ -248,8 +255,17 @@ double mixed_dist_product::evaluate(state &s){
   vector<double> pars=s.get_params_vector();
   for(uint i=0;i<dim;i++){
     double pdfi=dists[i]->pdf(pars[i]);
-      //cout<<"subspace prior for "<<s.getSpace()->get_name(i)<<" -> "<<pdfi<<endl;
-    result*=pdfi;
+    if(verbose){
+      ostringstream ss;
+      ss<<"subspace prior for "<<s.getSpace()->get_name(i)<<"="<<pars[i]<<" -> "<<pdfi<<"\n";
+      cout<<ss.str();
+    }
+      result*=pdfi;
+  }
+  if(verbose){
+    ostringstream ss;
+    ss<<"prior result = "<<result<<"\n";
+    cout<<ss.str();
   }
   return result;
 };

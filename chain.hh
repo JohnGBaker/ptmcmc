@@ -40,7 +40,7 @@ protected:
     double x=rng->Next(); //pick a number
     //rngout<<x<<" 1"<<endl;
     //#pragma omp critical
-    //cout<<id<<":"<<x<<" 1 rng="<<rng<<endl;
+    //cout<<id<<":"<<x<<endl;//" rng="<<rng<<endl;
     return x;
   };
 public:
@@ -246,7 +246,7 @@ class parallel_tempering_chains: public chain{
   double getLogPost(int elem=-1,bool raw_indexing=false)override{return c0().getLogPost(elem,raw_indexing);};
   double getLogLike(int elem=-1,bool raw_indexing=false)override{return c0().getLogLike(elem,raw_indexing);};
   //double getLogPrior(int elem=-1,bool raw_indexing=false)override{return c0().getLogPrior(elem,raw_indexing);};
-  void dumpChain(ostream &os,int Nburn=0,int ievery=1){  dumpChain(0,os,Nburn,ievery);}
+  void dumpChain(ostream &os,int Nburn=0,int ievery=1){ dumpChain(0,os,Nburn,ievery);}
   void dumpChain(int ichain,ostream &os,int Nburn=0,int ievery=1){
     chains[ichain].dumpChain(os,Nburn,ievery);
   };

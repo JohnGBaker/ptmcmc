@@ -32,6 +32,7 @@ states.o: states.hh options.hh
 
 ${LIB}/libptmcmc.a: ${MCMC_OFILES}
 	@echo "archiving"
+	cp *.hh ${INCLUDE}/
 	ar rv ${LIB}/libptmcmc.a ${MCMC_OFILES} 
 
 clean:

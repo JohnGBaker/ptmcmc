@@ -46,6 +46,7 @@ void MH_chain::initialize(uint n){
       s=lprior->drawSample(*rng);
     }
     //cout <<"starting with Nsize="<<Nsize<<endl;//debug
+    Nhist=0;//As long as Nhist remains zero we will add the state regardless of add_every_N
     add_state(s);
   }
   Nhist=0;//Don't count these.
@@ -118,7 +119,7 @@ void MH_chain::step(proposal_distribution &prop,void *data){
     state newstate=prop.draw(current_state,this);
     double newlike,newlpost,newlprior=lprior->evaluate_log(newstate);
     //cout<<"MH_chain::step: newlprior="<<newlprior<<endl;
-    if(newlprior-oldlprior>minPrior){//Avoid spurious likelihood calls where prior effectively vanishes.  
+    if((!current_lpost>-1e200&&newlprior>-1e200)||newlprior-oldlprior>minPrior){//Avoid spurious likelihood calls where prior effectively vanishes. But try anyway if current_lpost is huge. 
       newlike=llikelihood->evaluate_log(newstate);
       newlpost=newlike*invtemp+newlprior;
     } else {
@@ -129,6 +130,7 @@ void MH_chain::step(proposal_distribution &prop,void *data){
     //Now the test: 
     double log_hastings_ratio=prop.log_hastings_ratio();
     log_hastings_ratio+=newlpost-current_lpost;
+    //if(!(current_lpost>-1e200))  cout<<"   log_hastings_ratio="<<log_hastings_ratio<<endl;
     bool accept=true;
     //cout<<Nhist<<"("<<invtemp<<"): ("<<newlike<<","<<newlpost<<")vs.("<<oldlpost<<")->"<<log_hastings_ratio<<endl;//debug
     if(log_hastings_ratio<0){
@@ -242,8 +244,8 @@ void MH_chain::dumpChain(ostream &os,int Nburn,int ievery){
       int idx=Ninit+i;
       if(i>=0)idx=get_state_idx(i);
       os<<i<<" "<<lposts[idx]<<" "<<llikes[idx]<<" "<<acceptance_ratio[idx]<<" "<<types[idx]<<": ";
+      //cout<<"i="<<i<<" "<<idx<<"=idx<states.size()="<<states.size()<<"?"<<endl;//debug
       vector<double>pars=states[idx].get_params_vector();
-      //cout<<i<<"=i<states.size()="<<states.size()<<"?"<<endl;//debug
       //cout<<"state:"<<states[i].show()<<endl;
       for(int j=0;j<np-1;j++)os<<pars[j]<<" ";
       os<<pars[np-1]<<endl;

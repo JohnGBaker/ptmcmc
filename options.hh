@@ -5,6 +5,7 @@
 
 #include <string>
 #include <iostream>
+#include <iomanip>
 #include <sstream>
 #include <map>
 #include <memory>
@@ -79,8 +80,12 @@ public:
     map<string,Option>::const_iterator i;
     
     for(i=flags.begin();i!=flags.end();i++){
-      os<<"  -"<<(*i).second.name<<":\n";
-      os<<"\t"<<(*i).second.info<<":\n";
+      // os.width(20);
+      ostringstream flag("");
+      if(dash_dash)flag<<"  --";
+      else flag<<"  -";
+      flag<<(*i).second.name;
+      os<<setw(24)<<left<<flag.str()<<"\t"<<(*i).second.info<<"\n";
     }
     return os.str();
   };
@@ -93,28 +98,33 @@ public:
     //In this way we work either with a partial list of flags, with others to be processed later
     //or will a presumed full list with errors to be called out.
     while(i<argc){
-      if(argv[i][0]!='-'||(dash_dash&&(string(argv[i]).length()<=1||argv[i][1]!='-')))break;
-      unsigned int iword=dash_dash?2:1;
-      string flag( & argv[i][iword] );
-      unsigned int pos=flag.find_first_of("=",iword);
-      string name=flag.substr(0,pos);
-      if(flags.count(name)==0){
-	if(verbose)cerr<<"Option '"<<name<<"' not recognized."<<endl;
-	fail=true;
-	i++;
-      } else {
-	Option *opt=&flags[name];
-	opt->is_set=true;
-	if(pos!=(unsigned int)string::npos){
-	  //cout<<"pos="<<pos<<endl;
-	  opt->value=flag.substr(pos+1);
-	  //cout<<"value='"<<opt->value<<"'"<<endl;
+      if(argv[i][0]!='-'||(dash_dash&&(string(argv[i]).length()<=1||argv[i][1]!='-'))) i++;
+      else {
+	unsigned int iword=dash_dash?2:1;
+	string flag( & argv[i][iword] );
+	unsigned int pos=flag.find_first_of("=",iword);
+	string name=flag.substr(0,pos); 
+	//cout<<i<<" processsing flag '"<<name<<"'";
+	if(flags.count(name)==0){
+	  //cout<<"\t...not found"<<endl;
+	  if(verbose)cerr<<"Option '"<<name<<"' not recognized."<<endl;
+	  fail=true;
+	  i++;
+	} else {
+	  //cout<<"\t...found"<<endl;
+	  Option *opt=&flags[name];
+	  opt->is_set=true;
+	  if(pos!=(unsigned int)string::npos){
+	    //cout<<"pos="<<pos<<endl;
+	    opt->value=flag.substr(pos+1);
+	    //cout<<"value='"<<opt->value<<"'"<<endl;
+	  }
+	  else
+	    opt->value="true";
+	  for(int ic=i;ic<argc-1;ic++)argv[ic]=argv[ic+1];
+	  count++;
+	  argc--;
 	}
-	else
-	  opt->value="true";
-	for(int ic=i;ic<argc-1;ic++)argv[ic]=argv[ic+1];
-	count++;
-	argc--;
       }
     }
     //for(int i=0;i<argc;i++)argv[i+1]=argv[i+1+count];

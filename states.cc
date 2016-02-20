@@ -7,7 +7,7 @@
 #include "states.hh"
 
 bool boundary::enforce(double &x)const{
-    //cout<<"boundary::enforce: testing value "<<x<<" in range "<<show()<<endl;//debug
+  //cout<<"boundary::enforce: testing value "<<x<<" in range "<<show()<<endl;//debug
     //check wrapping first
     if(lowertype==wrap^uppertype==wrap){//can't have just one wrap 
       cout<<"boundary::enforce: Inconsistent wrap."<<endl;
@@ -119,10 +119,12 @@ state::state(const stateSpace *space,int n):space(space){
   }
 };
 state::state(const stateSpace *sp, const valarray<double>&array):space(sp),params(array){
-  //cout<<"state::state(stuff):space="<<this->space<<endl;
+  //cout<<"state::state(stuff):space="<<this->space<<"  params[0]="<<params[0]<<endl;
+  //cout<<"state::state(stuff):space="<<this->space<<"  ="<<show()<<endl;
   valid=false;
   if(space)valid=true;
   enforce();
+  //cout<<"state::state(stuff):space->"<<this->space<<"  ="<<show()<<endl;
 };
   //some algorithms rely on using the states as a vector space
 state state::add(const state &other)const{

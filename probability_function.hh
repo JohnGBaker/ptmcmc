@@ -121,16 +121,17 @@ class mixed_dist_product: public sampleable_probability_function{
   valarray<double> centers;  //like x0s of gaussian, or (min+max)/2 of uniform.
   valarray<double> halfwidths; //like sigmas of gaussian, or (max-min)/2 of uniform.
   valarray<int> types; //uniform or gaussian
-
   vector<ProbabilityDist*> dists;
+  bool verbose;
 public:
   //static const int mixed_dist_product::uniform=1;
   //static const int mixed_dist_product::gaussian=1;
   static const int uniform=1;
   static const int gaussian=2;
-  static const int polar=2;
+  static const int polar=3;
+  static const int copolar=4;
   mixed_dist_product(stateSpace *space,unsigned int N=1);
-  mixed_dist_product(stateSpace *space,const valarray<int> &types,const valarray<double>&centers,const valarray<double>&halfwidths);
+  mixed_dist_product(stateSpace *space,const valarray<int> &types,const valarray<double>&centers,const valarray<double>&halfwidths,bool verbose=false);
   virtual ~mixed_dist_product();
   state drawSample(Random &rng);
   double evaluate(state &s);
