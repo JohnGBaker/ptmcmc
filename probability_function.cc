@@ -215,6 +215,8 @@ mixed_dist_product::mixed_dist_product(stateSpace *space,const valarray<int> &ty
       dists[i]=new UniformPolarDist();//note centers,halfwidths are ignored
     else if(types[i]==copolar)
       dists[i]=new UniformCoPolarDist();//note centers,halfwidths are ignored
+    else if(types[i]==log)
+      dists[i]=new UniformLogDist(centers[i]/halfwidths[i],centers[i]*halfwidths[i]);//halfwidths is taken as multiplicative in this case
     else {
       cout<<"mixed_dist_product(constructor): Unrecognized type. types["<<i<<"]="<<types[i]<<endl;
       exit(1);

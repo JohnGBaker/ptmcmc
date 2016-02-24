@@ -100,6 +100,44 @@ public:
   };
 };
 
+//Uniform logarithmic interval
+//
+class UniformLogDist: public ProbabilityDist {
+  double xmin,xmax;
+  double log_xmin, log_xmax;
+public:
+  UniformLogDist(double xmin,double xmax):xmin(xmin),xmax(xmax){
+    if(xmin<=0||xmax<=xmin){
+      cout<<"UniformLogDist(constructor):Arguments must satisfy 0<=xmin<=xmax"<<endl;
+      exit(1);
+    }
+    log_xmin=log(xmin);
+    log_xmax=log(xmax);
+  };
+  virtual ProbabilityDist* clone(){return new UniformLogDist(*this);};
+  //~UniformIntervalDist();
+  double cdf(double x)const{
+    if(x<xmin)return 0;
+    if(x>xmax)return 1;
+    return (log(x)-log_xmin)/(log_xmax-log_xmin);
+  };
+  double pdf(double x)const{
+    //ostringstream ss;ss<<"UniformIntervalDist::pdf: checking "<<xmin<<" < "<<x<<" < "<<xmax<<"\n";cout<<ss.str();
+    if(x<xmin)return 0;
+    if(x>xmax)return 0;
+    return 1/(log_xmax-log_xmin)/x;
+  }
+  double invcdf(double p)const{
+    if(p<0||p>1)return numeric_limits<double>::signaling_NaN();
+    return exp(p*(log_xmax-log_xmin)+log_xmin);
+  };
+  string show()const{
+    ostringstream ss;
+    ss<<"LogDist["<<xmin<<","<<xmax<<"]";
+    return ss.str();
+  };
+};
+
 //Gaussian distribution
 class GaussianDist: public ProbabilityDist {
 protected:

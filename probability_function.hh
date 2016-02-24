@@ -130,6 +130,7 @@ public:
   static const int gaussian=2;
   static const int polar=3;
   static const int copolar=4;
+  static const int log=5;
   mixed_dist_product(stateSpace *space,unsigned int N=1);
   mixed_dist_product(stateSpace *space,const valarray<int> &types,const valarray<double>&centers,const valarray<double>&halfwidths,bool verbose=false);
   virtual ~mixed_dist_product();

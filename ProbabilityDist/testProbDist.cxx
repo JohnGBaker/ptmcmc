@@ -22,6 +22,7 @@ int main(int argc, char*argv[]){
   int Nbin=80;
   ProbabilityDist *dist;
   UniformIntervalDist uni(0.1,43.2);
+  UniformLogDist lg(0.31,3.1e2);
   UniformPolarDist pol;
   UniformCoPolarDist copol;
   GaussianDist gauss(32.3,6.8);
@@ -38,6 +39,18 @@ int main(int argc, char*argv[]){
     cout<<n<<" bins : sigma="<<u3<<endl;
   }
   ofstream *file=new ofstream("uniform.dat");
+  testProbabilityDist(*dist,n,*file);		   
+  delete file;
+
+  dist=&lg;
+  cout<<dist->show()<<endl;
+  for(int i=0;i<6;i++){
+    ostringstream ss;
+    n=(2<<i)*Nbin;
+    double u3=testProbabilityDist(*dist,n,ss);		   
+    cout<<n<<" bins : sigma="<<u3<<endl;
+  }
+  file=new ofstream("log.dat");
   testProbabilityDist(*dist,n,*file);		   
   delete file;
 
