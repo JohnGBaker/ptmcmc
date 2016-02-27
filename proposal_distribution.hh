@@ -77,8 +77,9 @@ public:
   //};
   state draw(state &s,chain *caller){
     state offset=dist->drawSample(*(caller->getPRNG()));;
-    double x=caller->getPRNG()->Next();
-    if(x<oneDfrac){
+    double x=1;
+    if(oneDfrac>0)x=caller->getPRNG()->Next();
+    if(oneDfrac>0&&x<oneDfrac){
       int ndim=offset.size();
       int i=ndim*caller->getPRNG()->Next();
       valarray<double>vals(0.0,ndim);

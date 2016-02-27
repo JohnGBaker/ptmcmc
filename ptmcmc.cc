@@ -181,6 +181,7 @@ void ptmcmc_sampler::addOptions(Options &opt,const string &prefix){
   addOption("pt_swap_rate","Frequency of parallel tempering swap_trials. Default 0.01","0.01");
   addOption("pt_Tmax","Max temp of parallel tempering chains. Default 100","100");
   addOption("pt_evolve_rate","Rate at which parallel tempering temps should be allowed to evolve. Default none.","0");
+  addOption("pt_evolve_lpost_cut","Tolerance limit for disordered log-posterior values in temperature evolution. Default no limit.","-1");
   addOption("pt_reboot_rate","Max frequency of rebooting poorly performing parallel tempering chains. Default 0","0");
   addOption("pt_reboot_every","How often to test for rebooting poorly performing parallel tempering chains. Default 0","0");
   addOption("pt_reboot_grace","Grace period protecting infant instances reboot. Default 0","0");
@@ -208,6 +209,7 @@ void ptmcmc_sampler::processOptions(){
   parallel_tempering=optSet("pt");
   *optValue("pt_n")>>Nptc;
   *optValue("pt_evolve_rate")>>pt_evolve_rate;
+  *optValue("pt_evolve_lpost_cut")>>pt_evolve_lpost_cut;
   *optValue("pt_reboot_rate")>>pt_reboot_rate;
   *optValue("pt_reboot_every")>>pt_reboot_every;
   *optValue("pt_reboot_grace")>>pt_reboot_grace;
@@ -249,7 +251,7 @@ int ptmcmc_sampler::initialize(){
     parallel_tempering_chains *ptc= new parallel_tempering_chains(Nptc,Tmax,swap_rate,save_every);
     cc=ptc;
     have_cc=true;
-    if(pt_evolve_rate>0)ptc->evolve_temps(pt_evolve_rate);
+    if(pt_evolve_rate>0)ptc->evolve_temps(pt_evolve_rate,pt_evolve_lpost_cut);
     if(pt_reboot_rate>0)ptc->do_reboot(pt_reboot_rate,pt_reboot_cut,pt_reboot_thermal,pt_reboot_every,pt_reboot_grace,pt_reboot_grad,pt_reboot_blindly);
     ptc->initialize(chain_llike,chain_prior,chain_Ninit);
   } else {
@@ -290,8 +292,8 @@ int ptmcmc_sampler::run(const string & base, int ic){
   for(int i=0;i<=chain_Nstep;i++){
     cc->step();
     if(0==i%Nevery){
-      cout<<"chain "<<ic<<" step "<<i;
-      cout<<" MaxPosterior="<<chain_llike->bestPost()<<endl;
+      cout<<"chain "<<ic<<" step "<<i<<endl;
+      cout<<"   MaxPosterior="<<chain_llike->bestPost()<<endl;
       if(parallel_tempering)for(int ich=0;ich<dump_n;ich++)dynamic_cast<parallel_tempering_chains*>(cc)->dumpChain(ich,out[ich],i-Nevery+1,Nskip);
       else cc->dumpChain(out[0],i-Nevery+1,Nskip);
       cout<<cc->status()<<endl;

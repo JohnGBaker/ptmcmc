@@ -248,7 +248,9 @@ void MH_chain::dumpChain(ostream &os,int Nburn,int ievery){
       vector<double>pars=states[idx].get_params_vector();
       //cout<<"state:"<<states[i].show()<<endl;
       for(int j=0;j<np-1;j++)os<<pars[j]<<" ";
-      os<<pars[np-1]<<endl;
+      os<<pars[np-1];
+      os<<invtemp;
+      os<<endl;
     }
 };
   
@@ -263,7 +265,7 @@ string MH_chain::status(){
     //s<<"chain(id="<<id<<", N="<<Nsize<<", T="<<1.0/invtemp<<"):"<<lposts[Nsize-1]<<", "<<llikes[Nsize-1]<<" : "<<this->getState().get_string();
     s<<"chain(id="<<id<<", N="<<Nsize<<", T="<<1.0/invtemp<<"):"<<current_lpost<<", "<<current_llike<<" : "<<this->getState().get_string();
     return s.str();
-  };
+};
 
 
 
@@ -312,7 +314,8 @@ void parallel_tempering_chains::initialize( probability_function *log_likelihood
   //#pragma omp parallel for schedule (guided, 1)  ///try big chunks first, then specialize
 #pragma omp parallel for schedule (dynamic, 1) ///take one pass/thread at a time until done.
   for(int i=0;i<Ntemps;i++){
-    cout<<"PTchain: initializing chain "<<i<<endl;
+  ostringstream oss;oss<<"PTchain: initializing chain "<<i<<endl;
+  cout<<oss.str();
     chains[i].initialize(n);
     // chains[i].resetTemp(1/temps[i]);
     chains[i].invtemp=1/temps[i];
@@ -348,7 +351,7 @@ void parallel_tempering_chains::set_proposal(proposal_distribution &proposal){
 void parallel_tempering_chains::step(){
   int iswaps[maxswapsperstep];
   double x;
-
+  
   //diagnostics and steering: set up
   const int ireport=10000;//should make this user adjustable.
   static int icount=0;
@@ -378,65 +381,71 @@ void parallel_tempering_chains::step(){
       bool accept=true;
       trycounts[iswaps[j]]++;
       //cout<<"iswaps["<<j<<"]="<<iswaps[j]<<endl;
-    //do swap 
-    //This algorithm assumes swap_rate<1/Ntemps, which isn't always true.
-    //It maybe should be that Nswaps (per step) = int(swap_rate*Ntemps*get_uniform) (possibly/2 as well to get perchain rate)
-    //(above, if Ntemps==1,we avoid calling RNG for equivalent behavior to single chain)
-    //pick a chain
-    int i=iswaps[j];
-    //diagnostic records first
-    if(i>0){
-      if(directions[i]>0)ups[i]++;
-      if(directions[i]<0)downs[i]++;
-    }
-    //cout<<"LogLikes:"<<chains[i].getLogLike()<<" "<<chains[i+1].getLogLike()<<endl;
-    //cout<<"invtemps:"<<chains[i].invtemp<<" "<<chains[i+1].invtemp<<endl;
-    double log_hastings_ratio=-(chains[i+1].invtemp-chains[i].invtemp)*(chains[i+1].getLogLike()-chains[i].getLogLike());//Follows from (21) of LittenbergEA09.
-    if(log_hastings_ratio<0){
-      x=get_uniform(); //pick a number
-      accept=(log(x)<log_hastings_ratio);
-    }
-    //cout<<i<<" "<<log_hastings_ratio<<" -> "<<(accept?"Swap":"----")<<endl;
-    if(accept){
-      //we swap states and leave temp fixed.
-      state sA=chains[i].getState();
-      double llikeA=chains[i].getLogLike();
-      //double lpostA=chains[i].getLogPost();  //This doesn't work since posterior depends on temperature.
-      state sB=chains[i+1].getState();
-      //double lpostB=chains[i+1].getLogPost();
-      double llikeB=chains[i+1].getLogLike();
-      double dirB=directions[i+1];
-      //chains[i+1].add_state(sA,llikeA,lpostA);
-      chains[i+1].add_state(sA,llikeA);  //Allow the chain to compute posterior itself.
-      //chains[i].add_state(sB,llikeB,lpostB);
-      chains[i].add_state(sB,llikeB);
-      int instanceB=instances[i+1];
-      instances[i+1]=instances[i];
-      instances[i]=instanceB;
-      directions[i+1]=directions[i];
-      directions[i]=dirB;
-      if(i==0)directions[i]=1;
-      if(i+1==Ntemps-1)directions[i+1]=-1;
-      swap_accept_count[i]++;
-      swapcounts[iswaps[j]]++;
-      if(do_evolve_temps){
-	pry_temps(i,evolve_temp_rate);
+      //do swap 
+      //This algorithm assumes swap_rate<1/Ntemps, which isn't always true.
+      //It maybe should be that Nswaps (per step) = int(swap_rate*Ntemps*get_uniform) (possibly/2 as well to get perchain rate)
+      //(above, if Ntemps==1,we avoid calling RNG for equivalent behavior to single chain)
+      //pick a chain
+      int i=iswaps[j];
+      //diagnostic records first
+      if(i>0){
+	if(directions[i]>0)ups[i]++;
+	if(directions[i]<0)downs[i]++;
       }
-    } else { //Conceptually this seems necessary.  It was missing before 11-16-2014.  Didn't notice any problems though, before, though.
-      state sA=chains[i].getState();
-      double llikeA=chains[i].getLogLike();
-      double lpostA=chains[i].getLogPost();  //This does work because temperature doesn't change.
-      state sB=chains[i+1].getState();
-      double llikeB=chains[i+1].getLogLike();
-      double lpostB=chains[i+1].getLogPost();
-      chains[i].add_state(sA,llikeA,lpostA);  //For each chain, this is is just a copy of the current state
-      chains[i+1].add_state(sB,llikeB,lpostB);//because we tried and failed with a new candidate.
-    }	
-    swap_count[i]++;
-  }
-  
-  //Either guided or dynamic scheduling seems to work about the same.
-  //#pragma omp parallel for schedule (guided, 1)  ///try big chunks first, then specialize 
+      //cout<<"Trying swap between chains "<<i<<" and "<<i+1<<endl;
+      //cout<<"  logLikes:"<<chains[i].getLogLike()<<" "<<chains[i+1].getLogLike()<<endl;
+      //cout<<"  invtemps:"<<chains[i].invtemp<<" "<<chains[i+1].invtemp<<endl;
+      double lla=chains[i].getLogLike();if(!(lla>-1e200))lla=-1e200;
+      double llb=chains[i+1].getLogLike();if(!(llb>-1e200))llb=-1e200;
+      double log_hastings_ratio=-(chains[i+1].invtemp-chains[i].invtemp)*(llb-lla);//Follows from (21) of LittenbergEA09.
+      //double log_hastings_ratio=-(chains[i+1].invtemp-chains[i].invtemp)*(chains[i+1].getLogLike()-chains[i].getLogLike());//Follows from (21) of LittenbergEA09.
+      if(log_hastings_ratio<0){
+	x=get_uniform(); //pick a number
+	accept=(log(x)<log_hastings_ratio);
+      }
+      //cout<<"lla, llb: "<<lla<<", "<<llb<<endl;
+      //cout<<i<<" "<<log_hastings_ratio<<" -> "<<(accept?"Swap":"----")<<endl;
+      if(accept){
+	//we swap states and leave temp fixed.
+	state sA=chains[i].getState();
+	double llikeA=chains[i].getLogLike();
+	//double lpostA=chains[i].getLogPost();  //This doesn't work since posterior depends on temperature.
+	state sB=chains[i+1].getState();
+	//double lpostB=chains[i+1].getLogPost();
+	double llikeB=chains[i+1].getLogLike();
+	double dirB=directions[i+1];
+	//chains[i+1].add_state(sA,llikeA,lpostA);
+	chains[i+1].add_state(sA,llikeA);  //Allow the chain to compute posterior itself.
+	//chains[i].add_state(sB,llikeB,lpostB);
+	chains[i].add_state(sB,llikeB);
+	int instanceB=instances[i+1];
+	instances[i+1]=instances[i];
+	instances[i]=instanceB;
+	directions[i+1]=directions[i];
+	directions[i]=dirB;
+	if(i==0)directions[i]=1;
+	if(i+1==Ntemps-1)directions[i+1]=-1;
+	swap_accept_count[i]++;
+	swapcounts[iswaps[j]]++;
+	if(do_evolve_temps){
+	  pry_temps(i,evolve_temp_rate);
+	}
+      } else { //Conceptually this seems necessary.  It was missing before 11-16-2014.  Didn't notice any problems though, before, though.
+	state sA=chains[i].getState();
+	double llikeA=chains[i].getLogLike();
+	double lpostA=chains[i].getLogPost();  //This does work because temperature doesn't change.
+	state sB=chains[i+1].getState();
+	double llikeB=chains[i+1].getLogLike();
+	double lpostB=chains[i+1].getLogPost();
+	chains[i].add_state(sA,llikeA,lpostA);  //For each chain, this is is just a copy of the current state
+	chains[i+1].add_state(sB,llikeB,lpostB);//because we tried and failed with a new candidate.
+      }	
+      swap_count[i]++;
+    }
+
+    //Here we perform the standard (non-swap) step for the remaining chains.
+    //Either guided or dynamic scheduling seems to work about the same.
+    //#pragma omp parallel for schedule (guided, 1)  ///try big chunks first, then specialize 
 #pragma omp parallel for schedule (dynamic, 1) ///take one pass/thread at a time until done. 
   for(int i=0;i<Ntemps;i++){
     //NOTE: for thread-independent results with omp and DE-cross-breeding temp chains,
@@ -458,13 +467,16 @@ void parallel_tempering_chains::step(){
   //diagnostics and steering:
   icount++;
   if(icount>=ireport){
+    double evidence=0;
     for(int i=0;i<Ntemps-1;i++){
       tryrate[i]=trycounts[i]/(double)icount;
       swaprate[i]=swapcounts[i]/(double)icount;
       //Compute upside log_evidence ratio
       log_eratio_up[i]=   log_evidence_ratio(i  ,i+1,ireport,add_every_N);
       log_eratio_down[i]=-log_evidence_ratio(i+1,i  ,ireport,add_every_N);
+      evidence+=(log_eratio_up[i]+log_eratio_down[i])/2.0;
     }
+    cout<<"Total log-evidence: "<<evidence<<endl;
     //Compute up/down fracs (and reset count)
     for(int i=0;i<Ntemps;i++){
       if(i==0)up_frac[i]=1;      
@@ -473,7 +485,9 @@ void parallel_tempering_chains::step(){
       ups[i]=downs[i]=0;
     }
     icount=0;
-  }
+  } 
+
+  //***** Reboot *****//
   if((Nsize-Ninit)%test_reboot_every==0){
     //perhaps reboot an underperforming chain.
     //it is convenient to do this at the same time as reporting though this may need to change
@@ -503,7 +517,7 @@ void parallel_tempering_chains::step(){
       for(int i=Ntemps-1;i>0;i--){
 	//We consider rebooting the hottest chains first (only rebooting nreboot per turn at most) 
 	//out criterion for killing is that the posterior is a billion times less than the
-	//max likelihood of any colder chain.  In this case meaningful exchange between the chains may be
+	//max posterior of any colder chain.  In this case meaningful exchange between the chains may be
 	//considered unlikely.
 	if(rcount==nreboot)break;//reached the max-rate limit.
 	double thresh=reboot_thresh+reboot_thermal_thresh*chains[i].invTemp();
@@ -547,15 +561,66 @@ void parallel_tempering_chains::step(){
 };
 
 
-//a scheme for evolving the temperatures to encourage mixing:
+///A scheme for evolving the temperatures to encourage mixing:
+///
+///This function is called each time there is a replica exchange.  It functions in two ways.  First, each time the states of
+///Two temperatures are exchanged, we push those temperatures slightly apart relative to the others, while maintaining the
+///same min and max temps.  The effect, by itself is to move the temps around until the exchange rates are equal for all temperature
+///steps.  The rate argument controls the rate at which we drive toward this equilibrium.
+///
+///Secondly, if the evolve_temp_lpost_cut is engaged, then we similarly push apart any chains for which the current posterior values are
+///out of order by more than the cut value.  The expected order is that hotter chains have larger posteriors as elaborated below.  Since the
+///posterior values jump around stochasitically, it makes sense to allow some tolerance of "disordered" posterior values. Pushing the
+///temps apart reduces the contibution of the likelihood for the hotter chain and thus reduces its posterior value toward the cut value.
+///
+/// The motivation for enforcing posterior ordering is to prevent too much exchange between chains with extremely different likelihoods
+/// so that various replicas are pushed toward independently finding their ways toward high-likelihood regions, rather than perhaps learing
+/// the route from other replicas.  The possiblity of learning from other replicas is characteristic of differential evolution proposal
+/// distributions, which is an advantage when the chains are providing decent sampling of the high-likelihood region. The trouble is that
+/// when exceptionally low-likelihood replicas are exchanging with high-likelihood replicas, the low-likelihood replicas are more likely to
+/// "learn" then path to that same high-likelihood region, which ends up with too many replicas, and reduces the pool of high-temp replicas
+/// searching for alternative high-likelihood areas.  This hypothesis is how I interpret the observed tendency of runs with evolving temperatures
+/// to yield many replicas exploring a nearly disjoint subset of the high-posterior region and few or none in other regions, which the selection
+/// of which regions are explored dependent on the randomization of the run. That is parameter space ranges of the various replicas are strongly
+/// correlated with each other, yielding good mixing in only part of the parameter space.
+///
+///Thermal ordering of posteriors:
+///  The annealed evidence or annealed marginal likelihood is the expectation value of the thermally weighted likelihood
+///  As is standard for thermal integration, the evidence ratio between nearby inverse temperatures \beta
+///  (Z(\beta_b)/Z(\beta_a) ~ (\beta_b-\beta_a) <ln(L)>
+///  Another way to write this is d lnZ / d\beta ~ <ln(L)>
+///  Where the expectation value of ln L is computed at either temp a or b (or more accurately, the average)
+///  For b colder than a (\beta_b-\beta_a)>0 with <ln L> generally <0, we see that the relevant evidence ratio is always negative
+///  meaning that Z(\beta) should always decrease with increasing \beta.
+///  On average then, we expect the annealed evidence, and therefore also typical values of the posterior, to *increase* with hotter temperature. 
+///  Thus we expect, for a mature set of chains, that the posterior values are typically ordered from largest to smallest.
+///  If that is far from the case, something is wrong; then is may be desirable to keep the hotter chain, with the excessively small
+///  posterior at a hotter temperature to allow it to anneal and to keep it from exchanging with the colder chain, which may lead to less
+///  independence of the set of cold instances with DE as we may end of "greasing" the path to that particular cold state.
+///
+///Cut scaling:
+///  We set that the cut limit is proportional to the inverse temperature of the lower chain. This means
+///  that smaller mis-orderings are more significant for hotter chains.  This makes some sense if we think
+///  we are essentially setting a cut on the likelihood difference allowed between mis-ordered chain pairs.
+///  That makes sense also if we want to "protect" the colder chain's better likelihood from jumping up to
+///  the hotter chain.
 void parallel_tempering_chains::pry_temps(int ipry, double rate){
   vector< double > splits(Ntemps-1);
-  for(int i=0;i<Ntemps-1;i++)
+  double sum=0;
+  for(int i=0;i<Ntemps-1;i++){
     splits[i]=chains[i].invTemp()-chains[i+1].invTemp();
-  //dTold=1-chains[Ntemps-1].invTemp()
-  //dTnew=1-chains[Ntemps-1].invTemp()+rate*splits[ipry]
-  double norm=1+rate*splits[ipry]/(1-chains[Ntemps-1].invTemp());
-  splits[ipry]*=1.0+rate;
+    if(evolve_temp_lpost_cut>=0 &&
+       chains[i].current_lpost-chains[i+1].current_lpost>evolve_temp_lpost_cut*chains[i].invTemp()){
+      //cout<<"splits["<<i<<"]="<<splits[i]<<"-->";
+      splits[i]*=1.0+rate;
+      //cout<<splits[i]<<endl;
+    }
+    if(i==ipry)splits[i]*=1.0+rate;
+    sum+=splits[i];
+  }
+  double norm=sum/(1-chains[Ntemps-1].invTemp());
+  //double norm=1+rate*splits[ipry]/(1-chains[Ntemps-1].invTemp());
+  //splits[ipry]*=1.0+rate;
   double invtemp=1;
   for(int i=1;i<Ntemps-1;i++){
     invtemp-=splits[i-1]/norm;
@@ -567,24 +632,40 @@ void parallel_tempering_chains::pry_temps(int ipry, double rate){
 }
   
   
-//This function computes the evidence ratio between chains a two different temps;
+///This function computes the evidence ratio between chains a two different temps;
+///
+///  As is standard for thermal integration, the evidence ratio between nearby inverse temperatures \beta
+///  (Z(\beta_b)/Z(\beta_a) ~ (\beta_b-\beta_a) <ln(L)>
+///  Another way to write this is d lnZ / d\beta ~ <ln(L)>
+///  For small differences between a and b=a+\epsilon
+///  The approximation:
+///  (Z(\beta_b)/Z(\beta_a) ~ (\beta_b-\beta_a) ( <ln(L)>a + <ln(L)>b ) / 2
+///  is good to order \epsilon^2.  Here < . >a means that we take the mean over the samples at temp a.
+///  This function computes the log of the one-sided evidence ratio
 double parallel_tempering_chains::log_evidence_ratio(int ia,int ib,int ilen,int every){
-  double size=chains[ib].size();
-  if(ilen<size)ilen=size;
+  double size=chains[ib].get_state_idx(chains[ib].Nhist);
+  double istart=chains[ib].get_state_idx(chains[ib].Nhist-ilen);
   double amb=chains[ia].invTemp()-chains[ib].invTemp();
   //to avoid possible overflow we offset by max(lnL*amb) before the sum;
+  /*
   double xmax=-1e100;
   for(int i=size-ilen;i<size;i+=every){
     double x=chains[ib].getLogLike(i)*amb;
     if(x>xmax)xmax=x;
-  }
+    }*/
   double sum=0;
-  for(int i=size-ilen;i<size;i+=every){
-    double x=chains[ib].getLogLike(i)*amb-xmax;
-    if(x>-35)sum+=exp(x);
+  double count=0;
+  for(int i=istart;i<size;i+=every){
+    double x=chains[ib].getLogLike(i)*amb;
+    //double x=chains[ib].getLogLike(i)*amb-xmax;
+    sum+=x;
+    count++;
+    //if(x>-35)sum+=exp(x);
   }
-  double result=log(sum/ceil(ilen/(double)every))+xmax;
-  cout<<"log_eratio: amb="<<amb<<" xmax="<<xmax<<" --> "<<result<<endl;
+  double result=sum/count;
+  //double result=log(sum/ceil(ilen/(double)every))+xmax;
+  cout<<"log_eratio: amb="<<amb<<" --> "<<result<<endl;
+  //cout<<"log_eratio: amb="<<amb<<" xmax="<<xmax<<" --> "<<result<<endl;
   return result;
 };
 
@@ -625,7 +706,7 @@ string parallel_tempering_chains::status(){
     ostringstream s;
     s<<"chain(id="<<id<<", Ntemps="<<Ntemps<<"):\n";
     for(int i=0;i<Ntemps;i++){
-      s<<"instance "<<instances[i]<<"["<<Nsize-instance_starts[instances[i]]<<"]("<<(directions[i]>0?"+":"-")<<" , "<<up_frac[i]<<"):                     "<<chains[i].status()<<"\n";
+      s<<"instance \033[1;31m"<<instances[i]<<"\033[0m["<<Nsize-instance_starts[instances[i]]<<"]("<<(directions[i]>0?"+":"-")<<" , "<<up_frac[i]<<"):                     "<<chains[i].status()<<"\n";
       //cout<<swaprate.size()<<" "<<tryrate.size()<<" "<< log_eratio_down.size()<<" "<< log_eratio_up.size()<<endl;
       if(i<Ntemps-1)s<<"-><-("<<swaprate[i]<<" of "<<tryrate[i]<<"): log eratio:("<<log_eratio_down[i]<<","<<log_eratio_up[i]<<")"<<endl;
     }
