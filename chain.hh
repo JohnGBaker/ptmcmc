@@ -159,7 +159,7 @@ class MH_chain: public chain{
   proposal_distribution *default_prop;
   bool default_prop_set;
 protected:
-  int Nhist;
+  int Nhist,Nzero;
   int get_state_idx(int i=-1);
   double invtemp;
 public:

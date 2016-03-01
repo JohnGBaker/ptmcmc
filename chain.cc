@@ -15,7 +15,7 @@ int chain::idcount=0;
 // May add "burn-in" distinction later.
 MH_chain::MH_chain(probability_function * log_likelihood, sampleable_probability_function *log_prior,double minPrior,int add_every_N):
   llikelihood(log_likelihood),lprior(log_prior),minPrior(minPrior),add_every_N(add_every_N){
-  Nsize=0;Nhist=0;invtemp=1;Ntries=1;Naccept=1;last_type=-1;
+  Nsize=0;Nhist=0;Nzero=0;invtemp=1;Ntries=1;Naccept=1;last_type=-1;
   dim=log_prior->getDim();
   default_prop_set=false;
   //cout<<"creating chain at this="<<this->show()<<" with lprior="<<lprior->show()<<endl;//debug
@@ -53,6 +53,7 @@ void MH_chain::initialize(uint n){
 };
 
 void MH_chain::reboot(){
+  Nzero=Nhist;
   Nsize=0;Nhist=0;Ntries=1;Naccept=1;last_type=-1;
   cout<<"Rebooting chain (id="<<id<<")"<<endl;
   Nfrozen=-1;
@@ -157,17 +158,20 @@ void MH_chain::step(proposal_distribution &prop,void *data){
 };
 
 double MH_chain::expectation(double (*test_func)(state s),int Nburn){
-    double sum=0;
-    for(int i=Nburn;i<Nhist;i+=add_every_N)sum+=test_func(states[get_state_idx(i)]);
-    return sum/int((Nhist-Nburn)/add_every_N);
+  //should probably add a check that Nburn>Nzero
+  double sum=0;
+  for(int i=Nburn;i<Nhist;i+=add_every_N)sum+=test_func(states[get_state_idx(i)]);
+  return sum/int((Nhist-Nburn)/add_every_N);
 };
 
 int MH_chain::get_state_idx(int i){
+  //should probably add a check that Nburn>Nzero
   if(i<0||i>=Nhist)i=Nhist-1;
-  return Ninit+i/add_every_N;
+  return Ninit+(i-Nzero)/add_every_N;
 }
 
 double MH_chain::variance(double (*test_func)(state s),double fmean,int Nburn){
+  //should probably add a check that Nburn>Nzero
     double sum=0;
     for(int i=Nburn;i<Nhist;i+=add_every_N){
       double diff=test_func(states[get_state_idx(i)])-fmean;
@@ -433,7 +437,7 @@ void parallel_tempering_chains::step(){
       } else { //Conceptually this seems necessary.  It was missing before 11-16-2014.  Didn't notice any problems though, before, though.
 	state sA=chains[i].getState();
 	double llikeA=chains[i].getLogLike();
-	double lpostA=chains[i].getLogPost();  //This does work because temperature doesn't change.
+	double lpostA=chains[i].getLogPost();  //This does work because temperature doesn't change here.
 	state sB=chains[i+1].getState();
 	double llikeB=chains[i+1].getLogLike();
 	double lpostB=chains[i+1].getLogPost();
