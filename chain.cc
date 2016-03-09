@@ -253,7 +253,7 @@ void MH_chain::dumpChain(ostream &os,int Nburn,int ievery){
       //cout<<"state:"<<states[i].show()<<endl;
       for(int j=0;j<np-1;j++)os<<pars[j]<<" ";
       os<<pars[np-1];
-      os<<invtemp;
+      os<<" "<<invtemp;
       os<<endl;
     }
 };
