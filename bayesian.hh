@@ -34,6 +34,10 @@ protected:
       exit(1);
     }
   };
+  sampleable_probability_function getObjectPrior()const{
+    cout<<"bayes_component::getObjectPrior: No prior is defined for this object!"<<endl;
+    exit(1);
+  };
 };
 	
 ///Interface class for bayesian signal data. This is some kind of compound data.
