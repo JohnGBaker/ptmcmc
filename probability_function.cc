@@ -33,7 +33,7 @@ gaussian_dist_product::~gaussian_dist_product(){
   }
 };
 
-state gaussian_dist_product::drawSample(Random &rng){
+state gaussian_dist_product::drawSample(Random &rng)const{
   valarray<double> v(dim);    
   //cout<<"gaussian_dist_product::drawSample: drawing vector of len "<<dim<<"for space at"<<space<<endl;//debug
   for(uint i=0;i<dim;i++){
@@ -45,7 +45,7 @@ state gaussian_dist_product::drawSample(Random &rng){
   return state(space,v);
 };
 
-double gaussian_dist_product::evaluate(state &s){
+double gaussian_dist_product::evaluate(state &s)const{
   if(s.invalid())return 0;
   if(dim!=s.size()){
     cout<<"gaussian_dist_product:evaluate: State size mismatch.\n";
@@ -121,7 +121,7 @@ uniform_dist_product::~uniform_dist_product(){
   }
 };
 
-state uniform_dist_product::drawSample(Random &rng){
+state uniform_dist_product::drawSample(Random &rng)const{
   valarray<double> v(dim);
   for(uint i=0;i<dim;i++){
     double number=dists[i]->draw(&rng);
@@ -130,7 +130,7 @@ state uniform_dist_product::drawSample(Random &rng){
   return state(space,v);
 };
 
-double uniform_dist_product::evaluate(state &s){
+double uniform_dist_product::evaluate(state &s)const{
   if(s.invalid())return 0;
   if(dim!=s.size()){
     cout<<"uniform_dist_product:evaluate: State size mismatch.\n";
@@ -231,7 +231,7 @@ mixed_dist_product::~mixed_dist_product(){
   }
 };
 
-state mixed_dist_product::drawSample(Random &rng){
+state mixed_dist_product::drawSample(Random &rng)const{
   valarray<double> v(dim);
   for(uint i=0;i<dim;i++){
     double number=dists[i]->draw(&rng);
@@ -247,7 +247,7 @@ state mixed_dist_product::drawSample(Random &rng){
   return s; 
 };
 
-double mixed_dist_product::evaluate(state &s){
+double mixed_dist_product::evaluate(state &s)const{
   if(s.invalid())return 0;
   if(dim!=s.size()){
     cout<<"mixed_dist_product:evaluate: State size mismatch.\n";
@@ -312,16 +312,16 @@ string mixed_dist_product::show(int ii)const{
 ///
 ///Generic class for defining sampleable probability distribution from a direct product of independent state spaces.
 ///
-independent_dist_product::independent_dist_product(const stateSpace *product_space,  sampleable_probability_function *subspace1_dist, sampleable_probability_function *subspace2_dist)
-  :independent_dist_product(product_space,vector<sampleable_probability_function*>(initializer_list<sampleable_probability_function*>{subspace1_dist,subspace2_dist})){};
+independent_dist_product::independent_dist_product(const stateSpace *product_space,  const sampleable_probability_function *subspace1_dist, const sampleable_probability_function *subspace2_dist)
+  :independent_dist_product(product_space,vector<const sampleable_probability_function*>(initializer_list<const sampleable_probability_function*>{subspace1_dist,subspace2_dist})){};
 
-independent_dist_product::independent_dist_product(const stateSpace *product_space,  sampleable_probability_function *subspace1_dist, sampleable_probability_function *subspace2_dist, sampleable_probability_function *subspace3_dist)
-  :independent_dist_product(product_space,vector<sampleable_probability_function*>(initializer_list<sampleable_probability_function*>{subspace1_dist,subspace2_dist,subspace3_dist})){};
+independent_dist_product::independent_dist_product(const stateSpace *product_space,  const sampleable_probability_function *subspace1_dist, const sampleable_probability_function *subspace2_dist, const sampleable_probability_function *subspace3_dist)
+  :independent_dist_product(product_space,vector<const sampleable_probability_function*>(initializer_list<const sampleable_probability_function*>{subspace1_dist,subspace2_dist,subspace3_dist})){};
 
-independent_dist_product::independent_dist_product(const stateSpace *product_space,  sampleable_probability_function *subspace1_dist, sampleable_probability_function *subspace2_dist, sampleable_probability_function *subspace3_dist, sampleable_probability_function *subspace4_dist)
-  :independent_dist_product(product_space,vector<sampleable_probability_function*>(initializer_list<sampleable_probability_function*>{subspace1_dist,subspace2_dist,subspace3_dist,subspace4_dist})){};
+independent_dist_product::independent_dist_product(const stateSpace *product_space,  const sampleable_probability_function *subspace1_dist, const sampleable_probability_function *subspace2_dist, const sampleable_probability_function *subspace3_dist, const sampleable_probability_function *subspace4_dist)
+  :independent_dist_product(product_space,vector<const sampleable_probability_function*>(initializer_list<const sampleable_probability_function*>{subspace1_dist,subspace2_dist,subspace3_dist,subspace4_dist})){};
 
-independent_dist_product::independent_dist_product(const stateSpace *product_space, const vector<sampleable_probability_function*> &subspace_dists):sampleable_probability_function(product_space){
+independent_dist_product::independent_dist_product(const stateSpace *product_space, const vector<const sampleable_probability_function*> &subspace_dists):sampleable_probability_function(product_space){
   dim=product_space->size();
   Nss=subspace_dists.size();
   ss_dists.resize(Nss);
@@ -384,7 +384,7 @@ independent_dist_product::independent_dist_product(const stateSpace *product_spa
 };
   
 //Take the direct product state of subspace samples
-state independent_dist_product::drawSample(Random &rng){
+state independent_dist_product::drawSample(Random &rng)const{
   valarray<double> param_vals(dim);
   vector<state> substates(Nss);
   state s();
@@ -400,7 +400,7 @@ state independent_dist_product::drawSample(Random &rng){
 };
 
 //Take product state of subspace evaluate()s
-double independent_dist_product::evaluate(state &s){
+double independent_dist_product::evaluate(state &s)const{
   if(s.invalid())return 0;
   if(dim!=s.size()){
     cout<<"independent_dist_product:evaluate: State size mismatch.\n";
