@@ -6,7 +6,7 @@
 #include "probability_function.hh"
 #include "chain.hh"
 
-gaussian_dist_product::gaussian_dist_product(stateSpace *space,unsigned int N):sampleable_probability_function(space){
+gaussian_dist_product::gaussian_dist_product(const stateSpace *space,unsigned int N):sampleable_probability_function(space){
   dim=N;
   x0s.resize(N,0);
   sigmas.resize(N,1);
@@ -14,7 +14,7 @@ gaussian_dist_product::gaussian_dist_product(stateSpace *space,unsigned int N):s
   for(size_t i=0;i<dim;i++)dists[i]=new GaussianDist(x0s[i],sigmas[i]);
 };
 
-gaussian_dist_product::gaussian_dist_product(stateSpace *space, valarray<double>&x0s,valarray<double>&sigmas):x0s(x0s),sigmas(sigmas),sampleable_probability_function(space){
+gaussian_dist_product::gaussian_dist_product(const stateSpace *space, valarray<double>&x0s,valarray<double>&sigmas):x0s(x0s),sigmas(sigmas),sampleable_probability_function(space){
   dim=x0s.size();
   if(dim!=sigmas.size()){
     cout<<"gaussian_dist_product(constructor): Array sizes mismatch.\n";
@@ -96,7 +96,7 @@ string gaussian_dist_product::show(int ii)const{
 // An example class for defining likelihoods/priors/etc
 // from which we can draw samples based on the ProbabilityDist class.
 // Default version is flat within unit range on each parameter.
-uniform_dist_product::uniform_dist_product(stateSpace *space , int N):sampleable_probability_function(space){
+uniform_dist_product::uniform_dist_product(const stateSpace *space , int N):sampleable_probability_function(space){
   dim=N;
   min.resize(N,0);
   max.resize(N,1);
@@ -104,7 +104,7 @@ uniform_dist_product::uniform_dist_product(stateSpace *space , int N):sampleable
   for(uint i=0;i<dim;i++)dists[i]=new UniformIntervalDist(min[i],max[i]);
 };
 
-uniform_dist_product::uniform_dist_product(stateSpace *space,const valarray<double>&min_corner,const valarray<double>&max_corner):min(min_corner),max(max_corner),sampleable_probability_function(space){
+uniform_dist_product::uniform_dist_product(const stateSpace *space,const valarray<double>&min_corner,const valarray<double>&max_corner):min(min_corner),max(max_corner),sampleable_probability_function(space){
   dim=min.size();
   if(dim!=max.size()){
     cout<<"prob_dist_product(constructor): Array sizes mismatch.\n";
@@ -184,7 +184,7 @@ string uniform_dist_product::show(int ii)const{
 // from which we can draw samples based on the ProbabilityDist class.
 // unit normal range on each parameter.
 
-mixed_dist_product::mixed_dist_product(stateSpace *space,unsigned int N):sampleable_probability_function(space){
+mixed_dist_product::mixed_dist_product(const stateSpace *space,unsigned int N):sampleable_probability_function(space){
   //cout<<"mixed_dist_product::mixed_dist_product("<<space<<","<<N<<"): Constructing this="<<this<<endl;//debug;
   //cout<<"mixed_dist_product:Creating with space="<<space<<endl;
   dim=N;
@@ -198,7 +198,7 @@ mixed_dist_product::mixed_dist_product(stateSpace *space,unsigned int N):samplea
   }
 };
 
-mixed_dist_product::mixed_dist_product(stateSpace *space,const valarray<int> &types,const valarray<double>&centers,const valarray<double>&halfwidths,bool verbose):types(types),centers(centers),halfwidths(halfwidths),verbose(verbose),sampleable_probability_function(space){
+mixed_dist_product::mixed_dist_product(const stateSpace *space,const valarray<int> &types,const valarray<double>&centers,const valarray<double>&halfwidths,bool verbose):types(types),centers(centers),halfwidths(halfwidths),verbose(verbose),sampleable_probability_function(space){
   //cout<<"mixed_dist_product::mixed_dist_product("<<space<<",types,centers,halfwidths): Constructing this="<<this<<endl;//debug;
   dim=centers.size();
   if(dim!=halfwidths.size()||dim!=types.size()){
@@ -312,16 +312,16 @@ string mixed_dist_product::show(int ii)const{
 ///
 ///Generic class for defining sampleable probability distribution from a direct product of independent state spaces.
 ///
-independent_dist_product::independent_dist_product(stateSpace *product_space,  sampleable_probability_function *subspace1_dist, sampleable_probability_function *subspace2_dist)
+independent_dist_product::independent_dist_product(const stateSpace *product_space,  sampleable_probability_function *subspace1_dist, sampleable_probability_function *subspace2_dist)
   :independent_dist_product(product_space,vector<sampleable_probability_function*>(initializer_list<sampleable_probability_function*>{subspace1_dist,subspace2_dist})){};
 
-independent_dist_product::independent_dist_product(stateSpace *product_space,  sampleable_probability_function *subspace1_dist, sampleable_probability_function *subspace2_dist, sampleable_probability_function *subspace3_dist)
+independent_dist_product::independent_dist_product(const stateSpace *product_space,  sampleable_probability_function *subspace1_dist, sampleable_probability_function *subspace2_dist, sampleable_probability_function *subspace3_dist)
   :independent_dist_product(product_space,vector<sampleable_probability_function*>(initializer_list<sampleable_probability_function*>{subspace1_dist,subspace2_dist,subspace3_dist})){};
 
-independent_dist_product::independent_dist_product(stateSpace *product_space,  sampleable_probability_function *subspace1_dist, sampleable_probability_function *subspace2_dist, sampleable_probability_function *subspace3_dist, sampleable_probability_function *subspace4_dist)
+independent_dist_product::independent_dist_product(const stateSpace *product_space,  sampleable_probability_function *subspace1_dist, sampleable_probability_function *subspace2_dist, sampleable_probability_function *subspace3_dist, sampleable_probability_function *subspace4_dist)
   :independent_dist_product(product_space,vector<sampleable_probability_function*>(initializer_list<sampleable_probability_function*>{subspace1_dist,subspace2_dist,subspace3_dist,subspace4_dist})){};
 
-independent_dist_product::independent_dist_product(stateSpace *product_space, const vector<sampleable_probability_function*> &subspace_dists):sampleable_probability_function(product_space){
+independent_dist_product::independent_dist_product(const stateSpace *product_space, const vector<sampleable_probability_function*> &subspace_dists):sampleable_probability_function(product_space){
   dim=product_space->size();
   Nss=subspace_dists.size();
   ss_dists.resize(Nss);

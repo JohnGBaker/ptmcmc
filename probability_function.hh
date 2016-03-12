@@ -85,8 +85,8 @@ class gaussian_dist_product: public sampleable_probability_function{
   valarray<double> sigmas;
   vector<ProbabilityDist*> dists;
 public:
-  gaussian_dist_product(stateSpace *space,unsigned int N=1);
-  gaussian_dist_product(stateSpace *space, valarray<double>&x0s,valarray<double>&sigmas);
+  gaussian_dist_product(const stateSpace *space,unsigned int N=1);
+  gaussian_dist_product(const stateSpace *space, valarray<double>&x0s,valarray<double>&sigmas);
   virtual ~gaussian_dist_product();
   state drawSample(Random &rng);
   double evaluate(state &s);
@@ -103,8 +103,8 @@ class uniform_dist_product: public sampleable_probability_function{
   valarray<double> max;
   vector<ProbabilityDist*> dists;
 public:
-  uniform_dist_product(stateSpace *space , int N=1);
-  uniform_dist_product(stateSpace *space,const valarray<double>&min_corner,const valarray<double>&max_corner);
+  uniform_dist_product(const stateSpace *space , int N=1);
+  uniform_dist_product(const stateSpace *space,const valarray<double>&min_corner,const valarray<double>&max_corner);
   virtual ~uniform_dist_product();
   state drawSample(Random &rng);
   double evaluate(state &s);
@@ -131,8 +131,8 @@ public:
   static const int polar=3;
   static const int copolar=4;
   static const int log=5;
-  mixed_dist_product(stateSpace *space,unsigned int N=1);
-  mixed_dist_product(stateSpace *space,const valarray<int> &types,const valarray<double>&centers,const valarray<double>&halfwidths,bool verbose=false);
+  mixed_dist_product(const stateSpace *space,unsigned int N=1);
+  mixed_dist_product(const stateSpace *space,const valarray<int> &types,const valarray<double>&centers,const valarray<double>&halfwidths,bool verbose=false);
   virtual ~mixed_dist_product();
   state drawSample(Random &rng);
   double evaluate(state &s);
@@ -151,10 +151,10 @@ class independent_dist_product: public sampleable_probability_function{
   vector<int>index_ss_index; //holds the index within the subspace where the ith element maps
   vector< vector<int> > ss_indices; //holds the product space index corresponding to each subspace index
 public:
-  independent_dist_product(stateSpace *product_space,  sampleable_probability_function *subspace1_dist, sampleable_probability_function *subspace2_dist);
-  independent_dist_product(stateSpace *product_space,  sampleable_probability_function *subspace1_dist, sampleable_probability_function *subspace2_dist, sampleable_probability_function *subspace3_dist);
-  independent_dist_product(stateSpace *product_space,  sampleable_probability_function *subspace1_dist, sampleable_probability_function *subspace2_dist, sampleable_probability_function *subspace3_dist, sampleable_probability_function *subspace4_dist);
-  independent_dist_product(stateSpace *product_space, const vector<sampleable_probability_function*> &subspace_dists);
+  independent_dist_product(const stateSpace *product_space,  sampleable_probability_function *subspace1_dist, sampleable_probability_function *subspace2_dist);
+  independent_dist_product(const stateSpace *product_space,  sampleable_probability_function *subspace1_dist, sampleable_probability_function *subspace2_dist, sampleable_probability_function *subspace3_dist);
+  independent_dist_product(const stateSpace *product_space,  sampleable_probability_function *subspace1_dist, sampleable_probability_function *subspace2_dist, sampleable_probability_function *subspace3_dist, sampleable_probability_function *subspace4_dist);
+  independent_dist_product(const stateSpace *product_space, const vector<sampleable_probability_function*> &subspace_dists);
   virtual ~independent_dist_product(){};
   state drawSample(Random &rng);//Take the direct product state of subspace samples
   double evaluate(state &s);//Take product state of subspace evaluate()s

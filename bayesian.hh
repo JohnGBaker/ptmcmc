@@ -24,6 +24,7 @@ using namespace std;
 class bayes_component: public stateSpaceInterface,public Optioned{
   bool have_setup;
 protected:
+  stateSpace nativespace;
   bayes_component(){have_setup=false;};
   ///This declares that setup is complete.
   void haveSetup(){have_setup=true;};
@@ -34,7 +35,9 @@ protected:
       exit(1);
     }
   };
-  sampleable_probability_function getObjectPrior()const{
+public:
+  ///Return a pointer to an appropriate prior for this objects stateSpace
+  virtual sampleable_probability_function* newObjectPrior()const{
     cout<<"bayes_component::getObjectPrior: No prior is defined for this object!"<<endl;
     exit(1);
   };
