@@ -183,7 +183,7 @@ public:
   virtual void defWorkingStateSpace(const stateSpace &sp)=0;
   virtual void haveWorkingStateSpace(){have_working_space=true;};
   //virtual stateSpace getObjectStateSpace()const{return stateSpace();};
-  virtual stateSpace getObjectStateSpace()const=0;
+  virtual const stateSpace* getObjectStateSpace()const=0;
   void checkWorkingStateSpace()const{
     if(!have_working_space){
       cout<<"stateSpaceTransform::checkWorkingSpace: Must define working space (defWorkingStateSpace) before applying it."<<endl;

@@ -18,29 +18,42 @@
 
 using namespace std;
 
-///This class provides some functions/interface common to all bayesian components (data, signal, likelihood)
+///This class provides some functions/interface common to all bayesian components (data, signal, likelihood).
+///
 ///In particular these all implement the stateSpaceInterface, and the Optioned interfaces.
-///The also generally require set-up before being applied.
+///Derived classes generally provide:
+///-addOptions(Options,String):[options.hh]Object defines its (de facto) command-line options. Begin with call to GLens::addOptions(Options,String).
+///-setup():Object sets itself up after options have been parsed. Should set nativeSpace and nativePrior if used. End with call to haveSetup().
+///-getObjectStateSpace():[states.hh,required] Object returns an appropriate stateSpace for its params. Begin with checkSetup();
+///-getObjectPrior(): Object returns an appropriate for its params. Begin with checkSetup();
+///-defWorkingStateSpace():[states,hh,required] Object finds location of its parameters in the state space. End by calling haveWorkingStateSpace().
+///-setState(State): Object takes values from its parameters as needed for state-specific computations. Begin with haveWorkingStateSpace().
 class bayes_component: public stateSpaceInterface,public Optioned{
   bool have_setup;
+  bool have_prior;
 protected:
-  stateSpace nativespace;
-  bayes_component(){have_setup=false;};
+  stateSpace nativeSpace;
+  shared_ptr<const sampleable_probability_function> nativePrior;
+  bayes_component(){have_setup=false;have_prior=false;};
+  ~bayes_component(){};
   ///This declares that setup is complete.
   void haveSetup(){have_setup=true;};
+  void setPrior(sampleable_probability_function* prior){nativePrior.reset(prior);have_prior=true;};
   ///This assert checks that the object is already set up.
-  void checkSetup()const{
-    if(!have_setup){
+  bool checkSetup(bool quiet=false)const{
+    if((!quiet)&&!have_setup){
       cout<<"bayes_component::checkSetup: Cannot apply object before setup. Be sure to call haveSetup() when set-up is complete."<<endl;
       exit(1);
     }
+    return have_setup;
   };
 public:
   ///Return a pointer to an appropriate prior for this objects stateSpace
-  virtual sampleable_probability_function* newObjectPrior()const{
-    cout<<"bayes_component::getObjectPrior: No prior is defined for this object!"<<endl;
-    exit(1);
+  virtual const sampleable_probability_function* getObjectPrior()const{
+    if(have_prior)return nativePrior.get();
+    else { cout<<"bayes_component::getObjectPrior: No prior is defined for this object!"<<endl;exit(1);}
   };
+  virtual const stateSpace* getObjectStateSpace()const{checkSetup();return &nativeSpace; };
 };
 	
 ///Interface class for bayesian signal data. This is some kind of compound data.
@@ -187,7 +200,6 @@ public:
     return var;
   };
   ///from stateSpaceInterface
-  virtual stateSpace getObjectStateSpace()const{return stateSpace();};
   virtual void defWorkingStateSpace(const stateSpace &sp){
     haveWorkingStateSpace();
     checkPointers();
