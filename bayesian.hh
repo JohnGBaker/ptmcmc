@@ -18,14 +18,12 @@
 
 using namespace std;
 
-///This class provides some functions/interface common to all bayesian components (data, signal, likelihood).
+///Provides some functions/interface common to all bayesian components (data, signal, likelihood).
 ///
 ///In particular these all implement the stateSpaceInterface, and the Optioned interfaces.
 ///Derived classes generally provide:
 ///-addOptions(Options,String):[options.hh]Object defines its (de facto) command-line options. Begin with call to GLens::addOptions(Options,String).
-///-setup():Object sets itself up after options have been parsed. Should set nativeSpace and nativePrior if used. End with call to haveSetup().
-///-getObjectStateSpace():[states.hh,required] Object returns an appropriate stateSpace for its params. Begin with checkSetup();
-///-getObjectPrior(): Object returns an appropriate for its params. Begin with checkSetup();
+///-setup():Object sets itself up after options have been parsed. Should must set nativeSpace and can define prior with setPrior(). End with call to haveSetup().
 ///-defWorkingStateSpace():[states,hh,required] Object finds location of its parameters in the state space. End by calling haveWorkingStateSpace().
 ///-setState(State): Object takes values from its parameters as needed for state-specific computations. Begin with haveWorkingStateSpace().
 class bayes_component: public stateSpaceInterface,public Optioned{
@@ -54,6 +52,7 @@ public:
     else { cout<<"bayes_component::getObjectPrior: No prior is defined for this object!"<<endl;exit(1);}
   };
   virtual const stateSpace* getObjectStateSpace()const{checkSetup();return &nativeSpace; };
+  virtual void setup(){};
 };
 	
 ///Interface class for bayesian signal data. This is some kind of compound data.

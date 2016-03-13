@@ -13,7 +13,7 @@ int chain::idcount=0;
 
 // A markov (or non-Markovian) chain based on some variant of the Metropolis-Hastings algorithm
 // May add "burn-in" distinction later.
-MH_chain::MH_chain(probability_function * log_likelihood, sampleable_probability_function *log_prior,double minPrior,int add_every_N):
+MH_chain::MH_chain(probability_function * log_likelihood, const sampleable_probability_function *log_prior,double minPrior,int add_every_N):
   llikelihood(log_likelihood),lprior(log_prior),minPrior(minPrior),add_every_N(add_every_N){
   Nsize=0;Nhist=0;Nzero=0;invtemp=1;Ntries=1;Naccept=1;last_type=-1;
   dim=log_prior->getDim();
@@ -308,7 +308,7 @@ parallel_tempering_chains::parallel_tempering_chains(int Ntemps,int Tmax,double 
     maxswapsperstep=1+2*swap_rate*Ntemps;
 };
 
-void parallel_tempering_chains::initialize( probability_function *log_likelihood, sampleable_probability_function *log_prior,int n){
+void parallel_tempering_chains::initialize( probability_function *log_likelihood, const sampleable_probability_function *log_prior,int n){
   Ninit=n;
   dim=log_prior->getDim();
   for(int i=0;i<Ntemps;i++){

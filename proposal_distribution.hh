@@ -42,9 +42,9 @@ public:
 
 //A trivial wrapper
 class draw_from_dist: public proposal_distribution{
-  sampleable_probability_function &dist;
+  const sampleable_probability_function &dist;
 public:
-  draw_from_dist(sampleable_probability_function &dist):dist(dist){};
+  draw_from_dist(const sampleable_probability_function &dist):dist(dist){};
   //state draw(state &s,Random &rng){return dist.drawSample(rng);};
   state draw(state &s,chain *caller){return dist.drawSample(*(caller->getPRNG()));};
   draw_from_dist* clone()const{return new draw_from_dist(*this);};

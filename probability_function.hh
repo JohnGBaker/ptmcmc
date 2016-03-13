@@ -70,6 +70,7 @@ public:
   ///are also possible.
   virtual state invcdf(const state &s)const{cout<<"probability_function::invcdf: No invcdf is defined for this probability function: "<<show()<<endl;exit(1);};
   virtual string show(int i=-1)const{return "UnspecifiedSampleableProb()";};
+  virtual void getHalfwidths(valarray<double> &outarray)const{};
 };
 
 
@@ -93,6 +94,7 @@ public:
   //double evaluate_log(state &s){return log(evaluate(s));};
   state invcdf(const state &s)const;    
   string show(int i=-1)const;
+  virtual void getHalfwidths(valarray<double> &outarray)const{outarray=std::move(sigmas);};
 };
 
 // An example class for defining likelihoods/priors/etc
@@ -111,6 +113,10 @@ public:
   //double evaluate_log(state &s){return log(evaluate(s));};
   state invcdf(const state &s)const;    
   string show(int i=-1)const;
+  virtual void getHalfwidths(valarray<double> &outarray)const{
+    outarray=std::move(min);
+    for(int i=0;i<dim;i++)outarray[i]=(max[i]-min[i])/2.0;
+  };
 };
 
 
@@ -139,6 +145,7 @@ public:
   //double evaluate_log(state &s){return log(evaluate(s));};
   state invcdf(const state &s)const;    
   string show(int i=-1)const;
+  virtual void getHalfwidths(valarray<double> &outarray)const{outarray=std::move(halfwidths);};
 };
 
 ///Generic class for defining sampleable probability distribution from a direct product of independent state spaces.
@@ -161,6 +168,17 @@ public:
   //double evaluate_log(state &s){return log(evaluate(s));};//Or could be sum of subspace log_evaluate()s
   state invcdf(const state &s)const;//image is the direct product state of subspace invcdf images
   string show(int i=-1)const;
+  virtual void getHalfwidths(valarray<double> &outarray)const{
+    outarray.resize(dim);
+    int count=0;
+    for(int i=0;i<Nss;i++){
+      int ni=ss_dists[i]->getDim();
+      valarray<double>ss_halfwidths;
+      ss_dists[i]->getHalfwidths(ss_halfwidths);
+      outarray[slice(count,dim,1)]=ss_halfwidths;
+      count+=ni;
+    }
+  };
 };
 
 ///Class for realizing the derived probability_function under a transformation of the stateSpace.

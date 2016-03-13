@@ -15,7 +15,7 @@ private:
   bool have_cc,have_cprop;
   //These pointers are externally owned.
   bayes_likelihood *chain_llike;
-  sampleable_probability_function *chain_prior;
+  const sampleable_probability_function *chain_prior;
   bool have_setup;
   //options params
   int chain_Nstep,chain_Ninit,chain_nburn,output_precision;
@@ -25,11 +25,11 @@ private:
   bool parallel_tempering,pt_reboot_grad;
 
 public:
-  static proposal_distribution* new_proposal_distribution(int Npar, int &Ninit, const Options &opt, sampleable_probability_function * prior, const valarray<double>*halfwidths);
+  static proposal_distribution* new_proposal_distribution(int Npar, int &Ninit, const Options &opt, const sampleable_probability_function * prior, const valarray<double>*halfwidths);
   ptmcmc_sampler();
   void addOptions(Options &opt,const string &prefix="");
   int run(const string & base, int ic=0);
-  void setup(int Ninit, bayes_likelihood &llike, sampleable_probability_function &prior, proposal_distribution &prop,int output_precision=15);
+  void setup(int Ninit, bayes_likelihood &llike, const sampleable_probability_function &prior, proposal_distribution &prop,int output_precision=15);
   int initialize();
   int analyze(const string & base, int ic, int Nsigma, int Nbest, bayes_likelihood &like);
   bayes_sampler * clone(){

@@ -9,7 +9,7 @@ using namespace std;
 ///Set the proposal distribution. Calling routing responsible for deleting.
 ///Also returns choice of Ninit in first arg.
 ///This can be a static routine of ptmcmc_sampler class...
-proposal_distribution* ptmcmc_sampler::new_proposal_distribution(int Npar, int &Ninit, const Options &opt, sampleable_probability_function * prior, const valarray<double>*halfwidths){
+proposal_distribution* ptmcmc_sampler::new_proposal_distribution(int Npar, int &Ninit, const Options &opt, const sampleable_probability_function * prior, const valarray<double>*halfwidths){
   int proposal_option,SpecNinit;
   double tmixfac,reduce_gamma_by,de_eps,gauss_1d_frac;
   bool de_mixing=false;
@@ -224,7 +224,7 @@ void ptmcmc_sampler::processOptions(){
 
 ///Setup specific for the ptmcmc sampler
 ///
-void ptmcmc_sampler::setup(int Ninit,bayes_likelihood &llike, sampleable_probability_function &prior, proposal_distribution &prop, int output_precision_){
+void ptmcmc_sampler::setup(int Ninit,bayes_likelihood &llike, const sampleable_probability_function &prior, proposal_distribution &prop, int output_precision_){
   //cout<<"SETUP("<<this<<")"<<endl;
   processOptions();
   chain_Nstep=Nstep;
