@@ -47,12 +47,19 @@ protected:
   };
 public:
   ///Return a pointer to an appropriate prior for this objects stateSpace
-  virtual const sampleable_probability_function* getObjectPrior()const{
-    if(have_prior)return nativePrior.get();
+virtual shared_ptr<const sampleable_probability_function> getObjectPrior()const{
+    if(have_prior)return nativePrior;
     else { cout<<"bayes_component::getObjectPrior: No prior is defined for this object!"<<endl;exit(1);}
   };
   virtual const stateSpace* getObjectStateSpace()const{checkSetup();return &nativeSpace; };
   virtual void setup(){};
+  virtual string show_pointers(){
+    ostringstream ss;
+    if(have_prior){
+      ss<<"nativePrior["<<nativePrior.get()<<","<<nativePrior.use_count()<<"]";
+    } else ss<<"nativePrior[null]";
+    return ss.str();
+  };
 };
 	
 ///Interface class for bayesian signal data. This is some kind of compound data.

@@ -453,10 +453,7 @@ string independent_dist_product::show(int ii)const{
       cout<<"independent_dist_product::show: Index out of range."<<endl;
       exit(1);
     }
-    //cout<<"index_ss["<<ii<<"]="<<index_ss[ii]<<endl;
-    //cout<<"index_ss_index["<<ii<<"]="<<index_ss_index[ii]<<endl;
-    //cout<<"ss_dists.size()="<<ss_dists.size()<<endl;
-    //cout<<"ss_dists["<<index_ss[ii]<<"]="<<ss_dists[index_ss[ii]]<<endl;
+    //s<<"["<<ss_dists[index_ss[ii]]<<"]";
     s<<ss_dists[index_ss[ii]]->show(index_ss_index[ii]);
   }
   //cout<<"exiting IDP with: "<<s.str()<<endl;

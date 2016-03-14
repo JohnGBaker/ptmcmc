@@ -175,7 +175,7 @@ public:
       int ni=ss_dists[i]->getDim();
       valarray<double>ss_halfwidths;
       ss_dists[i]->getHalfwidths(ss_halfwidths);
-      outarray[slice(count,dim,1)]=ss_halfwidths;
+      outarray[slice(count,ni,1)]=ss_halfwidths;
       count+=ni;
     }
   };
