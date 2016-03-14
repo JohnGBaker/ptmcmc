@@ -46,7 +46,12 @@ class draw_from_dist: public proposal_distribution{
 public:
   draw_from_dist(const sampleable_probability_function &dist):dist(dist){};
   //state draw(state &s,Random &rng){return dist.drawSample(rng);};
-  state draw(state &s,chain *caller){return dist.drawSample(*(caller->getPRNG()));};
+  state draw(state &s,chain *caller){
+    state newstate=dist.drawSample(*(caller->getPRNG()));
+    //If we are more likely to draw the newstate than the oldstate this goes into the Hastings ratio.
+    log_hastings=dist.evaluate_log(s)-dist.evaluate_log(newstate);
+    return newstate;
+  };
   draw_from_dist* clone()const{return new draw_from_dist(*this);};
   string show(){return "DrawFrom["+dist.show()+"]()";};
 };
