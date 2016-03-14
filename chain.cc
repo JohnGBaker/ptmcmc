@@ -241,8 +241,11 @@ void MH_chain::dumpChain(ostream &os,int Nburn,int ievery){
     int np=states[0].size();
     os<<"#Ninit="<<Ninit<<", Nburn="<<Nburn<<"\n";
     os<<"#eval: log(posterior) log(likelihood) acceptance_ratio prop_type: ";
-    for(int i=0;i<np-1;i++)os<<"param("<<i<<") ";
-    os<<"param("<<np-1<<")"<<endl;
+    //for(int i=0;i<np-1;i++)os<<"param("<<i<<") ";
+    //os<<"param("<<np-1<<")"<<endl;
+    const stateSpace *sp=states[0].getSpace();
+    for(int i=0;i<np;i++)os<<sp->get_name(i)<<" ";
+    os<<endl;
     if(Nburn+Ninit<0)Nburn=-Ninit;
     for(int i=Nburn;i<Nhist;i+=ievery){
       int idx=Ninit+i;

@@ -166,7 +166,7 @@ protected:
 public:
   ///Add options to the program's option list.
   Optioned(){have_options=false;};
-  virtual void addOptions(Options &opts,const string &prefix_){opt=&opts,prefix=prefix_;have_options=true;};
+  virtual void addOptions(Options &opts,const string &prefix_=""){opt=&opts,prefix=prefix_;have_options=true;};
   //set the options for processing.
   unique_ptr<istringstream> optValue(const string & name){
     check_opt();return unique_ptr<istringstream>(new istringstream(opt->value((prefix+name).c_str())));
