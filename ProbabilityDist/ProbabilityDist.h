@@ -66,6 +66,7 @@ public:
   virtual double draw(valarray<double>&givens,Random *rng=0){
     setGivens(givens);
     return draw(rng);};
+  virtual void getLimits(double &xmin, double &xmax)const{xmin=-numeric_limits<double>::infinity();xmax=numeric_limits<double>::infinity();};
   virtual string show()const{return string("<empty>");};
 };
 
@@ -78,6 +79,7 @@ public:
   UniformIntervalDist(double xmin,double xmax):xmin(xmin),xmax(xmax){};
   virtual ProbabilityDist* clone(){return new UniformIntervalDist(*this);};
   //~UniformIntervalDist();
+  void getLimits(double &x_min, double &x_max)const{x_min=xmin;x_max=xmax;};
   double cdf(double x)const{
     if(x<xmin)return 0;
     if(x>xmax)return 1;
@@ -101,12 +103,12 @@ public:
 };
 
 //Uniform logarithmic interval
-//
+//x=exp(y) with y uniformly distributed.
 class UniformLogDist: public ProbabilityDist {
   double xmin,xmax;
   double log_xmin, log_xmax;
 public:
-  UniformLogDist(double xmin,double xmax):xmin(xmin),xmax(xmax){
+ UniformLogDist(double xmin,double xmax):xmin(xmin),xmax(xmax){
     if(xmin<=0||xmax<=xmin){
       cout<<"UniformLogDist(constructor):Arguments must satisfy 0<=xmin<=xmax"<<endl;
       exit(1);
@@ -115,14 +117,13 @@ public:
     log_xmax=log(xmax);
   };
   virtual ProbabilityDist* clone(){return new UniformLogDist(*this);};
-  //~UniformIntervalDist();
+  void getLimits(double &x_min, double &x_max)const{x_min=xmin;x_max=xmax;};
   double cdf(double x)const{
     if(x<xmin)return 0;
     if(x>xmax)return 1;
     return (log(x)-log_xmin)/(log_xmax-log_xmin);
   };
   double pdf(double x)const{
-    //ostringstream ss;ss<<"UniformIntervalDist::pdf: checking "<<xmin<<" < "<<x<<" < "<<xmax<<"\n";cout<<ss.str();
     if(x<xmin)return 0;
     if(x>xmax)return 0;
     return 1/(log_xmax-log_xmin)/x;
@@ -175,6 +176,7 @@ public:
   UniformPolarDist():xmin(0),xmax(M_PI){};
   virtual ProbabilityDist* clone(){return new UniformPolarDist(*this);};
   //~UniformPolarDist();
+  void getLimits(double &x_min, double &x_max)const{x_min=xmin;x_max=xmax;};
   double cdf(double x)const{
     if(x<xmin)return 0;
     if(x>xmax)return 1;
@@ -204,6 +206,7 @@ public:
   UniformCoPolarDist():xmin(-M_PI/2),xmax(M_PI/2){};
   virtual ProbabilityDist* clone(){return new UniformCoPolarDist(*this);};
   //~UniformPolarDist();
+  void getLimits(double &x_min, double &x_max)const{x_min=xmin;x_max=xmax;};
   double cdf(double x)const{
     if(x<xmin)return 0;
     if(x>xmax)return 1;
@@ -288,6 +291,7 @@ public:
 
 ///Lastly a handy consistency testing function:
 double testProbabilityDist(ProbabilityDist & dist,int Nbin,ostream &os);
+double testProbabilityDistIntegral(ProbabilityDist & dist,int Nbin);
 
 #endif
   
