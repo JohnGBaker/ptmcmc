@@ -276,7 +276,7 @@ int ptmcmc_sampler::run(const string & base, int ic){
 
   //ostringstream ss;
   //ss<<base<<".dat";
-  ofstream out[dump_n];
+  ofstream *out=new ofstream[dump_n];
   for(int ich=0;ich<dump_n;ich++){
     ostringstream ssi;
     if(parallel_tempering)ssi<<base<<"_t"<<ich<<".dat";
@@ -310,6 +310,7 @@ int ptmcmc_sampler::run(const string & base, int ic){
     outp<<"\n"<<endl;
   }
   cout<<"Finished running chain "<<ic<<"."<<endl;
+  delete [] out;
   return 0;
 };
 

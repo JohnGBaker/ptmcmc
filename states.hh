@@ -77,6 +77,14 @@ public:
     }
     have_names=true;
   };
+  /*  void set_names(vector<string> stringnames){
+    names.resize(dim,"");
+    for(uint i=0;i<dim;i++){
+      names[i]=stringnames[i];
+      index[names[i]]=i;
+    }
+    have_names=true;
+    };*/
   string get_name(int i)const {
     if(have_names&&i<dim)return names[i];
     else return "[unnamed]";
@@ -223,6 +231,7 @@ class stateSpaceTransform1D : public stateSpaceTransform {
     bound=b;
   }
   virtual stateSpace transform(const stateSpace &sp){
+    
     stateSpace outsp=sp;
     int ind=sp.get_index(in);
     if(ind<0){

@@ -97,7 +97,7 @@ public:
   virtual void getHalfwidths(valarray<double> &outarray)const{outarray=std::move(sigmas);};
 };
 
-// An example class for defining likelihoods/priors/etc
+// An class for defining likelihoods/priors/etc
 // from which we can draw samples based on the ProbabilityDist class.
 // Default version is flat within unit range on each parameter.
 class uniform_dist_product: public sampleable_probability_function{

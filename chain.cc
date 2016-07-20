@@ -483,7 +483,11 @@ void parallel_tempering_chains::step(){
       log_eratio_down[i]=-log_evidence_ratio(i+1,i  ,ireport,add_every_N);
       evidence+=(log_eratio_up[i]+log_eratio_down[i])/2.0;
     }
+    //double dE=(log_eratio_up[Ntemps-2]+log_eratio_down[Ntemps-2])/2.0/(chains[Ntemps-2].invTemp()/chains[Ntemps-1].invTemp()-1);    // Note, if beta 1 is small, r~1 anyway then the result will be about ~ beta1
+    //evidence+=dE;
     cout<<"Total log-evidence: "<<evidence<<endl;
+    //evidence*=1.0/(1-chains[Ntemps-1].invTemp());
+    //evidence+=evidence*chains[Ntemps-1].invTemp();
     //Compute up/down fracs (and reset count)
     for(int i=0;i<Ntemps;i++){
       if(i==0)up_frac[i]=1;      

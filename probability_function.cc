@@ -201,10 +201,11 @@ mixed_dist_product::mixed_dist_product(const stateSpace *space,unsigned int N):s
 mixed_dist_product::mixed_dist_product(const stateSpace *space,const valarray<int> &types,const valarray<double>&centers,const valarray<double>&halfwidths,bool verbose):types(types),centers(centers),halfwidths(halfwidths),verbose(verbose),sampleable_probability_function(space){
   //cout<<"mixed_dist_product::mixed_dist_product("<<space<<",types,centers,halfwidths): Constructing this="<<this<<endl;//debug;
   dim=centers.size();
-  if(dim!=halfwidths.size()||dim!=types.size()){
+  if(dim!=halfwidths.size()||dim!=types.size()||space->size()>dim){
     cout<<"mixed_dist_product(constructor): Array sizes mismatch.\n";
       exit(1);
   }
+  if(space->size()!=dim)dim=space->size();
   dists.resize(dim);
   for(size_t i=0;i<dim;i++){
     if(types[i]==uniform)
@@ -389,8 +390,11 @@ state independent_dist_product::drawSample(Random &rng)const{
   vector<state> substates(Nss);
   state s();
   //draw a sample from each subspace
+  //cout<<"dim="<<dim<<" Nss="<<Nss<<endl;
   for(int i=0;i<Nss;i++){
+    //cout<<"i="<<i<<":\ndist="<<ss_dists[i]->show();
     substates[i]=ss_dists[i]->drawSample(rng);
+    //cout<<" [drew "<<substates[i].size()<<" parameter values.]"<<endl;
   }
   //then map the parameters to the product space
   for(int i=0;i<dim;i++)param_vals[i]=substates[index_ss[i]].get_param(index_ss_index[i]);

@@ -77,7 +77,7 @@ string boundary::show()const{
 
 bool stateSpace::enforce(valarray<double> &params)const{
     if(params.size()!=dim){
-      cout<<"stateSpace::enforce:  Dimension error.  Expected "<<dim<<" params, but given "<<params.size()<<"."<<endl;
+      cout<<"stateSpace::enforce:  Dimension error.  Expected "<<dim<<" params, but given "<<params.size()<<" for stateSpace="<<show()<<"."<<endl;
       exit(1);
     }
     for(uint i=0;i<dim;i++){
