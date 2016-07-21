@@ -1,8 +1,11 @@
+#set CXX to g++
 MCMC_OFILES = states.o chain.o probability_function.o proposal_distribution.o  ptmcmc.o
 LIB ?= ${CURDIR}/lib
 INCLUDE ?= ${CURDIR}/include
-INCLUDE ?= ${CURDIR}/include
-export LIB INCLUDE
+CFLAGS ?= -fopenmp
+
+
+export LIB INCLUDE CFLAGS
 
 default:test
 
@@ -14,6 +17,7 @@ DUMMY:
 #Make library if needed.
 ${LIB}:
 	mkdir ${LIB}
+
 ${INCLUDE}:
 	mkdir ${INCLUDE}
 
@@ -49,6 +53,9 @@ testMH: testMH.cpp ${LIB}/libprobdist.a ${LIB}/libptmcmc.a
 
 testPT: testPT.cpp ${LIB}/libprobdist.a ${LIB}/libptmcmc.a
 	${CXX} $(CFLAGS) -std=c++11 -o testPT -lprobdist -lptmcmc -L${LIB} -I${INCLUDE} $<
+
+example: example.cc testPT.cpp ${LIB}/libprobdist.a ${LIB}/libptmcmc.a
+	${CXX} $(CFLAGS) -std=c++11 -o example -lprobdist -lptmcmc -L${LIB} -I${INCLUDE} $<
 
 .SUFFIXES: .c .cc .o
 
