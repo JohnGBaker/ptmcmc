@@ -228,6 +228,9 @@ class parallel_tempering_chains: public chain{
   vector<int> swap_count;
   vector<double> temps;
   vector<double> log_eratio_up,log_eratio_down,tryrate,swaprate,up_frac;
+  vector<vector<double> >total_evidence_records;
+  int evidence_count,evidence_records_dim;
+  double best_evidence_stderr;
   bool do_evolve_temps;
   double evolve_temp_rate,evolve_temp_lpost_cut;
   int maxswapsperstep;
@@ -265,6 +268,7 @@ class parallel_tempering_chains: public chain{
   //thermal integration evidence???
   //This function computes the evidence ratio between chains a two different temps;
   double log_evidence_ratio(int ia,int ib,int ilen,int every=1);
+  double bestEvidenceErr(){return best_evidence_stderr;};
   bool evolve_temps(double rate=0.01,double lpost_cut=-1){
     do_evolve_temps=1;
     evolve_temp_rate=rate;
