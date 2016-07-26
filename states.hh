@@ -77,14 +77,18 @@ public:
     }
     have_names=true;
   };
-  /*  void set_names(vector<string> stringnames){
+  void set_names(vector<string> &stringnames){
+    if(stringnames.size()<dim){
+      cout<<"stateSpace::set_names: Vector of param names is too short. Quitting."<<endl;
+      exit(-1);
+    }
     names.resize(dim,"");
     for(uint i=0;i<dim;i++){
       names[i]=stringnames[i];
       index[names[i]]=i;
     }
     have_names=true;
-    };*/
+  };
   string get_name(int i)const {
     if(have_names&&i<dim)return names[i];
     else return "[unnamed]";
@@ -138,6 +142,7 @@ public:
       if(have_names){
 	if(index.count(other.names[i])>0){
 	  cout<<"stateSpace::attach: Attempted to attach a stateSpace with an identical name '"<<other.names[i]<<"'!"<<endl;
+	  cout<<show()<<endl;
 	  exit(1);
 	}
 	names.push_back(other.names[i]);
