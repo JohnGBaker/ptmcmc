@@ -3,7 +3,7 @@ MCMC_OFILES = states.o chain.o probability_function.o proposal_distribution.o  p
 LIB ?= ${CURDIR}/lib
 INCLUDE ?= ${CURDIR}/include
 CFLAGS ?= -fopenmp
-
+#eg CXX = /opt/local/bin/g++-mp-5
 
 export LIB INCLUDE CFLAGS
 
@@ -56,6 +56,12 @@ testPT: testPT.cpp ${LIB}/libprobdist.a ${LIB}/libptmcmc.a
 
 example: example.cc testPT.cpp ${LIB}/libprobdist.a ${LIB}/libptmcmc.a
 	${CXX} $(CFLAGS) -std=c++11 -o example -lprobdist -lptmcmc -L${LIB} -I${INCLUDE} $<
+
+#linear_example: linear_example.cc ${LIB}/libprobdist.a ${LIB}/libptmcmc.a
+#	${CXX} $(CFLAGS) -std=c++11 -o linear_example -lprobdist -lptmcmc -L${LIB} -I${INCLUDE} $<
+
+poly_example: poly_example.cc ${LIB}/libprobdist.a ${LIB}/libptmcmc.a
+	${CXX} $(CFLAGS) -std=c++11 -o poly_example -lprobdist -lptmcmc -L${LIB} -I${INCLUDE} $<
 
 .SUFFIXES: .c .cc .o
 
