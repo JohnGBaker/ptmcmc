@@ -23,7 +23,8 @@ class Option {
   bool is_set;
  public:
   Option():name(""),info(""),value(""),have_default(false),is_set(false){};
-  Option(const char *name, const char *info, const char* vdefault="<no default>"):name(name),info(info),value(vdefault){
+  //Option(const char *name, const char *info, const char* vdefault="<no default>"):name(name),info(info),value(vdefault){
+  Option(const string & name, const string & info, const string& vdefault="<no default>"):name(name),info(info),value(vdefault){
     is_set= false;
     have_default=false;
     if(string(vdefault).compare("<no default>")!=0)have_default=true;
@@ -150,9 +151,10 @@ private:
   bool have_options;
 protected:
   void copyOptioned(Optioned &other){prefix=other.prefix;opt=other.opt;have_options=other.have_options;};
-  void addOption(const char * name, const char * info, const char * vdefault="<no default>"){
+  //void addOption(const char * name, const char * info, const char * vdefault="<no default>"){
+  void addOption(const string & name, const string & info, const string & vdefault="<no default>"){
     check_opt();
-    opt->add(Option((prefix+name).c_str(),info,vdefault));};
+    opt->add(Option((prefix+name),info,vdefault));};
   void check_opt(){
     if(!this){
       cout<<"Optioned::check_opt: You've called this from a null pointer."<<endl;
