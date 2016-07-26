@@ -171,7 +171,7 @@ ptmcmc_sampler::ptmcmc_sampler(){
 
 void ptmcmc_sampler::addOptions(Options &opt,const string &prefix){
   Optioned::addOptions(opt,prefix);
-  addOption("nevery","Frequency to dump chain info. Default=1000.","1000");
+  addOption("nevery","Frequency to dump chain info. Default=5000.","5000");
   addOption("save_every","Frequency to store chain info. Default=1.","1");
   addOption("nsteps","How long to run the chain. Default=5000.","5000");
   addOption("nskip","Only dump every nskipth element. Default=10.","10");
@@ -179,7 +179,7 @@ void ptmcmc_sampler::addOptions(Options &opt,const string &prefix){
   addOption("pt","Do parallel tempering.");
   addOption("pt_n","Number of parallel tempering chains. Default 20","20");
   addOption("pt_swap_rate","Frequency of parallel tempering swap_trials. Default 0.01","0.01");
-  addOption("pt_Tmax","Max temp of parallel tempering chains. Default 100","100");
+  addOption("pt_Tmax","Max temp of parallel tempering chains. Default 1e6","1e6");
   addOption("pt_evolve_rate","Rate at which parallel tempering temps should be allowed to evolve. Default none.","0");
   addOption("pt_evolve_lpost_cut","Tolerance limit for disordered log-posterior values in temperature evolution. Default no limit.","-1");
   addOption("pt_reboot_rate","Max frequency of rebooting poorly performing parallel tempering chains. Default 0","0");
@@ -190,6 +190,7 @@ void ptmcmc_sampler::addOptions(Options &opt,const string &prefix){
   addOption("pt_reboot_blindly","Do aggressive random rebooting at some level even if no gaps are found. Default 0","0");
   addOption("pt_reboot_grad","Let the reboot grace period depend linearly on temp level with given mean. (colder->longer)");
   addOption("pt_dump_n","How many of the coldest chains to dump; 0 for all. (default 1)","1");
+  addOption("pt_stop_evid_err","Set a value to specify a stopping criterion based on evidence consistency. (default 0)","0");
   addOption("prop","Proposal type (0-7). Default=4 (DE with Snooker updates w/o prior draws.)","4");
   addOption("gauss_1d_frac","With Gaussian proposal distribution variants, specify a fraction which should be taken in one random parameter direction. Default=0","0");
   addOption("de_ni","Differential-Evolution number of initialization elements per dimension. Default=10.","10");
@@ -208,6 +209,7 @@ void ptmcmc_sampler::processOptions(){
   *optValue("burn_frac")>>nburn_frac;
   parallel_tempering=optSet("pt");
   *optValue("pt_n")>>Nptc;
+  if(Nptc>1)parallel_tempering=true;
   *optValue("pt_evolve_rate")>>pt_evolve_rate;
   *optValue("pt_evolve_lpost_cut")>>pt_evolve_lpost_cut;
   *optValue("pt_reboot_rate")>>pt_reboot_rate;
@@ -220,6 +222,7 @@ void ptmcmc_sampler::processOptions(){
   *optValue("pt_swap_rate")>>swap_rate;
   *optValue("pt_Tmax")>>Tmax;  
   *optValue("pt_dump_n")>>dump_n;if(dump_n>Nptc||dump_n<0)dump_n=Nptc;  
+  *optValue("pt_stop_evid_err")>>pt_stop_evid_err;  
 };
 
 ///Setup specific for the ptmcmc sampler
@@ -291,13 +294,22 @@ int ptmcmc_sampler::run(const string & base, int ic){
   
   for(int i=0;i<=chain_Nstep;i++){
     cc->step();
+    bool stop=false;
     if(0==i%Nevery){
       cout<<"chain "<<ic<<" step "<<i<<endl;
       cout<<"   MaxPosterior="<<chain_llike->bestPost()<<endl;
-      if(parallel_tempering)for(int ich=0;ich<dump_n;ich++)dynamic_cast<parallel_tempering_chains*>(cc)->dumpChain(ich,out[ich],i-Nevery+1,Nskip);
+      if(parallel_tempering){
+	parallel_tempering_chains *ptc=dynamic_cast<parallel_tempering_chains*>(cc);
+	for(int ich=0;ich<dump_n;ich++)ptc->dumpChain(ich,out[ich],i-Nevery+1,Nskip);
+	double bestErr=ptc->bestEvidenceErr();
+	if(bestErr<pt_stop_evid_err){
+	  stop=true;
+	  cout<<"ptmcmc::run: Stopping based on pt_stop_evid_err criterion."<<endl; 
+      }
       else cc->dumpChain(out[0],i-Nevery+1,Nskip);
-      cout<<cc->status()<<endl;
+      cout<<cc->status()<<endl;      
     }
+    if(stop)break;
   }
   for(int ich=0;ich<dump_n;ich++)out[ich]<<"\n"<<endl;
   
