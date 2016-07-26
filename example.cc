@@ -417,7 +417,7 @@ int main(int argc, char*argv[]){
   cout<<"like.nativeSpace=\n"<<space.show()<<endl;
   prior=like->getObjectPrior();
   cout<<"Prior is:\n"<<prior->show()<<endl;
-  valarray<double> halfw;prior->getHalfwidths(halfw);
+  valarray<double> scales;prior->getScales(scales);
 
   //Read Params
   int Npar=space.size();
@@ -426,7 +426,7 @@ int main(int argc, char*argv[]){
   //Bayesian sampling [assuming mcmc]:
   //Set the proposal distribution 
   int Ninit;
-  proposal_distribution *prop=ptmcmc_sampler::new_proposal_distribution(Npar,Ninit,opt,prior.get(),&halfw);
+  proposal_distribution *prop=ptmcmc_sampler::new_proposal_distribution(Npar,Ninit,opt,prior.get(),&scales);
   cout<<"Proposal distribution is:\n"<<prop->show()<<endl;
   //set up the mcmc sampler (assuming mcmc)
   mcmc.setup(Ninit,*like,*prior,*prop,output_precision);
