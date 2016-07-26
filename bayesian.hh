@@ -36,7 +36,10 @@ protected:
   ~bayes_component(){};
   ///This declares that setup is complete.
   void haveSetup(){have_setup=true;};
-  void setPrior(sampleable_probability_function* prior){nativePrior.reset(prior);have_prior=true;};
+  void setPrior(sampleable_probability_function* prior){
+    nativePrior.reset(prior);have_prior=true;
+    cout<<"bayes_component::setPrior: Setting for this object("<<typeid(*this).name()<<")"<<endl;
+  };
   ///This assert checks that the object is already set up.
   bool checkSetup(bool quiet=false)const{
     if((!quiet)&&!have_setup){
@@ -107,8 +110,8 @@ public:
     start=labels.front();
     end=labels.back();
   };
-  virtual int size()const=0;
-  virtual double getFocusLabel(bool original=false)const=0;
+  virtual int size()const{return labels.size();};
+  virtual double getFocusLabel(bool original=false)const{return 0;};
   virtual double getValue(int i )const{return values[i];};
   virtual vector<double>getValues()const{checkData(VALUES);return values;};
   virtual vector<double>getDeltaValues()const{checkData(DVALUES);return dvalues;};
@@ -116,9 +119,12 @@ public:
   virtual vector<double> getVariances(const state &s)const{
     checkData(DVALUES);
     //cout<<"bayes_data::getVariances"<<endl;
+    //    for(int i=0;i<labels.size();i++)
+    //      cout<<i<<","<<labels[i]<<": "<<values[i]<<","<<dvalues[i]<<endl;
     vector<double>v=getDeltaValues();
     for(int i=0;i<v.size();i++){
       v[i]*=v[i];
+      //cout<<i<<":"<<v[i]<<endl;
     }
     return v;
   };
@@ -144,22 +150,26 @@ public:
     if(0==(have_data & test))return false;
     return true;
   };
-  void fill_data(vector<double> &newvalues,vector<double> &newdvalues){ 
+  void fill_data(vector<double> &newvalues){
     assertData(LABELS|VALUES|DVALUES);
     if(!allow_fill){
       cout<<"bayes_data::fill_data: Operation not permitted for this class object/instance."<<endl;
       exit(-1);
     }
     //test the vectors
-    if(newvalues.size()!=labels.size()||newdvalues.size()!=labels.size()){
-      cout<<"bayes_data::fill_data: Input arrays are of the wrong size."<<endl;
+    if(newvalues.size()!=labels.size()){
+      cout<<"bayes_data::fill_data: Input array is of the wrong size."<<endl;
       exit(-1);
     }
     for(int i=0;i<labels.size();i++){
       values[i]=newvalues[i];
-      dvalues[i]=newdvalues[i];
     }
   };  
+  ///By default assume there are no parameters associated with the data so this is trivial.  It should be overloaded if there are data parameters.
+  virtual void defWorkingStateSpace(const stateSpace &sp){
+    checkSetup();//Call this assert whenever we need options to have been processed.
+    haveWorkingStateSpace();
+  };
 };
 
 ///Bayes class for a likelihood function object
@@ -207,57 +217,12 @@ public:
   }
   virtual state bestState(){return best;};
   virtual double bestPost(){return best_post;};
-  double log_chi_squared(state &s)const{
-    checkPointers();
-    checkSetup();
-    data->assertData(data->LABELS|data->VALUES|data->DVALUES);
-    //here we assume the model data is magnitude as function of time
-    //and that dmags provides a 1-sigma error size.
-    double sum=0;
-    double nsum=0;
-    vector<double>tlabels=data->getLabels();
-    vector<double>modelData=signal->get_model_signal(transformSignalState(s),tlabels);
-    vector<double>S=getVariances(s);
-#pragma omp critical
-    {
-      //cout<<"size="<<tlabels.size()<<endl;
-      for(int i=0;i<tlabels.size();i++){
-        double d=modelData[i]-data->getValue(i);
-        //double S=getVariance(i,tlabels[i]);
-        sum+=d*d/S[i];
-        nsum+=log(S[i]);  //note trying to move log outside loop can lead to overflow error.
-      }
-    }
-    //cout<<" sum="<<sum<<"  nsum="<<nsum<<endl;
-    sum+=nsum;
-    sum/=-2;
-    //cout<<" sum="<<sum<<"  like0="<<like0<<endl;
-    //cout<<"this="<<this<<endl;
-    return sum-like0;
-  };
-  double log_poisson(state &s)const{
-    checkPointers();
-    checkSetup();
-    data->assertData(bayes_data::LABELS);
-    //here we assume the model data are rates at the data label value points
-    //and the extra last entry in model array is the total expected rate
-    double sum=0;
-    vector<double>labels=data->getLabels();
-    vector<double>modelData=signal->get_model_signal(transformSignalState(s),labels);
-    int ndata=labels.size();
-#pragma omp critical
-    {
-      for(int i=0;i<ndata;i++){
-	sum += log(modelData[i]);
-      }
-      sum -= modelData[ndata];//For Poisson data the model array should end with the total number of events expected.
-    }
-    return sum-like0;
-  };
   //virtual bool setStateSpace(stateSpace &sp)=0;
+  virtual double getFisher(const state &s0, vector<vector<double> >&fisher_matrix){
+    cout<<"getFisher not implemented for bayes_likelihood object ("<<typeid(*this).name()<<")"<<endl;
+  };
   virtual vector<double> getVariances(const state &st)const{
     checkPointers();
-    cout<<"bayes_likelihood::getVariances"<<endl;
     const vector<double>labels=data->getLabels();
     vector<double>var=data->getVariances(transformDataState(st));
     vector<double>svar=signal->getVariances(transformSignalState(st),labels);
@@ -355,8 +320,153 @@ public:
     xfinestart=x0-(-xstart+xend)*finewidthfac/2.0;
     xfineend=x0+(-xstart+xend)*finewidthfac/2.0;
   };
+protected:
+  //Some standard Likelihood models
+  ///Chi-squared likelihood models independent gaussian random noise for each datum.
+  ///For a normalized gaussian distribution:
+  /// logL = Exp[-(x-\mu)^2/Var] - (1/2)ln(2\pi Var) 
+  ///summed over all data values x(label).  Typically the model mean value \mu depends on label and on the parameters and variance Var
+  ///may also depend on parameters and label.
+  double log_chi_squared(state &s)const{
+    checkPointers();
+    checkSetup();
+    data->assertData(data->LABELS|data->VALUES|data->DVALUES);
+    //here we assume the model data is magnitude as function of time
+    //and that dmags provides a 1-sigma error size.
+    double sum=0;
+    double nsum=0;
+    vector<double>tlabels=data->getLabels();
+    vector<double>modelData=signal->get_model_signal(transformSignalState(s),tlabels);
+    vector<double>S=getVariances(s);
+#pragma omp critical
+    {
+      for(int i=0;i<tlabels.size();i++){
+        double d=modelData[i]-data->getValue(i);
+        //cout<<"i,d,S:"<<i<<","<<d<<","<<S[i]<<endl;
+        sum+=d*d/S[i];
+        nsum+=log(S[i]);  //note trying to move log outside loop can lead to overflow error.
+      }
+    }
+    //cout<<" sum="<<sum<<"  nsum="<<nsum<<endl;
+    sum+=nsum;
+    sum/=-2;
+    //cout<<" sum="<<sum<<"  like0="<<like0<<endl;
+    //cout<<"this="<<this<<endl;
+    return sum-like0;
+  };
+  double log_poisson(state &s)const{
+    checkPointers();
+    checkSetup();
+    data->assertData(bayes_data::LABELS);
+    //here we assume the model data are rates at the data label value points
+    //and the extra last entry in model array is the total expected rate
+    double sum=0;
+    vector<double>labels=data->getLabels();
+    vector<double>modelData=signal->get_model_signal(transformSignalState(s),labels);
+    int ndata=labels.size();
+#pragma omp critical
+    {
+      for(int i=0;i<ndata;i++){
+	sum += log(modelData[i]);
+      }
+      sum -= modelData[ndata];//For Poisson data the model array should end with the total number of events expected.
+    }
+    return sum-like0;
+  };
+  ///The Fisher information matrix for the chi-squared likelihood.
+  ///Generally the fisher information should return the expected value E[\partial_i(logL) \partial_j(logL)]
+  ///As noted, for a normalized gaussian distribution:
+  /// logL = -(x-\mu)^2/Var - (1/2)ln(2\pi Var) 
+  ///summed over all data values x(label).  Typically the model mean value \mu depends on label and on the parameters and variance Var
+  ///may also depend on parameters and label. For the Fisher computation we need:
+  ///  \partial_i logL =  (x-\mu)/Var \partial_i \mu + (1/2)( (x-\mu)^2/Var - 1 ) \partial_i ln(Var)
+  /// To compute the Fisher matrix, note that E[(x-mu)^n] vanishes for odd n, equals Var for n=2 and equals 3Var^2 for n=4.
+  /// Thus:
+  ///   F_{ij} =  (1/2) \partial_i ln(Var) \partial_j ln(Var) + (1/Var) \partial_i \mu \partial_j \mu  
+  /// Computationally, the trick is to get values for the derivatives. This requires some estimate for the relevant scale.
+  /// We apply a boot-strap approach, first estimating based on some scale-factor times smaller than the prior scales.
+  /// Note that his computation is not highly efficient. It is expected to be called relatively few times, certainly not
+  /// at each step of an MCMC chain.  It requires several times more than dim^2 model evaluations.
+  double getFisher_chi_squared(const state &s0, vector<vector<double> >&fisher_matrix){
+    int dim=s0.size();
+    int maxFisherIter=15*dim;
+    double deltafactor=0.001;
+    double tol=10*deltafactor*deltafactor*deltafactor;
+    valarray<double> scales;
+    nativePrior->getScales(scales);
+    vector<double>labels=data->getLabels();
+    double N=labels.size();
+    vector<double>Var0=getVariances(s0);
+    double err=1;
+    int count=0;
+    vector< vector<double> >last_fisher_matrix(dim,vector<double>(dim,0));
+    while(err>tol&&count<maxFisherIter){
+      for(int i=0;i<dim;i++){
+	//compute i derivative of model
+	vector<double>dmudi(N);
+	vector<double>dVdi(N);
+	double h=scales[i]*deltafactor;
+	state sPlus=s0;
+	sPlus.set_param(i,s0.get_param(i)+h);
+	state sMinus=s0;
+	sMinus.set_param(i,s0.get_param(i)-h);
+	vector<double>modelPlus=signal->get_model_signal(transformSignalState(sPlus),labels);
+	vector<double>modelMinus=signal->get_model_signal(transformSignalState(sMinus),labels);
+	for(int k=0;k<N;k++)dmudi[k]=(modelPlus[k]-modelMinus[k])/h/2.0;
+	//compute i derivative of Variances
+	vector<double>VarPlus=getVariances(sPlus);
+	vector<double>VarMinus=getVariances(sMinus);
+	for(int k=0;k<N;k++)dVdi[k]=(VarPlus[k]-VarMinus[k])/h/2.0;
+	
+
+	for(int j=i;j<dim;j++){
+	  //compute j derivative of model
+	  vector<double>dmudj(N);
+	  vector<double>dVdj(N);
+	  h=scales[j]*deltafactor;
+	  state sPlus=s0;
+	  sPlus.set_param(j,s0.get_param(j)+h);
+	  state sMinus=s0;
+	  sMinus.set_param(j,s0.get_param(j)-h);
+	  vector<double>modelPlus=signal->get_model_signal(transformSignalState(sPlus),labels);
+	  vector<double>modelMinus=signal->get_model_signal(transformSignalState(sMinus),labels);
+	  for(int k=0;k<N;k++)dmudj[k]=(modelPlus[k]-modelMinus[k])/h/2.0;
+	  //compute i derivative of Variances
+	  vector<double>VarPlus=getVariances(sPlus);
+	  vector<double>VarMinus=getVariances(sMinus);
+	  for(int k=0;k<N;k++)dVdj[k]=(VarPlus[k]-VarMinus[k])/h/2.0;
+
+	  //Compute fisher matrix element
+	  fisher_matrix[i][j]=0;
+	  for(int k=0;k<N;k++) fisher_matrix[i][j] += ( dmudi[k]*dmudj[k] - dVdi[k]*dVdj[k]/2.0 ) / Var0[k];
+	  fisher_matrix[j][i] = fisher_matrix[i][j];
+	}
+      }
+      
+      //estimate error
+      err=0;
+      double square=0;
+      for(int i=0;i<dim;i++)for(int j=0;j<dim;j++){
+	  double delta=(fisher_matrix[i][j]-last_fisher_matrix[i][j]);///scales[i]/scales[j];
+	  square+=fisher_matrix[i][j]*fisher_matrix[i][j];
+	  err+=delta*delta;
+	}
+      err/=square;
+      //set scale estimate based on result
+      for(int i=0;i<dim;i++)scales[i]=1.0/sqrt(1/scales[i]+fisher_matrix[i][i]);
+      //prep for next version of fisher calc;
+      for(int i=0;i<dim;i++)for(int j=0;j<dim;j++)last_fisher_matrix[i][j]=fisher_matrix[i][j];
+      count++;
+    }
+    err=sqrt(err);
+    cout<<"err="<<err<<endl;
+    cout<<"tol="<<tol<<endl;
+    if(err<tol)return tol;
+    return err; 
+  };
+  
+protected:
     
-  protected:
   ///A largely cosmetic adjustment to yield conventional likelihood level with noise_mag=0;
   virtual void set_like0_chi_squared(){
     checkPointers();
@@ -390,17 +500,8 @@ public:
     vector<double>dvalues(labels.size());
     for(int i=0;i<labels.size();i++){
       values[i]=modelData[i]+sqrt(Sm[i])*normal.draw();
-      dvalues[i]=0;
     }
-    data->fill_data(values,dvalues);
-    //Now, based on the noise free data object, we estimate the instrumental variance
-    vector<double>Sd=data->getVariances(s);
-    for(int i=0;i<labels.size();i++){
-      double sigma=sqrt(Sd[i]);
-      values[i]+=sigma*normal.draw();
-      dvalues[i]=sigma;
-    }
-    data->fill_data(values,dvalues);
+    data->fill_data(values);
   };
 };
 
