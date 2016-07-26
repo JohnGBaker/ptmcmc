@@ -305,6 +305,7 @@ int ptmcmc_sampler::run(const string & base, int ic){
 	if(bestErr<pt_stop_evid_err){
 	  stop=true;
 	  cout<<"ptmcmc::run: Stopping based on pt_stop_evid_err criterion."<<endl; 
+	}
       }
       else cc->dumpChain(out[0],i-Nevery+1,Nskip);
       cout<<cc->status()<<endl;      
