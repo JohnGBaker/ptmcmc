@@ -203,7 +203,8 @@ mixed_dist_product::mixed_dist_product(const stateSpace *space,const valarray<in
   dim=centers.size();
   if(dim!=halfwidths.size()||dim!=types.size()||space->size()>dim){
     cout<<"mixed_dist_product(constructor): Array sizes mismatch.\n";
-      exit(1);
+    cout<<"Ncenters="<<dim<<" Nscales="<<halfwidths.size()<<" Ntypes="<<types.size()<<" space_dim="<<space->size()<<endl;
+    exit(1);
   }
   if(space->size()!=dim)dim=space->size();
   dists.resize(dim);
