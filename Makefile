@@ -1,8 +1,11 @@
+#set CXX to g++
 MCMC_OFILES = states.o chain.o probability_function.o proposal_distribution.o  ptmcmc.o
 LIB ?= ${CURDIR}/lib
 INCLUDE ?= ${CURDIR}/include
-INCLUDE ?= ${CURDIR}/include
-export LIB INCLUDE
+CFLAGS ?= -fopenmp
+#eg CXX = /opt/local/bin/g++-mp-5
+
+export LIB INCLUDE CFLAGS
 
 default:test
 
@@ -14,6 +17,7 @@ DUMMY:
 #Make library if needed.
 ${LIB}:
 	mkdir ${LIB}
+
 ${INCLUDE}:
 	mkdir ${INCLUDE}
 
@@ -49,6 +53,15 @@ testMH: testMH.cpp ${LIB}/libprobdist.a ${LIB}/libptmcmc.a
 
 testPT: testPT.cpp ${LIB}/libprobdist.a ${LIB}/libptmcmc.a
 	${CXX} $(CFLAGS) -std=c++11 -o testPT $< -lprobdist -lptmcmc -L${LIB} -I${INCLUDE} $(LDFLAGS)
+
+example: example.cc testPT.cpp ${LIB}/libprobdist.a ${LIB}/libptmcmc.a
+	${CXX} $(CFLAGS) -std=c++11 -o example -lprobdist -lptmcmc -L${LIB} -I${INCLUDE} $<
+
+#linear_example: linear_example.cc ${LIB}/libprobdist.a ${LIB}/libptmcmc.a
+#	${CXX} $(CFLAGS) -std=c++11 -o linear_example -lprobdist -lptmcmc -L${LIB} -I${INCLUDE} $<
+
+poly_example: poly_example.cc ${LIB}/libprobdist.a ${LIB}/libptmcmc.a
+	${CXX} $(CFLAGS) -std=c++11 -o poly_example -lprobdist -lptmcmc -L${LIB} -I${INCLUDE} $<
 
 .SUFFIXES: .c .cc .o
 

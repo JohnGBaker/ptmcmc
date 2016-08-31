@@ -154,7 +154,7 @@ class MH_chain: public chain{
   //may be more efficient (esp in parallel proc) to change temp, than move chain, so save temp history
   //some algorithms use adaptive temperature
   probability_function *llikelihood;
-  sampleable_probability_function *lprior;
+  const sampleable_probability_function *lprior;
   double minPrior;
   proposal_distribution *default_prop;
   bool default_prop_set;
@@ -164,7 +164,7 @@ protected:
   double invtemp;
 public:
   //virtual ~MH_chain(){};//Assure correct deletion of any child via base pointer
-  MH_chain(probability_function * log_likelihood, sampleable_probability_function *log_prior,double minPrior=-30,int add_every_N=1);
+  MH_chain(probability_function * log_likelihood, const sampleable_probability_function *log_prior,double minPrior=-30,int add_every_N=1);
   ///If you know how long you are going to run, it can be more efficient to reserve up front, rather than resizing every step  
   virtual void reserve(int nmore);
   virtual int capacity(){return states.capacity();};
@@ -228,6 +228,9 @@ class parallel_tempering_chains: public chain{
   vector<int> swap_count;
   vector<double> temps;
   vector<double> log_eratio_up,log_eratio_down,tryrate,swaprate,up_frac;
+  vector<vector<double> >total_evidence_records;
+  int evidence_count,evidence_records_dim;
+  double best_evidence_stderr;
   bool do_evolve_temps;
   double evolve_temp_rate,evolve_temp_lpost_cut;
   int maxswapsperstep;
@@ -237,7 +240,7 @@ class parallel_tempering_chains: public chain{
  public:
   virtual ~parallel_tempering_chains(){  };//assure correct deletion of any child
   parallel_tempering_chains(int Ntemps,int Tmax,double swap_rate=0.01,int add_every_N=1);
-  void initialize( probability_function *log_likelihood, sampleable_probability_function *log_prior,int n=1);
+  void initialize( probability_function *log_likelihood, const sampleable_probability_function *log_prior,int n=1);
   void set_proposal(proposal_distribution &proposal);
   void step();
   ///reference to zero-temerature chain.
@@ -265,6 +268,7 @@ class parallel_tempering_chains: public chain{
   //thermal integration evidence???
   //This function computes the evidence ratio between chains a two different temps;
   double log_evidence_ratio(int ia,int ib,int ilen,int every=1);
+  double bestEvidenceErr(){return best_evidence_stderr;};
   bool evolve_temps(double rate=0.01,double lpost_cut=-1){
     do_evolve_temps=1;
     evolve_temp_rate=rate;

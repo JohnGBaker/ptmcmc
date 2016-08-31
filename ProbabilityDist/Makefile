@@ -1,5 +1,6 @@
 PROBDIST_OFILES = ProbabilityDist.o
 NEWRAN_OFILES   = newran1.o newran2.o myexcept.o simpstr.o extreal.o
+CFLAGS ?= -g
 
 all: ${LIB}/libprobdist.a  ${INCLUDE}/ProbabilityDist.h
 	@echo LIB=${LIB}

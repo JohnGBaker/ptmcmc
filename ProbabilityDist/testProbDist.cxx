@@ -29,14 +29,17 @@ int main(int argc, char*argv[]){
   GaussianFunctionDist fgauss(&fcent,&fsig,1);
 
 
-  int n;
+  int n,nn;
   dist=&uni;
   cout<<dist->show()<<endl;
   for(int i=0;i<5;i++){
     ostringstream ss;
     n=(2<<i)*Nbin;
-    double u3=testProbabilityDist(*dist,n,ss);		   
-    cout<<n<<" bins : sigma="<<u3<<endl;
+    double err=testProbabilityDist(*dist,n,ss);		   
+    cout<<n<<" bins : sigma  ="<<err<<endl;
+    nn=(2<<i)*Nbin;
+    err=testProbabilityDistIntegral(*dist,nn);		   
+    cout<<nn<<" step : int err="<<err<<endl;
   }
   ofstream *file=new ofstream("uniform.dat");
   testProbabilityDist(*dist,n,*file);		   
@@ -47,8 +50,11 @@ int main(int argc, char*argv[]){
   for(int i=0;i<6;i++){
     ostringstream ss;
     n=(2<<i)*Nbin;
-    double u3=testProbabilityDist(*dist,n,ss);		   
-    cout<<n<<" bins : sigma="<<u3<<endl;
+    double err=testProbabilityDist(*dist,n,ss);		   
+    cout<<n<<" bins : sigma="<<err<<endl;
+    nn=(2<<i)*Nbin;
+    err=testProbabilityDistIntegral(*dist,nn);		   
+    cout<<nn<<" step : int err="<<err<<endl;
   }
   file=new ofstream("log.dat");
   testProbabilityDist(*dist,n,*file);		   
@@ -59,8 +65,11 @@ int main(int argc, char*argv[]){
   for(int i=0;i<5;i++){
     ostringstream ss;
     n=(2<<i)*Nbin;
-    double u3=testProbabilityDist(*dist,n,ss);		   
-    cout<<n<<" bins : sigma="<<u3<<endl;
+    double err=testProbabilityDist(*dist,n,ss);		   
+    cout<<n<<" bins : sigma="<<err<<endl;
+    nn=(2<<i)*Nbin;
+    err=testProbabilityDistIntegral(*dist,nn);		   
+    cout<<nn<<" step : int err="<<err<<endl;
   }
   file=new ofstream("gauss.dat");
   testProbabilityDist(*dist,n,*file);		   
@@ -71,8 +80,11 @@ int main(int argc, char*argv[]){
   for(int i=0;i<7;i++){
     ostringstream ss;
     n=(2<<i)*Nbin;
-    double u3=testProbabilityDist(*dist,n,ss);		   
-    cout<<n<<" bins : sigma="<<u3<<endl;
+    double err=testProbabilityDist(*dist,n,ss);		   
+    cout<<n<<" bins : sigma="<<err<<endl;
+    nn=(2<<i)*Nbin;
+    err=testProbabilityDistIntegral(*dist,nn);		   
+    cout<<nn<<" step : int err="<<err<<endl;
   }
   file=new ofstream("polar.dat");
   testProbabilityDist(*dist,n,*file);		   
@@ -82,8 +94,11 @@ int main(int argc, char*argv[]){
   for(int i=0;i<7;i++){
     ostringstream ss;
     n=(2<<i)*Nbin;
-    double u3=testProbabilityDist(*dist,n,ss);		   
-    cout<<n<<" bins : sigma="<<u3<<endl;
+    double err=testProbabilityDist(*dist,n,ss);		   
+    cout<<n<<" bins : sigma="<<err<<endl;
+    nn=(2<<i)*Nbin;
+    err=testProbabilityDistIntegral(*dist,nn);		   
+    cout<<nn<<" step : int err="<<err<<endl;
   }
   file=new ofstream("copolar.dat");
   testProbabilityDist(*dist,n,*file);		   
@@ -96,8 +111,11 @@ int main(int argc, char*argv[]){
   for(int i=0;i<5;i++){
     ostringstream ss;
     n=(2<<i)*Nbin;
-    double u3=testProbabilityDist(*dist,n,ss);		   
-    cout<<n<<" bins : sigma="<<u3<<endl;
+    double err=testProbabilityDist(*dist,n,ss);		   
+    cout<<n<<" bins : sigma="<<err<<endl;
+    nn=(2<<i)*Nbin;
+    err=testProbabilityDistIntegral(*dist,nn);		   
+    cout<<nn<<" step : int err="<<err<<endl;
   }
   file=new ofstream("function.dat");
   testProbabilityDist(*dist,n,*file);		   

@@ -13,7 +13,7 @@ int chain::idcount=0;
 
 // A markov (or non-Markovian) chain based on some variant of the Metropolis-Hastings algorithm
 // May add "burn-in" distinction later.
-MH_chain::MH_chain(probability_function * log_likelihood, sampleable_probability_function *log_prior,double minPrior,int add_every_N):
+MH_chain::MH_chain(probability_function * log_likelihood, const sampleable_probability_function *log_prior,double minPrior,int add_every_N):
   llikelihood(log_likelihood),lprior(log_prior),minPrior(minPrior),add_every_N(add_every_N){
   Nsize=0;Nhist=0;Nzero=0;invtemp=1;Ntries=1;Naccept=1;last_type=-1;
   dim=log_prior->getDim();
@@ -241,8 +241,11 @@ void MH_chain::dumpChain(ostream &os,int Nburn,int ievery){
     int np=states[0].size();
     os<<"#Ninit="<<Ninit<<", Nburn="<<Nburn<<"\n";
     os<<"#eval: log(posterior) log(likelihood) acceptance_ratio prop_type: ";
-    for(int i=0;i<np-1;i++)os<<"param("<<i<<") ";
-    os<<"param("<<np-1<<")"<<endl;
+    //for(int i=0;i<np-1;i++)os<<"param("<<i<<") ";
+    //os<<"param("<<np-1<<")"<<endl;
+    const stateSpace *sp=states[0].getSpace();
+    for(int i=0;i<np;i++)os<<sp->get_name(i)<<" ";
+    os<<endl;
     if(Nburn+Ninit<0)Nburn=-Ninit;
     for(int i=Nburn;i<Nhist;i+=ievery){
       int idx=Ninit+i;
@@ -253,7 +256,7 @@ void MH_chain::dumpChain(ostream &os,int Nburn,int ievery){
       //cout<<"state:"<<states[i].show()<<endl;
       for(int j=0;j<np-1;j++)os<<pars[j]<<" ";
       os<<pars[np-1];
-      os<<invtemp;
+      os<<" "<<invtemp;
       os<<endl;
     }
 };
@@ -306,9 +309,12 @@ parallel_tempering_chains::parallel_tempering_chains(int Ntemps,int Tmax,double 
     reboot_thermal_thresh=0;
     reboot_aggression=0;
     maxswapsperstep=1+2*swap_rate*Ntemps;
+    evidence_count=0;
+    evidence_records_dim=0;
+    best_evidence_stderr=1e100;
 };
 
-void parallel_tempering_chains::initialize( probability_function *log_likelihood, sampleable_probability_function *log_prior,int n){
+void parallel_tempering_chains::initialize( probability_function *log_likelihood, const sampleable_probability_function *log_prior,int n){
   Ninit=n;
   dim=log_prior->getDim();
   for(int i=0;i<Ntemps;i++){
@@ -480,7 +486,68 @@ void parallel_tempering_chains::step(){
       log_eratio_down[i]=-log_evidence_ratio(i+1,i  ,ireport,add_every_N);
       evidence+=(log_eratio_up[i]+log_eratio_down[i])/2.0;
     }
+    double dE=(log_eratio_up[Ntemps-2]+log_eratio_down[Ntemps-2])/2.0/(chains[Ntemps-2].invTemp()/chains[Ntemps-1].invTemp()-1);    // Note, if beta 1 is small, r~1 anyway then the result will be about ~ beta1
+    evidence+=dE;
+    //evidence*=1.0/(1-chains[Ntemps-1].invTemp());
+    //evidence+=evidence*chains[Ntemps-1].invTemp();
     cout<<"Total log-evidence: "<<evidence<<endl;
+    //Save records of evidence:
+    evidence_count++;
+    int Ndim=log2(evidence_count);
+    if(Ndim>evidence_records_dim){//Add a column for a new larger scale of evidence averages
+      total_evidence_records.push_back(vector<double>());
+      evidence_records_dim++;
+    }
+    if(evidence_records_dim>0){//Note that we begin saving once we reach the *second* epoch at each scale.
+      total_evidence_records[0].push_back(evidence);
+      cout<<"total_evidence_records[0]["<<evidence_count-2<<"]="<<evidence<<endl;	
+    }
+    for(int i=1;i<evidence_records_dim;i++){
+      //We store evidence records averaged on various periods
+      //the period here is 2^i, so we store a new sample when
+      //then next lower bit in the count rolls over...
+      if(evidence_count % (1<<i) == 0 ){
+	cout<<"i="<<i<<" ec="<<evidence_count<<" 1<<(i)="<<(1<<i)<<" mod="<<(evidence_count % (1<<i))<<endl;
+	//we average the last two entries at the next shorter period
+	int iend=total_evidence_records[i-1].size()-1;
+	double new_avg=(total_evidence_records[i-1][iend-1]+total_evidence_records[i-1][iend])/2.0;
+	total_evidence_records[i].push_back(new_avg);
+	cout<<"averaging ev["<<i-1<<"]["<<iend-1<<"] and ev["<<i-1<<"]["<<iend<<"] to get ev["<<i<<"]["<<total_evidence_records[i].size()-1<<"]"<<endl;
+	cout<<"ie averaging "<<total_evidence_records[i-1][iend-1]<<" and "<<total_evidence_records[i-1][iend]<<" to get "<<total_evidence_records[i].back()<<endl;
+      }
+    }
+    //report evidence records:
+    cout<<"total_log_evs:"<<endl;
+    if(Ndim>0){
+      for(int i=0;i<total_evidence_records[0].size();i++){
+	for(int j=0;j<(int)log2(i+2);j++){
+	  int ind=(i+2)/(1<<j)-2;
+	  cout<<total_evidence_records[j][ind]<<"\t";
+	}
+	for(int j=(int)log2(i+2);j<total_evidence_records.size();j++)cout<<NAN<<"\t";
+	cout<<endl;
+      }
+    }
+    //report recent evidence stdevs:
+    cout<<"recent ev analysis:"<<endl;
+    Ndim=total_evidence_records.size();
+    for(int j=0;j<Ndim-1;j++){
+      int Nvar=2*(Ndim-j)+1;
+      int N=total_evidence_records[j].size();
+      if(N>=Nvar){//compute and report variance
+	double sum1=0,sum2=0;
+	for(int i=N-Nvar;i<N;i++){
+	  double ev=total_evidence_records[j][i];
+	  sum1+=ev;
+	  sum2+=ev*ev;
+	}
+	double mean=sum1/Nvar;
+	double variance=(sum2-sum1*mean)/(Nvar-1);
+	double stderr=sqrt(variance/Nvar);
+	cout<<j<<": N="<<Nvar<<" <ev>="<<sum1/Nvar<<" sigma="<<sqrt(variance)<<" StdErr="<<stderr<<endl;
+	if(stderr<best_evidence_stderr)best_evidence_stderr=stderr;
+      }
+    }
     //Compute up/down fracs (and reset count)
     for(int i=0;i<Ntemps;i++){
       if(i==0)up_frac[i]=1;      
@@ -668,7 +735,7 @@ double parallel_tempering_chains::log_evidence_ratio(int ia,int ib,int ilen,int 
   }
   double result=sum/count;
   //double result=log(sum/ceil(ilen/(double)every))+xmax;
-  cout<<"log_eratio: amb="<<amb<<" --> "<<result<<endl;
+  //cout<<"log_eratio: amb="<<amb<<" --> "<<result<<endl;
   //cout<<"log_eratio: amb="<<amb<<" xmax="<<xmax<<" --> "<<result<<endl;
   return result;
 };
@@ -714,6 +781,7 @@ string parallel_tempering_chains::status(){
       //cout<<swaprate.size()<<" "<<tryrate.size()<<" "<< log_eratio_down.size()<<" "<< log_eratio_up.size()<<endl;
       if(i<Ntemps-1)s<<"-><-("<<swaprate[i]<<" of "<<tryrate[i]<<"): log eratio:("<<log_eratio_down[i]<<","<<log_eratio_up[i]<<")"<<endl;
     }
+    s<<"Best evidence stderr="<<best_evidence_stderr<<endl; 
     return s.str();
 };
  

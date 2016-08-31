@@ -77,6 +77,18 @@ public:
     }
     have_names=true;
   };
+  void set_names(vector<string> &stringnames){
+    if(stringnames.size()<dim){
+      cout<<"stateSpace::set_names: Vector of param names is too short. Quitting."<<endl;
+      exit(-1);
+    }
+    names.resize(dim,"");
+    for(uint i=0;i<dim;i++){
+      names[i]=stringnames[i];
+      index[names[i]]=i;
+    }
+    have_names=true;
+  };
   string get_name(int i)const {
     if(have_names&&i<dim)return names[i];
     else return "[unnamed]";
@@ -130,6 +142,7 @@ public:
       if(have_names){
 	if(index.count(other.names[i])>0){
 	  cout<<"stateSpace::attach: Attempted to attach a stateSpace with an identical name '"<<other.names[i]<<"'!"<<endl;
+	  cout<<show()<<endl;
 	  exit(1);
 	}
 	names.push_back(other.names[i]);
@@ -183,7 +196,7 @@ public:
   virtual void defWorkingStateSpace(const stateSpace &sp)=0;
   virtual void haveWorkingStateSpace(){have_working_space=true;};
   //virtual stateSpace getObjectStateSpace()const{return stateSpace();};
-  virtual stateSpace getObjectStateSpace()const=0;
+  virtual const stateSpace* getObjectStateSpace()const=0;
   void checkWorkingStateSpace()const{
     if(!have_working_space){
       cout<<"stateSpaceTransform::checkWorkingSpace: Must define working space (defWorkingStateSpace) before applying it."<<endl;
@@ -223,6 +236,7 @@ class stateSpaceTransform1D : public stateSpaceTransform {
     bound=b;
   }
   virtual stateSpace transform(const stateSpace &sp){
+    
     stateSpace outsp=sp;
     int ind=sp.get_index(in);
     if(ind<0){
