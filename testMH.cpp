@@ -287,7 +287,7 @@ int main(int argc, char*argv[]){
       for(int ic=0;ic<Nchain;ic++){
         double val=est_peak_loc[ic][i][j]-net_peak_loc[i][j];
         double wval=sqrt(est_peak_width[ic][i])-est_peak_width_mean[i];
-	if(!isnan(val)){
+	if(!std::isnan(val)){
 	  net_peak_loc_rvar_est[i]+=val*val;
 	  est_peak_width_var[i]+=wval*wval;
 	  rvar_est_cnt++;

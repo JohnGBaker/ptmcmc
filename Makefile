@@ -45,10 +45,10 @@ docs:
 	doxygen dox.cfg
 
 testMH: testMH.cpp ${LIB}/libprobdist.a ${LIB}/libptmcmc.a
-	${CXX} $(CFLAGS) -std=c++11 -o testMH -lprobdist -lptmcmc -L${LIB} -I${INCLUDE} $<
+	${CXX} $(CFLAGS) -std=c++11 -o testMH $< -lprobdist -lptmcmc -L${LIB} -I${INCLUDE} $(LDFLAGS)
 
 testPT: testPT.cpp ${LIB}/libprobdist.a ${LIB}/libptmcmc.a
-	${CXX} $(CFLAGS) -std=c++11 -o testPT -lprobdist -lptmcmc -L${LIB} -I${INCLUDE} $<
+	${CXX} $(CFLAGS) -std=c++11 -o testPT $< -lprobdist -lptmcmc -L${LIB} -I${INCLUDE} $(LDFLAGS)
 
 .SUFFIXES: .c .cc .o
 
