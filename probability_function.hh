@@ -145,7 +145,13 @@ public:
   //double evaluate_log(state &s){return log(evaluate(s));};
   state invcdf(const state &s)const;    
   string show(int i=-1)const;
-  virtual void getScales(valarray<double> &outarray)const{outarray=std::move(halfwidths);};
+  virtual void getScales(valarray<double> &outarray)const{
+    outarray=halfwidths;
+    for(int i=0;i<outarray.size();i++)
+      if(types[i]==log)outarray[i]=centers[i];//halfwidths is taken as multiplicative in this case
+    
+    //outarray=std::move(halfwidths);
+  };
 };
 
 ///Generic class for defining sampleable probability distribution from a direct product of independent state spaces.
