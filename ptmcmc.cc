@@ -288,7 +288,7 @@ int ptmcmc_sampler::run(const string & base, int ic){
     out[ich].precision(output_precision);
   }
   
-  cout<<"\nRunning chain "<<ic<<endl;
+  cout<<"\nRunning chain "<<ic<<" for up to "<<chain_Nstep<<" steps."<<endl;
   //FIXME: add this function in "likelihood" class
   chain_llike->reset();
   

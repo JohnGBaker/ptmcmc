@@ -271,7 +271,7 @@ state  differential_evolution::draw_from_chain(chain *caller){
     if(amb==0)ithis=i;
     double sum=0;
     double l0scale=amb<0?l0min:l0max;//scale by exp(llmax) or exp(llmin) to avoid overflow
-    for(int i=0;i<Nmean;i++)sum+=exp((l0[i]-l0scale)*amb);
+    for(int ii=0;ii<Nmean;ii++)sum+=exp((l0[ii]-l0scale)*amb);
     double ll0=log(sum/Nmean)+l0scale*amb;
     double ll;
     vector<double> l(Nmedian);
