@@ -32,7 +32,7 @@ class bayes_component: public stateSpaceInterface,public Optioned{
 protected:
   stateSpace nativeSpace;
   shared_ptr<const sampleable_probability_function> nativePrior;
-  bayes_component(){have_setup=false;have_prior=false;};
+  bayes_component(string typestring="null",string option_name="",string option_info=""):typestring(typestring),option_name(option_name),option_info(option_info){have_setup=false;have_prior=false;};
   ~bayes_component(){};
   ///This declares that setup is complete.
   void haveSetup(){have_setup=true;};
@@ -63,11 +63,67 @@ public:
     } else ss<<"nativePrior[null]";
     return ss.str();
   };
+  ///The following are for use with bayes_component_selector
+  const string typestring;
+  const string option_name;
+  const string option_info;
+  bool type_matches(const bayes_component *other)const{if(typestring=="null")cout<<"bayes_component: Cannot match 'null' type."<<endl;return other->typestring==typestring;};  
 };
+
+
+///Class to provide runtime selection among several compatible component objects
+class bayes_component_selector : public Optioned {
+  vector<bayes_component*>components;
+public:
+  bayes_component_selector( const vector<bayes_component*> &list){//Note: the argument must be a persistent vector of pointers to the required selectable component objects
+    if(list.size()>1){
+      cout<<"bayes_component selector::(constructor): Cannot select from an empty list!"<<endl;
+      exit(1);
+    } 
+    string compttype=list[0]->typestring;
+    if(compttype=="null"){
+      cout<<"bayes_component selector::(constructor): Cannot select from 'null' type components!"<<endl;
+      exit(1);
+    }
+    for (auto const &component : list){
+      if(component->type_matches(list[0])){
+	cout<<"bayes_component selector::(constructor): Type of component "<<components.size()<<" does not match type of first component. Skipping!"<<endl;
+      } else {
+	components.push_back(component);
+      }
+    }
+  };
+  void addOptions(Options &opt,const string &prefix=""){
+    Optioned::addOptions(opt,prefix);
+    for(auto const &comp : components){
+      if(comp->option_name==""){
+	cout<<"bayes_component selector::addOptions: A component of type "<<components.size()<<" has an empty option name!"<<endl;
+	exit(1);
+      }
+      addOption(comp->option_name,comp->option_info);
+    }
+  };
+  bayes_component * select(Options &opt){
+    for(auto const &comp : components){
+      if(opt.set(comp->option_name)){
+	comp->addOptions(opt);
+	return comp;
+      }
+    }
+    //If here is reached no option was found.
+    string flags="{ ";
+    for(auto const &comp : components)flags+=comp->option_name+" ";
+    flags+="}";
+    cout<<"Cannot select '"<<components[0]->typestring<<"' component.  No flag among "<<flags<<" was provided."<<endl;
+    cout<<"Available flags are:\n"<<opt.print_usage()<<endl;
+  }
+};
+	
 
 ///Interface class for bayesian signal data. This is some kind of compound data.
 ///We begin with only what we need for ptmcmc, that we can write the signal
 class bayes_signal : public bayes_component {
+
 public:
   virtual vector<double> get_model_signal(const state &st, const vector<double> &labels)const=0;
   ///Stochastic signals imply some variance, default is to return 0
@@ -111,6 +167,7 @@ public:
     end=labels.back();
   };
   virtual int size()const{return labels.size();};
+  virtual bool can_mock(){return allow_fill;};
   virtual double getFocusLabel(bool original=false)const{return 0;};
   virtual double getValue(int i )const{return values[i];};
   virtual vector<double>getValues()const{checkData(VALUES);return values;};
