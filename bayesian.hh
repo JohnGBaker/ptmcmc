@@ -48,6 +48,10 @@ protected:
     }
     return have_setup;
   };
+  ///The following are for use with bayes_component_selector
+  string typestring;
+  string option_name;
+  string option_info;
 public:
   ///Return a pointer to an appropriate prior for this objects stateSpace
   virtual shared_ptr<const sampleable_probability_function> getObjectPrior()const{
@@ -63,10 +67,10 @@ public:
     } else ss<<"nativePrior[null]";
     return ss.str();
   };
-  ///The following are for use with bayes_component_selector
-  const string typestring;
-  const string option_name;
-  const string option_info;
+  ///The following are to support bayes_component_selector
+  string get_typestring(){return typestring;};
+  string get_option_name(){return option_name;};
+  string get_option_info(){return option_info;};
   bool type_matches(const bayes_component *other)const{if(typestring=="null")cout<<"bayes_component: Cannot match 'null' type."<<endl;return other->typestring==typestring;};  
 };
 
@@ -74,13 +78,14 @@ public:
 ///Class to provide runtime selection among several compatible component objects
 class bayes_component_selector : public Optioned {
   vector<bayes_component*>components;
+  bool required;
 public:
-  bayes_component_selector( const vector<bayes_component*> &list){//Note: the argument must be a persistent vector of pointers to the required selectable component objects
+  bayes_component_selector( const vector<bayes_component*> &list,bool require=false):required(require){//Note: the argument must be a persistent vector of pointers to the required selectable component objects
     if(list.size()>1){
       cout<<"bayes_component selector::(constructor): Cannot select from an empty list!"<<endl;
       exit(1);
     } 
-    string compttype=list[0]->typestring;
+    string compttype=list[0]->get_typestring();
     if(compttype=="null"){
       cout<<"bayes_component selector::(constructor): Cannot select from 'null' type components!"<<endl;
       exit(1);
@@ -96,26 +101,32 @@ public:
   void addOptions(Options &opt,const string &prefix=""){
     Optioned::addOptions(opt,prefix);
     for(auto const &comp : components){
-      if(comp->option_name==""){
+      if(comp->get_option_name()==""){
 	cout<<"bayes_component selector::addOptions: A component of type "<<components.size()<<" has an empty option name!"<<endl;
 	exit(1);
       }
-      addOption(comp->option_name,comp->option_info);
+      addOption(comp->get_option_name(),comp->get_option_info());
     }
   };
   bayes_component * select(Options &opt){
     for(auto const &comp : components){
-      if(opt.set(comp->option_name)){
+      if(opt.set(comp->get_option_name())){
 	comp->addOptions(opt);
 	return comp;
       }
     }
     //If here is reached no option was found.
-    string flags="{ ";
-    for(auto const &comp : components)flags+=comp->option_name+" ";
-    flags+="}";
-    cout<<"Cannot select '"<<components[0]->typestring<<"' component.  No flag among "<<flags<<" was provided."<<endl;
-    cout<<"Available flags are:\n"<<opt.print_usage()<<endl;
+    if(required){
+      string flags="{ ";
+      for(auto const &comp : components)flags+=comp->get_option_name()+" ";
+      flags+="}";
+      cout<<"Cannot select '"<<components[0]->get_typestring()<<"' component.  No flag was provided from required set: "<<flags<<"."<<endl;
+      cout<<"Available flags are:\n"<<opt.print_usage()<<endl;
+    } else { //default to first option
+      auto comp=components[0];
+      comp->addOptions(opt);
+      return comp;
+    }
   }
 };
 	
