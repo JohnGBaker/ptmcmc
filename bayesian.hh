@@ -71,7 +71,10 @@ public:
   string get_typestring(){return typestring;};
   string get_option_name(){return option_name;};
   string get_option_info(){return option_info;};
-  bool type_matches(const bayes_component *other)const{if(typestring=="null")cout<<"bayes_component: Cannot match 'null' type."<<endl;return other->typestring==typestring;};  
+  bool type_matches(const bayes_component *other)const{
+    //cout<<"bayes_component_selector::type_matches: Comparing type '"<<typestring<<"' with '"<<other->typestring<<"' -> "<<(other->typestring==typestring)<<endl;
+    if(typestring=="null")cout<<"bayes_component: Cannot match 'null' type."<<endl;return other->typestring==typestring;
+  };  
 };
 
 
@@ -81,7 +84,7 @@ class bayes_component_selector : public Optioned {
   bool required;
 public:
   bayes_component_selector( const vector<bayes_component*> &list,bool require=false):required(require){//Note: the argument must be a persistent vector of pointers to the required selectable component objects
-    if(list.size()>1){
+    if(list.size()<1){
       cout<<"bayes_component selector::(constructor): Cannot select from an empty list!"<<endl;
       exit(1);
     } 
@@ -91,7 +94,7 @@ public:
       exit(1);
     }
     for (auto const &component : list){
-      if(component->type_matches(list[0])){
+      if(not component->type_matches(list[0])){
 	cout<<"bayes_component selector::(constructor): Type of component "<<components.size()<<" does not match type of first component. Skipping!"<<endl;
       } else {
 	components.push_back(component);
@@ -123,6 +126,10 @@ public:
       cout<<"Cannot select '"<<components[0]->get_typestring()<<"' component.  No flag was provided from required set: "<<flags<<"."<<endl;
       cout<<"Available flags are:\n"<<opt.print_usage()<<endl;
     } else { //default to first option
+      if(components.size()<1){
+	cout<<"bayes_component_selector::select: Cannot select from empty list!"<<endl;
+	exit(1);
+      }
       auto comp=components[0];
       comp->addOptions(opt);
       return comp;
