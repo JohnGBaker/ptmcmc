@@ -26,28 +26,34 @@ private:
 
 public:
   static proposal_distribution* new_proposal_distribution(int Npar, int &Ninit, const Options &opt, const sampleable_probability_function * prior, const valarray<double>*halfwidths);
+  static proposal_distribution* new_proposal_distribution_guts(int Npar, int &Ninit, const sampleable_probability_function * prior, const valarray<double>*halfwidths, int proposal_option,int SpecNinit, double tmixfac,double reduce_gamma_by,double de_eps,double gauss_1d_frac, bool de_mixing=false);
+  proposal_distribution* select_proposal();
   ptmcmc_sampler();
   void addOptions(Options &opt,const string &prefix="");
   int run(const string & base, int ic=0);
-  void setup(int Ninit, bayes_likelihood &llike, const sampleable_probability_function &prior, proposal_distribution &prop,int output_precision=15);
+  void setup(bayes_likelihood &llike, const sampleable_probability_function &prior,int output_precision=15);
+  void setup(int Ninit,bayes_likelihood &llike, const sampleable_probability_function &prior, proposal_distribution &prop,int output_precision=15);//deprecated
   int initialize();
   int analyze(const string & base, int ic, int Nsigma, int Nbest, bayes_likelihood &like);
   bayes_sampler * clone(){
     //cout<<"cloning:"<<this<<")"<<endl;
-    if(have_cc||have_cprop){
+    if(have_cc){
       cout<<"ptmcmc_sampler::clone(): Cannot clone after instantiating chain/prop."<<endl;
       exit(1);
     }
     ptmcmc_sampler* s=new ptmcmc_sampler();
     s->copyOptioned(*this);
-    if(have_setup)s->setup(chain_Ninit,*chain_llike,*chain_prior,*cprop,output_precision);
+    if(have_setup)s->setup(*chain_llike,*chain_prior,output_precision);
+    if(have_cprop)s->select_proposal();
+    cout<<"prior is:"<<chain_prior->show()<<endl;
     return s;
   };
   ///must delete managed pointers
   ~ptmcmc_sampler(){
-      if(have_cc)delete cc;
+    if(have_cc)delete cc;
     if(have_cprop)delete cprop;
   };
+  state getState();
   
 private:
   void processOptions();

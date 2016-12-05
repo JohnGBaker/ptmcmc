@@ -8,7 +8,7 @@ using namespace std;
 
 ///Set the proposal distribution. Calling routing responsible for deleting.
 ///Also returns choice of Ninit in first arg.
-///This can be a static routine of ptmcmc_sampler class...
+///This version is a static routine of ptmcmc_sampler class, but should be considered deprecated in favor of select_proposal below
 proposal_distribution* ptmcmc_sampler::new_proposal_distribution(int Npar, int &Ninit, const Options &opt, const sampleable_probability_function * prior, const valarray<double>*halfwidths){
   int proposal_option,SpecNinit;
   double tmixfac,reduce_gamma_by,de_eps,gauss_1d_frac;
@@ -20,10 +20,39 @@ proposal_distribution* ptmcmc_sampler::new_proposal_distribution(int Npar, int &
   istringstream(opt.value("de_reduce_gamma"))>>reduce_gamma_by;
   istringstream(opt.value("de_Tmix"))>>tmixfac;
   de_mixing=opt.set("de_mixing");
+  
+  return new_proposal_distribution_guts(Npar, Ninit, prior, halfwidths, proposal_option, SpecNinit, tmixfac, reduce_gamma_by, de_eps, gauss_1d_frac,de_mixing);
+};
+
+proposal_distribution* ptmcmc_sampler::select_proposal(){
+    valarray<double> scales;
+    chain_prior->getScales(scales);
+    int Npar=chain_prior->get_space()->size();
+    int proposal_option,SpecNinit;
+    double tmixfac,reduce_gamma_by,de_eps,gauss_1d_frac;
+    bool de_mixing=false;
+    (*optValue("prop"))>>proposal_option;
+    (*optValue("gauss_1d_frac"))>>gauss_1d_frac;
+    (*optValue("de_ni"))>>SpecNinit;
+    (*optValue("de_eps"))>>de_eps;
+    (*optValue("de_reduce_gamma"))>>reduce_gamma_by;
+    (*optValue("de_Tmix"))>>tmixfac;
+    de_mixing=optSet("de_mixing");
+    cprop=new_proposal_distribution_guts(Npar, chain_Ninit, chain_prior, &scales, proposal_option, SpecNinit, tmixfac, reduce_gamma_by, de_eps, gauss_1d_frac,de_mixing);
+    //cprop=new_proposal_distribution(Npar, chain_Ninit, opt, chain_prior, scales);
+    cout<<"Proposal distribution is:\n"<<cprop->show()<<endl;
+    have_cprop=true;
+};
+
+proposal_distribution* ptmcmc_sampler::new_proposal_distribution_guts(int Npar, int &Ninit, const sampleable_probability_function * prior, const valarray<double>*halfwidths,
+								      int proposal_option,int SpecNinit,
+								      double tmixfac,double reduce_gamma_by,double de_eps,double gauss_1d_frac,
+								      bool de_mixing
+								      ){
   valarray<double> sigmas;
   if(halfwidths!=nullptr)sigmas=*halfwidths;
   else if(proposal_option<2){
-    cout<<"new_proposal_distribution: Called without defining haflwidths. Cannot apply proposal option 0 or 1."<<endl;
+    cout<<"new_proposal_distribution: Called without defining halfwidths. Cannot apply proposal option 0 or 1."<<endl;
     exit(1);
   }
   Ninit = 1;
@@ -169,8 +198,37 @@ ptmcmc_sampler::ptmcmc_sampler(){
   dump_n=1;
 };
 
+///\brief Provide indicative state
+///If not initialized, then try to read params from file provided, or else draw a random state
+state ptmcmc_sampler::getState(){
+  if(!have_setup){
+    cout<<"ptmcmc_sampler::getState.  Must call setup() before getState!"<<endl;
+    exit(1);
+  }
+  if(have_cc)
+    return cc->getState();
+  else if(paramfile=="")
+    return chain_prior->drawSample(*ProbabilityDist::getPRNG());//Probably should have the sampler own a 'global' RNG from which everything (including this) is derived...
+  else {//open file, read params and set state.
+    ifstream parfile(paramfile);
+    vector<double>pars;
+    string line;
+    const stateSpace *sp=chain_llike->getObjectStateSpace();
+    if(getline(parfile, line)){
+      std::istringstream iss(line);
+      double parval;
+      while (iss>>parval&&pars.size()<sp->size())pars.push_back(parval);
+      return state(sp,pars);
+    } else {
+      cout<<"ptmcmc_sampler::getState: Could not read from file '"<<paramfile<<"'. Quitting."<<endl;
+      exit(1);
+    }
+}
+    
+};
+
 void ptmcmc_sampler::addOptions(Options &opt,const string &prefix){
-  Optioned::addOptions(opt,prefix);
+  bayes_sampler::addOptions(opt,prefix);
   addOption("nevery","Frequency to dump chain info. Default=5000.","5000");
   addOption("save_every","Frequency to store chain info. Default=1.","1");
   addOption("nsteps","How long to run the chain. Default=5000.","5000");
@@ -201,7 +259,8 @@ void ptmcmc_sampler::addOptions(Options &opt,const string &prefix){
 };
 
 void ptmcmc_sampler::processOptions(){
-  
+  bayes_sampler::processOptions();
+  *optValue("nevery")>>Nevery;
   *optValue("nevery")>>Nevery;
   *optValue("save_every")>>save_every;
   *optValue("nsteps")>>Nstep;
@@ -239,6 +298,18 @@ void ptmcmc_sampler::setup(int Ninit,bayes_likelihood &llike, const sampleable_p
   chain_llike = &llike;
   have_setup=true;
 }
+
+void ptmcmc_sampler::setup(bayes_likelihood &llike, const sampleable_probability_function &prior, int output_precision_){
+  //cout<<"SETUP("<<this<<")"<<endl;
+  processOptions();
+  chain_Nstep=Nstep;
+  chain_nburn=Nstep*nburn_frac;
+  output_precision=output_precision_;
+  chain_prior=&prior;
+  chain_llike = &llike;
+  have_setup=true;
+}
+
 ///Initialization for the ptmcmc sampler
 ///
 int ptmcmc_sampler::initialize(){
