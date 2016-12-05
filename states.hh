@@ -164,6 +164,7 @@ public:
   const state& operator=(const state model){space=model.space,valid=model.valid,params.resize(model.size(),0);params=model.params;return *this;};
   state(const stateSpace *space=nullptr,int n=0);
   state(const stateSpace *sp, const valarray<double>&array);
+  state(const stateSpace *sp, const vector<double>&array);
   int size()const{return params.size();}
   //some algorithms rely on using the states as a vector space
   virtual state add(const state &other)const;

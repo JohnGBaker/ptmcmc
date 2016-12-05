@@ -118,15 +118,23 @@ state::state(const stateSpace *space,int n):space(space){
     enforce();
   }
 };
+///build state from provided valarray params
 state::state(const stateSpace *sp, const valarray<double>&array):space(sp),params(array){
-  //cout<<"state::state(stuff):space="<<this->space<<"  params[0]="<<params[0]<<endl;
-  //cout<<"state::state(stuff):space="<<this->space<<"  ="<<show()<<endl;
   valid=false;
   if(space)valid=true;
   enforce();
-  //cout<<"state::state(stuff):space->"<<this->space<<"  ="<<show()<<endl;
 };
-  //some algorithms rely on using the states as a vector space
+//build state from provided vector params
+state::state(const stateSpace *sp, const vector<double>&array):space(sp){
+  int n=array.size();
+  params.resize(n,0);
+  for(int i=0;i<n;i++)params[i]=array[i];
+  valid=false;
+  if(space)valid=true;
+  enforce();
+};
+
+//some algorithms rely on using the states as a vector space
 state state::add(const state &other)const{
     //here we only require that the result is valid.
     state result(space,size());
