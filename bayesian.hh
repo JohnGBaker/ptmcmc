@@ -584,14 +584,31 @@ public:
 ///
 ///To begin with the only option is for MCMC sampling, though we expect soon to add a multinest option.
 class bayes_sampler : public Optioned {
+protected:
+  string paramfile;
+  bool have_paramfile;
 public:
-  bayes_sampler(){};
+  bayes_sampler():have_paramfile(false){};
   virtual bayes_sampler * clone()=0;
   virtual int initialize()=0;
   virtual int run(const string & base, int ic=0)=0;
   ///This is too specific for a generic interface, but we're building on what we had before...
   //virtual int analyze(const string & base, int ic, int Nsigma, int Nbest, bayes_old_signal &data, double tfinestart, double tfineend)=0;
   virtual int analyze(const string & base, int ic, int Nsigma, int Nbest, bayes_likelihood &like)=0;
+  //Provide indicative state;If not initialized, then try to read params from file provided, or else draw a random state
+  virtual bool haveParfile(){return have_paramfile;};
+  virtual state getState()=0;
+  virtual void addOptions(Options &opt,const string &prefix=""){
+    Optioned::addOptions(opt,prefix);
+    addOption("stateFile","File with initialization state parameters","");
+  };
+  virtual void setup(bayes_likelihood &llike, const sampleable_probability_function &prior, int output_precision=15)=0;
+protected:
+  void processOptions(){
+    *optValue("stateFile")>>paramfile;
+    if(not (paramfile=="")){have_paramfile=true;}
+    cout<<"haveParfile="<<have_paramfile<<endl;
+  };
 };
 
 
