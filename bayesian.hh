@@ -25,20 +25,21 @@ using namespace std;
 ///-addOptions(Options,String):[options.hh]Object defines its (de facto) command-line options. Begin with call to GLens::addOptions(Options,String).
 ///-setup():Object sets itself up after options have been parsed. Should must set nativeSpace and can define prior with setPrior(). End with call to haveSetup().
 ///-defWorkingStateSpace():[states,hh,required] Object finds location of its parameters in the state space. End by calling haveWorkingStateSpace().
-///-setState(State): Object takes values from its parameters as needed for state-specific computations. Begin with haveWorkingStateSpace().
+///-setState(State): Object takes values from its parameters as needed for state-specific computations. Begin with bayes_component::setState() or checkWorkingStateSpace().
 class bayes_component: public stateSpaceInterface,public Optioned{
   bool have_setup;
   bool have_prior;
+  const state *working_state;//stored mainly for reference in panic.
 protected:
   stateSpace nativeSpace;
+  virtual void setState(const state &st){working_state=&st; checkWorkingStateSpace();};
   shared_ptr<const sampleable_probability_function> nativePrior;
-  bayes_component(string typestring="null",string option_name="",string option_info=""):typestring(typestring),option_name(option_name),option_info(option_info){have_setup=false;have_prior=false;};
+  bayes_component(string typestring="null",string option_name="",string option_info=""):typestring(typestring),option_name(option_name),option_info(option_info){have_setup=false;have_prior=false;working_state=NULL;};
   ~bayes_component(){};
   ///This declares that setup is complete.
   void haveSetup(){have_setup=true;};
-  void setPrior(sampleable_probability_function* prior){
+  void setPrior(const sampleable_probability_function* prior){
     nativePrior.reset(prior);have_prior=true;
-    cout<<"bayes_component::setPrior: Setting for this object("<<typeid(*this).name()<<")"<<endl;
   };
   ///This assert checks that the object is already set up.
   bool checkSetup(bool quiet=false)const{
@@ -48,6 +49,12 @@ protected:
     }
     return have_setup;
   };
+  ///If component references panic, it should also call defWorkingStateSpace with a state pointer for meaningful info.
+  virtual void panic(string message=""){
+    cout<<"bayes_component::panic!\n"<<message<<endl;
+    if(working_state)cout<<"Working state is"<<working_state->show()<<endl;
+    exit(1);
+  };      
   ///The following are for use with bayes_component_selector
   string typestring;
   string option_name;
@@ -138,7 +145,22 @@ public:
 };
 	
 
-///Interface class for bayesian signal data. This is some kind of compound data.
+///This is a class for defining a frame against which the data are labeled.
+///
+///In many cases the label set is common to different components of the problem
+///and these must be related somehow.  For temporal data, for instance, we might
+///need a reference time frame against which the component objects may be connected.
+class bayes_frame : public bayes_component {
+  vector<double> label0;
+  bool is_registered;
+public:
+  bayes_frame(){is_registered=false;};
+  virtual const vector<double> & getRef()const{return label0;};
+  virtual void setRegister(vector<double> &c0){label0=c0;is_registered=true;};
+  virtual bool registered()const{return is_registered;};
+};
+
+  ///Interface class for bayesian signal data. This is some kind of compound data.
 ///We begin with only what we need for ptmcmc, that we can write the signal
 class bayes_signal : public bayes_component {
 
