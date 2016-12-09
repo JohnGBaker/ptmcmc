@@ -235,6 +235,7 @@ mixed_dist_product::~mixed_dist_product(){
 
 state mixed_dist_product::drawSample(Random &rng)const{
   valarray<double> v(dim);
+  //cout<<"mixed_dist_product::drawSample():space="<<space->show()<<endl;
   for(uint i=0;i<dim;i++){
     double number=dists[i]->draw(&rng);
     v[i]=number;
@@ -335,15 +336,17 @@ independent_dist_product::independent_dist_product(const stateSpace *product_spa
   for(size_t i=0;i<Nss;i++){
     ss_indices[i].resize(0);
     ss_dists[i]=subspace_dists[i];
-    //ss[i]=subspaces[i];
-    //int ss_dim=subspaces[i]->size();
     ss[i]=subspace_dists[i]->get_space();
-    int ss_dim=ss[i]->size();
+    //int ss_dim=ss[i]->size();
+    ss[i]=subspace_dists[i]->get_space();
+    int ss_dim=ss_dists[i]->getDim();
     dim_count+=ss_dim;
   }
   //Check that the spaces are commensurate and define parameter mapping
   if(dim!=dim_count){
-    cout<<"independent_dist_product(constructor): Total dimension of subspaces does not match product space dimension."<<endl;
+    cout<<"independent_dist_product(constructor): Total dimension of subspaces does not match product space dimension:"<<endl;
+    cout<<"product_space: "<<product_space->show()<<endl<<"subspaces:"<<endl;
+    for(size_t i=0;i<Nss;i++)cout<<ss[i]->show()<<endl;    
     exit(1);
   }    
   for(int i=0;i<dim;i++){
@@ -369,20 +372,6 @@ independent_dist_product::independent_dist_product(const stateSpace *product_spa
       exit(1);
     }
   }
-  /*
-  cout<<"independent_dist_product::(contructor): dim="<<dim<<" Nss="<<Nss<<endl;
-  for(int i=0;i<Nss;i++){
-    cout<<"i="<<i<<": "<<endl;
-    cout<<"  ss[i]="<<ss[i]->show()<<endl;
-    cout<<"  ss_dists[i]="<<ss_dists[i]->show()<<endl;
-    cout<<"  indices={";
-    for(int j=0;j<ss_indices[i].size();j++)cout<<ss_indices[i][j]<<(ss_indices[i].size()-j>1?",":"");
-    cout<<"}"<<endl;
-  }
-  for(int i=0;i<dim;i++){
-    cout<<"i="<<i<<": ss="<<index_ss[i]<<" param "<<index_ss_index[i]<<endl;
-  }
-  */
 };
   
 //Take the direct product state of subspace samples
@@ -458,7 +447,6 @@ string independent_dist_product::show(int ii)const{
       cout<<"independent_dist_product::show: Index out of range."<<endl;
       exit(1);
     }
-    //s<<"["<<ss_dists[index_ss[ii]]<<"]";
     s<<ss_dists[index_ss[ii]]->show(index_ss_index[ii]);
   }
   //cout<<"exiting IDP with: "<<s.str()<<endl;

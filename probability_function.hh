@@ -30,9 +30,11 @@ class probability_function;
 /// Default version is flat.
 class probability_function {
 protected:
-  const stateSpace *space; //May want to make this a copy rather than pointer so that it can be initialized from a temp. obj.
+  const stateSpace space_copy;//maybe we don't need const here
+  const stateSpace *space; 
 public:
   virtual ~probability_function(){};
+  //probability_function(const stateSpace *space):space(&space_copy),space_copy(space?*space:stateSpace()){};//May want argument a copy rather than pointer so that it can be initialized from a temp. obj.
   probability_function(const stateSpace *space):space(space){};
   virtual double evaluate(state &s){return exp(evaluate_log(s));};
   virtual double evaluate_log(state &s){return 0;};
