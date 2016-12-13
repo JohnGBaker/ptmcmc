@@ -44,7 +44,7 @@ protected:
   ///This assert checks that the object is already set up.
   bool checkSetup(bool quiet=false)const{
     if((!quiet)&&!have_setup){
-      cout<<"bayes_component::checkSetup: Cannot apply object before setup. Be sure to call haveSetup() when set-up is complete."<<endl;
+      cout<<"bayes_component::checkSetup: [type="<<typestring<<"] Cannot apply object before setup. Be sure to call haveSetup() when set-up is complete."<<endl;
       exit(1);
     }
     return have_setup;
@@ -150,13 +150,24 @@ public:
 ///In many cases the label set is common to different components of the problem
 ///and these must be related somehow.  For temporal data, for instance, we might
 ///need a reference time frame against which the component objects may be connected.
-class bayes_frame : public bayes_component {
+class bayes_frame {
+  int dim;
   vector<double> label0;
   bool is_registered;
+  string name;
 public:
-  bayes_frame(){is_registered=false;};
+  bayes_frame(string name="",int dim=1):name(name),dim(dim){is_registered=false;};
   virtual const vector<double> & getRef()const{return label0;};
-  virtual void setRegister(vector<double> &c0){label0=c0;is_registered=true;};
+  virtual void setRegister(vector<double> &c0){
+      label0=c0;is_registered=true;
+      if(dim <1 or not c0.size()==dim){
+	cout<<"bayes_frame::setRegister:["<<name<<"] Got vector of length="<<c0.size()<<" while expecting dim="<<dim<<" > 0."<<endl;
+	exit(1);
+      }
+      cout<<"bayes_frame["<<name<<"] registered at: ( "<<label0[0];
+      for(int i=1;i<label0.size();i++)cout<<", "<<label0[i];
+      cout<<" )"<<endl;
+  };
   virtual bool registered()const{return is_registered;};
 };
 

@@ -51,7 +51,7 @@ protected:
   unsigned int dim;
 public:
   virtual ~sampleable_probability_function(){};
-  sampleable_probability_function(const stateSpace *space):probability_function(space){};
+  sampleable_probability_function(const stateSpace *space):dim(0),probability_function(space){};
   virtual state drawSample(Random &rng)const{fail("drawSample");return state();}
   virtual double evaluate(state &s)const{fail("evaluate");return -1;};
   virtual double evaluate_log(state &s)const{return log(evaluate(s));};
