@@ -55,6 +55,11 @@ protected:
     if(working_state)cout<<"Working state is"<<working_state->show()<<endl;
     exit(1);
   };      
+  ///If component references panic, it should also call defWorkingStateSpace with a state pointer for meaningful info.
+  virtual void alert(string message=""){
+    cout<<"bayes_component::Alert!\n"<<message<<endl;
+    if(working_state)cout<<"Working state is"<<working_state->show()<<endl;
+  };      
   ///The following are for use with bayes_component_selector
   string typestring;
   string option_name;
