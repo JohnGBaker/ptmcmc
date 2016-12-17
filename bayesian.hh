@@ -181,10 +181,10 @@ public:
 class bayes_signal : public bayes_component {
 
 public:
-  virtual vector<double> get_model_signal(const state &st, const vector<double> &labels)const=0;
+  virtual vector<double> get_model_signal(const state &st, const vector<double> &labels)=0;
   ///Stochastic signals imply some variance, default is to return 0
   //virtual double getVariance(double tlabel){return 0;};
-  virtual vector<double> getVariances(const state &st,const vector<double> tlabel)const{
+  virtual vector<double> getVariances(const state &st,const vector<double> tlabel){
     //cout<<"bayes_signal::getVariances"<<endl;
     return vector<double>(tlabel.size(),0);};
 };
@@ -406,8 +406,8 @@ public:
     double xfoc=data->getFocusLabel();
     double x0=data->getFocusLabel(true);
     
-    vector<double> model=signal->get_model_signal(transformSignalState(st),xs);
     vector<double> dmags=data->getDeltaValues();
+    vector<double> model=signal->get_model_signal(transformSignalState(st),xs);
     vector<double> dvar=getVariances(st);
 
     for(int i=0;i<xs.size();i++){
@@ -451,7 +451,7 @@ protected:
     vector<double>tlabels=data->getLabels();
     vector<double>modelData=signal->get_model_signal(transformSignalState(s),tlabels);
     vector<double>S=getVariances(s);
-#pragma omp critical
+#pragma omp critical  //probably don't need this critical if coded well...
     {
       for(int i=0;i<tlabels.size();i++){
         double d=modelData[i]-data->getValue(i);
