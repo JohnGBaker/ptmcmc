@@ -4,6 +4,7 @@
 /// \file newran.h
 /// Definition file for random number generator library.
 /// (c) R.B Davies "No restrictions, please attribute" http://www.robertnz.net/nr02doc.htm
+/// Minor modifications by John Baker NASA-GSFC 2013-2017
 
 #ifndef NEWRAN_LIB
 #define NEWRAN_LIB 0
@@ -52,6 +53,7 @@ protected:
    static Random* RNG;                    // pointer to uniform rng
    static Random* Dummy;                  // pointer to dummy rng
    static SimpleString Dir;               // directory where seed is stored
+   SimpleString InstanceDir;              // directory where seed is stored //JGB added
 
 public:
    static void Set(Random& r);            // set type
@@ -59,6 +61,11 @@ public:
    static void CopySeedToDisk();
    static void SetDirectory(const char* dir); // set the directory for storing seed
 
+
+   virtual void CopyInstanceSeedFromDisk(bool update=false); //JGB added (since the above only operate on the static instance reference *RNG)
+   virtual void CopyInstanceSeedToDisk();                    //JGB added
+   virtual void SetInstanceDirectory(const char* dir);       //JGB added
+   
    virtual Real Next() { return RNG->Next(); } // get new value
    virtual unsigned long ulNext();        // unsigned long value
    virtual const char* Name();            // identification

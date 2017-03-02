@@ -66,6 +66,30 @@ void MH_chain::reboot(){
   initialize(Ninit);
 };
 
+//If we should decide we no longer need to hold on to part of the chain then:
+//This is an initial draft implementation not yet tested or enabled
+/*
+void MH_chain::forget(int imin){
+  int icut=get_state_idx(imin);
+  if(icut<=0)return;
+  int ncut=icut;
+  Nzero=imin;
+  //Nsize=0;
+  //Nhist=0;
+  //Ntries=1;
+  //Naccept=1;
+  //last_type=-1;
+  cout<<"Forgetting early part of chain (id="<<id<<")"<<endl;
+  types.erase(types.begin(),types.begin()+ncut);
+  states.erase(states.begin(),states.begin()+ncut);
+  lposts.erase(lposts.begin(),lposts.begin()+ncut);
+  llikes.erase(llikes.begin(),llikes.begin()+ncut);
+  acceptance_ratio.erase(acceptance_ratio.begin(),acceptance_ratio.begin()+ncut);
+  invtemps.erase(invtemps.begin(),invtemps.begin()+ncut);
+  Ninit=0;
+};
+*/
+
 void MH_chain::add_state(state newstate,double log_like,double log_post){
   //cout<<"this="<<0<<",adding state: like="<<log_like<<",post="<<log_post<<endl;
   //if log_like or log_post can be passed in to save computation.  Values passed in are assumed to equal the evaluation results.
@@ -167,7 +191,12 @@ double MH_chain::expectation(double (*test_func)(state s),int Nburn){
 int MH_chain::get_state_idx(int i){
   //should probably add a check that Nburn>Nzero
   if(i<0||i>=Nhist)i=Nhist-1;
-  return Ninit+(i-Nzero)/add_every_N;
+  int irequest=Ninit+(i-Nzero)/add_every_N;
+  if(irequest<0){
+    cout<<"MH_chain::get_state_idx: Requested data for i("<<i<<")="<<irequest<<" but data before i=0 is not available!!!"<<endl;
+    //irequest=0;
+  }
+  return irequest;
 }
 
 double MH_chain::variance(double (*test_func)(state s),double fmean,int Nburn){
@@ -362,6 +391,9 @@ void parallel_tempering_chains::step(){
   int iswaps[maxswapsperstep];
   double x;
   
+  //checkpoint test
+  //if(chains[0].size()==2000)chains[0].checkRestart("chain0.cp");
+  
   //diagnostics and steering: set up
   const int ireport=10000;//should make this user adjustable.
   static int icount=0;
@@ -373,7 +405,7 @@ void parallel_tempering_chains::step(){
     swapcounts.clear();
     swapcounts.resize(Ntemps,0);
   }
-  
+
   //Determine which chains to try for swaps
   for(int i=0;i<maxswapsperstep;i++){
     iswaps[i]=-2;

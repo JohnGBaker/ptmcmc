@@ -2,12 +2,14 @@
 ///
 ///The base class chain, is not useful, and is defined in mcmc.hh
 ///The Metropolis-Hastings MH_chain and parallel_tempering_chains types should be useful.
-///John G Baker - NASA-GSFC (2013-2014)
+///John G Baker - NASA-GSFC (2013-2017)
 #ifndef CHAIN_HH
 #define CHAIN_HH
 
 #include "states.hh"
 #include "probability_function.hh"
+#include "restart.hh"
+#include <sys/stat.h>
 //#include "probability_function.hh"
 //#include <memory>
 //#include "include/ProbabilityDist.h"
@@ -17,20 +19,23 @@
 //#include <sstream>
 //#include <cmath>
 //#include <iostream>
-
+extern bool verboseMOA;
 
 class proposal_distribution;
 
 /// A generalized chain has results like a chain, but we specify
-/// anything about *how* those results are produced.  Standard analysis can be applied. 
-class chain {
-  //TODO?
-  //autocorrelation
-  //convergence,MAP,...
+/// anything about *how* those results are produced.  Standard analysis can be applied.
+/// Notes on indexing:
+/// There are several variants of indexing.  There is a nominal step index which starts at zero at the first MCMC step,
+/// but there is also a "raw" indexing which indicates the actual indexing of the stored data array.  These can
+/// differ for several reasons: initialization, downsampling before storage, and "forgetting" early chain history that is
+/// no longer needed.
+class chain : public restartable{
   static int idcount;
 protected:
   int id;
   int Nsize,Ninit; //Maybe move this history stuff to a subclass
+  int Nearliest;
   int Nfrozen;
   int dim;
   shared_ptr<Random> rng; //Random number generator for this chain. Each chain has its own so that the results can be threading invariant
@@ -56,6 +61,46 @@ public:
     //Each chain has its own pseudo (newran) random number generator seeded with a seed drawn from the master PRNG
     //As long as the chains are created in a fixed order, this should allow threading independence of the result.
     Nfrozen=-1;
+  };
+  virtual void checkpoint(string path)override{
+    //save basic data 
+    ostringstream ss;
+    ss<<path<<"chain"<<id<<"-cp/";
+    string dir=ss.str();
+    mkdir(dir.data(),ACCESSPERMS);
+    ss<<"chain.cp";
+    ofstream os = openWrite(ss.str());
+    writeInt(os, id);
+    writeInt(os, Nsize);
+    writeInt(os, Ninit); //Maybe move this history stuff to a subclass
+    writeInt(os, Nearliest);
+    writeInt(os, Nfrozen);
+    writeInt(os, dim);
+    os.close();
+    //write RNG
+    rng->SetInstanceDirectory(dir.data());
+    rng->CopyInstanceSeedToDisk();
+  };
+  virtual void restart(string path)override{
+    //restore basic data;
+    ostringstream ss;
+    ss<<path<<"chain"<<id<<"-cp/";
+    string dir=ss.str();
+    ss<<"chain.cp";
+    ifstream is=openRead(ss.str());
+    readInt(is, id);
+    readInt(is, Nsize);
+    readInt(is, Ninit); //Maybe move this history stuff to a subclass
+    readInt(is, Nearliest);
+    readInt(is, Nfrozen);
+    readInt(is, dim);
+    is.close();
+    //write RNG
+    cout<<"rng="<<rng.get()<<endl;
+    cout<<"Before restore: next="<<rng->Next()<<endl;
+    rng.reset(new MotherOfAll(rng->Next()));
+    rng->SetInstanceDirectory(dir.data());
+    rng->CopyInstanceSeedFromDisk();
   };
   virtual shared_ptr<Random> getPRNG(){return rng;};
   virtual string show(){
@@ -128,6 +173,8 @@ public:
   ///Temporarily freeze the length of the chain as reported by size()
   void history_freeze(){Nfrozen=Nsize;};
   void history_thaw(){Nfrozen=-1;};
+  ///If it is determined that the early part of chain history before imin, is no longer needed...
+  //virtual void forget(int imin){};
   int get_id(){return id;};
 };
 
@@ -190,6 +237,7 @@ public:
   virtual string status();
   virtual double invTemp(){return invtemp;};
   void resetTemp(double new_invtemp);
+  //virtual void forget(int imin)override;
   friend parallel_tempering_chains;
 };
 

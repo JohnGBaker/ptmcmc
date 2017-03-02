@@ -87,6 +87,23 @@ void Random::SetDirectory(const char* dir)
    Dir = dir;
 }
 
+void Random::CopyInstanceSeedFromDisk(bool update)
+{
+   if (InstanceDir.size() == 0) Throw(Logic_error("Newran: directory not defined"));
+   CSFD(update);
+}
+
+void Random::CopyInstanceSeedToDisk()
+{
+   if (InstanceDir.size() == 0) Throw(Logic_error("Newran: directory not defined"));
+   CSTD();
+}
+
+void Random::SetInstanceDirectory(const char* dir)
+{
+   InstanceDir = dir;
+}
+
 //***************** verify we are dealing with a seed file *********************
 
 static void ReadVerify(ifstream& in, bool missing_ok = false)
@@ -367,7 +384,7 @@ void MotherOfAll::Mother()
    short n, *p;
    unsigned short sNumber;
 
-   // Initialize motheri with 9 random values the first time
+  // Initialize motheri with 9 random values the first time
    if (mStart)
    {
       sNumber = (unsigned short)(seed & m16Mask);   // The low 16 bits
@@ -883,6 +900,8 @@ void DummyRNG::CSTD()
 
 /// \fn static void Random::SetDirectory(const char* dir)
 /// Set the directory where seeds are stored.
+
+/// JGB added instance versions of these which can access any instance not just the one pointed to by the static reference
 
 /// \fn virtual Real Random::Next()
 /// Return a new random number.
