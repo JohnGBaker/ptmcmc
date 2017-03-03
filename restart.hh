@@ -5,6 +5,7 @@
 #define RESTART_HH
 #include <iostream>
 #include <fstream>
+#include <sstream>
 #include <cstdlib>
 
 using namespace std;
@@ -28,7 +29,7 @@ public:
   };
 protected:
   //void openWrite(string path){
-  ofstream openWrite(string path, bool append=false){
+  ofstream openWrite(string path, bool append=false)const{
     ofstream os;
     if(os.is_open()){
       cout<<"restartable::openwrite: Cannot reopen stream for checkpoint! (path='"<<path<<"')."<<endl;
@@ -44,7 +45,7 @@ protected:
     return os;
   };
   //void openRead(string path){
-  ifstream openRead(string path){
+  ifstream openRead(string path)const{
     ifstream is;
     if(is.is_open()){
       cout<<"restartable::openread: Cannot reopen stream for restart! (path='"<<path<<"')."<<endl;
@@ -57,6 +58,10 @@ protected:
     }      
     return is;
   };
+  ostringstream openStringWrite()const{
+    ostringstream oss;
+    return oss;
+  };
   /*
   void close(){
     if(os.is_open()){
@@ -68,46 +73,53 @@ protected:
     };*/
   //void writeInt(int val){
   //void writeInt(int val){
-  void writeInt(ofstream & os, int val){
+  void writeInt(ostream & os, int val)const{
     os.write(reinterpret_cast<char *>(&val),sizeof(int));
   };
   //void readInt(int &val){
-  void readInt(ifstream & is, int &val){
+  void readInt(istream & is, int &val)const{
     is.read(reinterpret_cast<char *>(&val),sizeof(int));
   };
   //void writeDouble(double val){
-  void writeDouble(ofstream & os, double val){
+  void writeDouble(ostream & os, double val)const{
     os.write(reinterpret_cast<char *>(&val),sizeof(double));
   };
   //void readDouble(double &val){
-  void readDouble(ifstream & is, double &val){
+  void readDouble(istream & is, double &val)const{
     is.read(reinterpret_cast<char *>(&val),sizeof(double));
   };
-  //void writeString(const string &s){
-  void writeString(ofstream & os, const string &s){
+  void writeString(ostream & os, const string &s)const{
     size_t len=s.length();
     os.write(reinterpret_cast<char *>(&len),sizeof(size_t));
     os.write(&s[0],len);
   };
-  //void readString(string &s){
-  void readString(ifstream & is, string &s){
+  void readString(istream & is, string &s)const{
     size_t len;
     is.read(reinterpret_cast<char *>(&len),sizeof(size_t));
     s.resize(len);
     is.read(&s[0],len);
   };
-  //void writeDoubleVector(const vector<double> &vec){
-  void writeDoubleVector(ofstream & os, const vector<double> &vec){
+  void writeDoubleVector(ostream & os, const vector<double> &vec)const{
     size_t len=vec.size();
     os.write(reinterpret_cast<char *>(&len),sizeof(size_t));
     os.write(reinterpret_cast<const char *>(&vec[0]),len*sizeof(double));
   };
-  //void readDoubleVector(vector<double> &vec){
-  void readDoubleVector(ifstream & is, vector<double> &vec){
+  void readDoubleVector(istream & is, vector<double> &vec)const{
     size_t len;
     is.read(reinterpret_cast<char *>(&len),sizeof(size_t));
     vec.resize(len);
     is.read(reinterpret_cast<char *>(&vec[0]),len*sizeof(double));
+  };
+  void writeIntVector(ostream & os, const vector<int> &vec)const{
+    size_t len=vec.size();
+    os.write(reinterpret_cast<char *>(&len),sizeof(size_t));
+    os.write(reinterpret_cast<const char *>(&vec[0]),len*sizeof(int));
+  };
+  void readIntVector(istream & is, vector<int> &vec)const{
+    size_t len;
+    is.read(reinterpret_cast<char *>(&len),sizeof(size_t));
+    vec.resize(len);
+    is.read(reinterpret_cast<char *>(&vec[0]),len*sizeof(int));
   };
   
 };

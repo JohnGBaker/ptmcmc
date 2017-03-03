@@ -48,6 +48,7 @@ protected:
     //cout<<id<<":"<<x<<endl;//" rng="<<rng<<endl;
     return x;
   };
+  
 public:
   virtual ~chain(){};
   chain():
@@ -62,6 +63,7 @@ public:
     //As long as the chains are created in a fixed order, this should allow threading independence of the result.
     Nfrozen=-1;
   };
+
   virtual void checkpoint(string path)override{
     //save basic data 
     ostringstream ss;
@@ -96,8 +98,6 @@ public:
     readInt(is, dim);
     is.close();
     //write RNG
-    cout<<"rng="<<rng.get()<<endl;
-    cout<<"Before restore: next="<<rng->Next()<<endl;
     rng.reset(new MotherOfAll(rng->Next()));
     rng->SetInstanceDirectory(dir.data());
     rng->CopyInstanceSeedFromDisk();
@@ -216,6 +216,73 @@ public:
   virtual void reserve(int nmore);
   virtual int capacity(){return states.capacity();};
   ///Initialize the chain with one or more states.  Technically we do consider these as part of the chain, for output/analysis purposes as they are not selected based on the MH criterion
+  virtual void checkpoint(string path)override{
+    chain::checkpoint(path);
+    ostringstream ss;
+    ss<<path<<"chain"<<id<<"-cp/";
+    ss<<"MHchain.cp";
+    ofstream os = openWrite(ss.str());
+    //save basic data 
+    //The philosopy is that we don't need to save anything set by setup...
+    writeInt(os, Ntries);
+    writeInt(os, Naccept);
+    writeInt(os, last_type);
+    //add_every_N;
+    writeIntVector(os,types);
+    writeInt(os,states.size());for(int i=0;i<states.size();i++)writeString(os,states[i].save_string());
+    writeDoubleVector(os,lposts);
+    writeDoubleVector(os,llikes);
+    //cout<<"current_state before:"<<current_state.show()<<endl;
+    writeString(os,current_state.save_string());
+    writeDouble(os,current_lpost);
+    writeDouble(os,current_llike);
+    writeDoubleVector(os,acceptance_ratio);
+    writeDoubleVector(os,invtemps);
+    //probability_function *llikelihood;
+    //const sampleable_probability_function *lprior;
+    //double minPrior;
+    //proposal_distribution *default_prop;
+    //bool default_prop_set;
+    writeInt(os,Nhist);
+    writeInt(os,Nzero);
+    writeDouble(os,invtemp);
+  };
+  virtual void restart(string path)override{
+    state protostate=lprior->drawSample(*rng);//We draw a sample as seed state *before* reinstating the rng;  if the current rng were ever needed again this would fail
+    chain::restart(path);
+    ostringstream ss;
+    ss<<path<<"chain"<<id<<"-cp/";
+    ss<<"MHchain.cp";
+    ifstream os = openRead(ss.str());
+    //save basic data 
+    //The philosopy is that we don't need to save anything set by setup...
+    readInt(os, Ntries);
+    readInt(os, Naccept);
+    readInt(os, last_type);
+    //add_every_N;
+    readIntVector(os,types);
+    //The following block is to restore the states vector
+    int n;readInt(os,n);states.resize(n,protostate);for(int i=0;i<n;i++){string s;readString(os,s);states[i].restore_string(s);};
+    readDoubleVector(os,lposts);
+    readDoubleVector(os,llikes);
+    //cout<<"current_state before restore:"<<current_state.show()<<endl;
+    string s;
+    readString(os,s);
+    current_state.restore_string(s);
+    //cout<<"current_state after restore:"<<current_state.show()<<endl;
+    readDouble(os,current_lpost);
+    readDouble(os,current_llike);
+    readDoubleVector(os,acceptance_ratio);
+    readDoubleVector(os,invtemps);
+    //probability_function *llikelihood;
+    //const sampleable_probability_function *lprior;
+    //double minPrior;
+    //proposal_distribution *default_prop;
+    //bool default_prop_set;
+    readInt(os,Nhist);
+    readInt(os,Nzero);
+    readDouble(os,invtemp);
+  };
   void initialize(uint n=1);
   void reboot();
   void add_state(state newstate,double log_like=999,double log_post=999);

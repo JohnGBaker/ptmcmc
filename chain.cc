@@ -353,8 +353,8 @@ void parallel_tempering_chains::initialize( probability_function *log_likelihood
   //#pragma omp parallel for schedule (guided, 1)  ///try big chunks first, then specialize
 #pragma omp parallel for schedule (dynamic, 1) ///take one pass/thread at a time until done.
   for(int i=0;i<Ntemps;i++){
-  ostringstream oss;oss<<"PTchain: initializing chain "<<i<<endl;
-  cout<<oss.str();
+    ostringstream oss;oss<<"PTchain: initializing chain "<<i<<endl;
+    cout<<oss.str();
     chains[i].initialize(n);
     // chains[i].resetTemp(1/temps[i]);
     chains[i].invtemp=1/temps[i];
@@ -379,7 +379,7 @@ void parallel_tempering_chains::set_proposal(proposal_distribution &proposal){
       //cout<<"                    chain=("<<&chains[i]<<")"<<chains[i].show()<<endl;
       if(props[i]->support_mixing()){
 	props[i]->set_chain(this);
-	//cout<<"Supporting chain mixing in proposal distribution."<<endl;
+	cout<<"Supporting chain mixing in proposal distribution."<<endl;
 }
       else
 	props[i]->set_chain(&chains[i]); //*** This seems to set the last chain to all props...***
@@ -392,8 +392,15 @@ void parallel_tempering_chains::step(){
   double x;
   
   //checkpoint test
-  //if(chains[0].size()==2000)chains[0].checkRestart("chain0.cp");
-  
+  /*
+  if(chains[0].size()==2000){
+    chains[0].checkpoint(".");
+    //proposal_distribution *p=props[0]->clone();
+    //props[0]=p;
+    //props[0]->set_chain(&chains[0]);
+    chains[0].reboot();
+    chains[0].restart(".");
+    }*/
   //diagnostics and steering: set up
   const int ireport=10000;//should make this user adjustable.
   static int icount=0;

@@ -14,6 +14,7 @@
 #include <iostream>
 //#include <utility>
 //#include <memory>
+#include "restart.hh"
 
 using namespace std;
 
@@ -154,7 +155,7 @@ public:
 };
       
 ///Class for holding and manipulating bayesian parameter states
-class state {
+class state :restartable {
   bool valid;
   const stateSpace *space;
   valarray<double> params;
@@ -165,6 +166,37 @@ public:
   state(const stateSpace *space=nullptr,int n=0);
   state(const stateSpace *sp, const valarray<double>&array);
   state(const stateSpace *sp, const vector<double>&array);
+  void checkpoint(string path)override{//probably won't want to use this; woudl need a separate dir for each state...
+    ostringstream ss;
+    ss<<path<<"/state.cp";
+    ofstream os = openWrite(ss.str());
+    writeString(os,save_string());
+  };
+  void restart(string path)override{//probably won't want to use this; woudl need a separate dir for each state...
+    ostringstream ss;
+    ss<<path<<"/state.cp";
+    ifstream os = openRead(ss.str());
+    string s;
+    readString(os,s);
+    restore_string(s);
+  };
+  string save_string()const{
+    //We assume *space is known independently
+    ostringstream oss;
+    writeInt(oss,valid);
+    writeInt(oss,params.size());
+    for(int i=0;i<params.size();i++)writeDouble(oss,params[i]);
+    return oss.str();
+  };
+  void restore_string(const string s){
+    //We assume *space is known independently
+    istringstream iss(s);
+    int n;
+    readInt(iss,n);valid=n;
+    readInt(iss,n);
+    params.resize(n,0);
+    for(int i=0;i<params.size();i++)readDouble(iss,params[i]);
+  };
   int size()const{return params.size();}
   //some algorithms rely on using the states as a vector space
   virtual state add(const state &other)const;
