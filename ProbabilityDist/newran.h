@@ -61,7 +61,7 @@ public:
    static void CopySeedToDisk();
    static void SetDirectory(const char* dir); // set the directory for storing seed
 
-
+   SimpleString getDir();
    virtual void CopyInstanceSeedFromDisk(bool update=false); //JGB added (since the above only operate on the static instance reference *RNG)
    virtual void CopyInstanceSeedToDisk();                    //JGB added
    virtual void SetInstanceDirectory(const char* dir);       //JGB added

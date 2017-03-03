@@ -82,9 +82,11 @@ void Random::CopySeedToDisk()
    RNG->CSTD();
 }
 
-void Random::SetDirectory(const char* dir)
+SimpleString Random::getDir()
 {
-   Dir = dir;
+  if(InstanceDir.size()==0)
+    return Dir;
+  return InstanceDir;
 }
 
 void Random::CopyInstanceSeedFromDisk(bool update)
@@ -187,7 +189,7 @@ unsigned long LGM_mixed::ulNext()
 void LGM_mixed::CSFD(bool update)
 {
    Update = false;
-   ifstream in((Dir+"lgm_mix.txt").c_str());
+   ifstream in((getDir()+"lgm_mix.txt").c_str());
    ReadVerify(in);
    char x; seed = 0;
    for (int n = 28; n >= 0; n -= 4) { in >> x; seed |= unhex(x, n); }
@@ -199,9 +201,9 @@ void LGM_mixed::CSFD(bool update)
 
 void LGM_mixed::CSTD()
 {
-   ifstream in; in.open((Dir+"lgm_mix.txt").c_str(), ios::in);
+   ifstream in; in.open((getDir()+"lgm_mix.txt").c_str(), ios::in);
    ReadVerify(in, true); if (in) in.close();
-   ofstream out((Dir+"lgm_mix.txt").c_str());
+   ofstream out((getDir()+"lgm_mix.txt").c_str());
    WriteVerify(out);
    for (int n = 28; n >= 0; n -= 4) out << hex(seed, n);
    WriteVerify(out);
@@ -225,7 +227,7 @@ LGM_simple::LGM_simple(double s) : LGM_base(s) {}
 void LGM_simple::CSFD(bool update)
 {
    Update = false;
-   ifstream in((Dir+"lgm.txt").c_str());
+   ifstream in((getDir()+"lgm.txt").c_str());
    ReadVerify(in);
    seed = 0;
    char x;
@@ -237,9 +239,9 @@ void LGM_simple::CSFD(bool update)
 
 void LGM_simple::CSTD()
 {
-   ifstream in; in.open((Dir+"lgm_mix.txt").c_str(), ios::in);
+   ifstream in; in.open((getDir()+"lgm_mix.txt").c_str(), ios::in);
    ReadVerify(in, true); if (in) in.close();
-   ofstream out((Dir+"lgm.txt").c_str());
+   ofstream out((getDir()+"lgm.txt").c_str());
    WriteVerify(out);
    for (int n = 28; n >= 0; n -= 4) out << hex(seed, n);
    WriteVerify(out);
@@ -290,7 +292,7 @@ unsigned long WH::ulNext() { return (unsigned long)floor(WH::Next() * 4294967296
 void WH::CSFD(bool update)
 {
    Update = false;
-   ifstream in((Dir+"wh.txt").c_str());
+   ifstream in((getDir()+"wh.txt").c_str());
    ReadVerify(in);
    seed1 = seed2 = seed3 = 0;
    char x; int n;
@@ -304,9 +306,9 @@ void WH::CSFD(bool update)
 
 void WH::CSTD()
 {
-   ifstream in; in.open((Dir+"lgm_mix.txt").c_str(), ios::in);
+   ifstream in; in.open((getDir()+"lgm_mix.txt").c_str(), ios::in);
    ReadVerify(in, true); if (in) in.close();
-   ofstream out((Dir+"wh.txt").c_str());
+   ofstream out((getDir()+"wh.txt").c_str());
    WriteVerify(out);
    int n;
    for (n = 28; n >= 0; n -= 4) out << hex(seed1, n);
@@ -435,7 +437,7 @@ unsigned long MotherOfAll::ulNext() { Mother(); return seed; }
 void MotherOfAll::CSFD(bool update)
 {
    Update = false;
-   ifstream in((Dir+"mother.txt").c_str());
+   ifstream in((getDir()+"mother.txt").c_str());
    ReadVerify(in);
    char x;
    for (int i = 0; i < 10; ++i)
@@ -454,9 +456,9 @@ void MotherOfAll::CSFD(bool update)
 
 void MotherOfAll::CSTD()
 {
-   ifstream in; in.open((Dir+"lgm_mix.txt").c_str(), ios::in);
+   ifstream in; in.open((getDir()+"lgm_mix.txt").c_str(), ios::in);
    ReadVerify(in, true); if (in) in.close();
-   ofstream out((Dir+"mother.txt").c_str());
+   ofstream out((getDir()+"mother.txt").c_str());
    WriteVerify(out);
    for (int i = 0; i < 10; ++i)
    {
@@ -544,7 +546,7 @@ unsigned long MultWithCarry::ulNext() { NextValue(); return x; }
 void MultWithCarry::CSFD(bool update)
 {
    Update = false;
-   ifstream in((Dir+"multwc.txt").c_str());
+   ifstream in((getDir()+"multwc.txt").c_str());
    ReadVerify(in);
    x = 0; crry = 0;
    char xx;
@@ -558,9 +560,9 @@ void MultWithCarry::CSFD(bool update)
 
 void MultWithCarry::CSTD()
 {
-   ifstream in; in.open((Dir+"lgm_mix.txt").c_str(), ios::in);
+   ifstream in; in.open((getDir()+"lgm_mix.txt").c_str(), ios::in);
    ReadVerify(in, true); if (in) in.close();
-   ofstream out((Dir+"multwc.txt").c_str());
+   ofstream out((getDir()+"multwc.txt").c_str());
    WriteVerify(out);
    int n;
    for (n = 28; n >= 0; n -= 4) out << hex(x, n);
@@ -697,7 +699,7 @@ unsigned long MT::genrand_int32()
 void MT::CSFD(bool update)
 {
    Update = false;
-   ifstream in((Dir+"mt19937.txt").c_str());
+   ifstream in((getDir()+"mt19937.txt").c_str());
    ReadVerify(in);
 
    char xx;
@@ -716,9 +718,9 @@ void MT::CSFD(bool update)
 
 void MT::CSTD()
 {
-   ifstream in; in.open((Dir+"lgm_mix.txt").c_str(), ios::in);
+   ifstream in; in.open((getDir()+"lgm_mix.txt").c_str(), ios::in);
    ReadVerify(in, true); if (in) in.close();
-   ofstream out((Dir+"mt19937.txt").c_str());
+   ofstream out((getDir()+"mt19937.txt").c_str());
    WriteVerify(out);
    for (int i = 0; i < N; ++i)
    {
@@ -814,7 +816,7 @@ FM::FM(double s)
 void FM::CSFD(bool update)
 {
    Update = false;
-   ifstream in((Dir+"fm.txt").c_str());
+   ifstream in((getDir()+"fm.txt").c_str());
    ReadVerify(in);
    unsigned long iseed = 0;
    char x;
@@ -827,9 +829,9 @@ void FM::CSFD(bool update)
 
 void FM::CSTD()
 {
-   ifstream in; in.open((Dir+"lgm_mix.txt").c_str(), ios::in);
+   ifstream in; in.open((getDir()+"lgm_mix.txt").c_str(), ios::in);
    ReadVerify(in, true); if (in) in.close();
-   ofstream out((Dir+"fm.txt").c_str());
+   ofstream out((getDir()+"fm.txt").c_str());
    WriteVerify(out);
    unsigned long iseed = (unsigned long)seed;
    for (int n = 28; n >= 0; n -= 4) out << hex(iseed, n);
