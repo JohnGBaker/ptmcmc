@@ -317,10 +317,11 @@ state  differential_evolution::draw_from_chain(chain *caller){
 
   //diagnostics:
   const int ireport=500000;
-  static int icount=0;
-  static vector< vector< int > > mixcounts;
-  static vector< int > trycounts;
+  //static int icount=0;  //these moved to static class data.
+  //static vector< vector< int > > mixcounts;
+  //static vector< int > trycounts;
 
+  /*  //commented out to facillitate testing of checkpointing
 #pragma omp critical
   //diagnostics/reporting on mixing
   {
@@ -348,6 +349,7 @@ state  differential_evolution::draw_from_chain(chain *caller){
       icount=0;//restart the count;
     }
   }
+  */
   
   return ci->getState(index,true);//grab the state with raw indexing, not nominal indexing (that includes unsaved states and no inits)
 };

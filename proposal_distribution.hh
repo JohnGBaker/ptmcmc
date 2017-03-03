@@ -148,6 +148,11 @@ class differential_evolution: public proposal_distribution {
   //SampsonEA don't use it, but terBraakEA seem to prefer a variant on DE where the scaling is set by a separate drawing of states;  I guess this propotes variety.
   bool do_support_mixing;
   double temperature_mixing_factor;
+  /*
+  static int icount;
+  static vector< vector< int > > mixcounts;
+  static vector< int > trycounts;
+  */
   
   //SOME INTERNAL FUNCTIONS
   //state draw_standard(state &s, Random &rng);
