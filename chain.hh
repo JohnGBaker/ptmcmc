@@ -63,47 +63,10 @@ public:
     //As long as the chains are created in a fixed order, this should allow threading independence of the result.
     Nfrozen=-1;
   };
-
-  virtual void checkpoint(string path)override{
-    //save basic data 
-    ostringstream ss;
-    ss<<path<<"chain"<<id<<"-cp/";
-    string dir=ss.str();
-    mkdir(dir.data(),ACCESSPERMS);
-    ss<<"chain.cp";
-    ofstream os = openWrite(ss.str());
-    writeInt(os, id);
-    writeInt(os, Nsize);
-    writeInt(os, Ninit); //Maybe move this history stuff to a subclass
-    writeInt(os, Nearliest);
-    writeInt(os, Nfrozen);
-    writeInt(os, dim);
-    os.close();
-    //write RNG
-    rng->SetInstanceDirectory(dir.data());
-    rng->CopyInstanceSeedToDisk();
-  };
-  virtual void restart(string path)override{
-    //restore basic data;
-    ostringstream ss;
-    ss<<path<<"chain"<<id<<"-cp/";
-    string dir=ss.str();
-    ss<<"chain.cp";
-    ifstream is=openRead(ss.str());
-    readInt(is, id);
-    readInt(is, Nsize);
-    readInt(is, Ninit); //Maybe move this history stuff to a subclass
-    readInt(is, Nearliest);
-    readInt(is, Nfrozen);
-    readInt(is, dim);
-    is.close();
-    //write RNG
-    rng.reset(new MotherOfAll(rng->Next()));
-    rng->SetInstanceDirectory(dir.data());
-    rng->CopyInstanceSeedFromDisk();
-  };
+  virtual void checkpoint(string path)override;
+  virtual void restart(string path)override;
   virtual shared_ptr<Random> getPRNG(){return rng;};
-  virtual string show(){
+  virtual string show(bool verbose=false){
     ostringstream s;
     s<<"chain(id="<<id<<"size="<<Nsize<<")\n";
     return s.str();
@@ -127,30 +90,7 @@ public:
   ///2. Probability of being in some bin region of param space (test_func returns 1 iff in that region)
   virtual double  Pcond(bool (*test_func)(state s)){return dim;};
   virtual int i_after_burn(int nburn=0){return nburn;}
-  virtual void inNsigma(int Nsigma,vector<int> & indicies,int nburn=0){
-    //cout<<" inNsigma:this="<<this->show()<<endl;
-    int ncount=size()-this->i_after_burn(nburn);
-    //cout<<"size="<<size()<<"   nburn="<<nburn<<"   i_after_burn="<<this->i_after_burn(nburn)<<endl;
-    int inNstd_count=(int)(erf(Nsigma/sqrt(2.))*ncount);
-    vector<pair<double,double> > lpmap;
-    //double zero[2]={0,0};
-    //lpmap.resize(ncount,zero);
-    //cout<<"ncount="<<ncount<<"   inNstd_count="<<inNstd_count<<endl;
-    lpmap.resize(ncount);
-    for(uint i=0;i<ncount;i++){
-      int idx=i+this->i_after_burn(nburn);
-      //cout<<idx<<" state:"<<this->getState(idx,true).get_string()<<endl;
-      lpmap[i]=make_pair(-this->getLogPost(idx,true),idx);
-    }
-    //sort(lpmap.begin(),lpmap.end(),chain::AgtB);
-    sort(lpmap.begin(),lpmap.end());
-    indicies.resize(inNstd_count);
-    for(uint i=0;i<inNstd_count;i++){
-      indicies[i]=lpmap[i].second;
-      //cout<<"  :"<<lpmap[i].first<<" "<<lpmap[i].second<<endl;
-    }
-    return;
-  };
+  virtual void inNsigma(int Nsigma,vector<int> & indicies,int nburn=0);
   virtual void set_proposal(proposal_distribution &proposal){
     cout<<"chain::step: No base-class set_proposal operation defined!"<<endl;
     exit(1);
@@ -216,73 +156,8 @@ public:
   virtual void reserve(int nmore);
   virtual int capacity(){return states.capacity();};
   ///Initialize the chain with one or more states.  Technically we do consider these as part of the chain, for output/analysis purposes as they are not selected based on the MH criterion
-  virtual void checkpoint(string path)override{
-    chain::checkpoint(path);
-    ostringstream ss;
-    ss<<path<<"chain"<<id<<"-cp/";
-    ss<<"MHchain.cp";
-    ofstream os = openWrite(ss.str());
-    //save basic data 
-    //The philosopy is that we don't need to save anything set by setup...
-    writeInt(os, Ntries);
-    writeInt(os, Naccept);
-    writeInt(os, last_type);
-    //add_every_N;
-    writeIntVector(os,types);
-    writeInt(os,states.size());for(int i=0;i<states.size();i++)writeString(os,states[i].save_string());
-    writeDoubleVector(os,lposts);
-    writeDoubleVector(os,llikes);
-    //cout<<"current_state before:"<<current_state.show()<<endl;
-    writeString(os,current_state.save_string());
-    writeDouble(os,current_lpost);
-    writeDouble(os,current_llike);
-    writeDoubleVector(os,acceptance_ratio);
-    writeDoubleVector(os,invtemps);
-    //probability_function *llikelihood;
-    //const sampleable_probability_function *lprior;
-    //double minPrior;
-    //proposal_distribution *default_prop;
-    //bool default_prop_set;
-    writeInt(os,Nhist);
-    writeInt(os,Nzero);
-    writeDouble(os,invtemp);
-  };
-  virtual void restart(string path)override{
-    state protostate=lprior->drawSample(*rng);//We draw a sample as seed state *before* reinstating the rng;  if the current rng were ever needed again this would fail
-    chain::restart(path);
-    ostringstream ss;
-    ss<<path<<"chain"<<id<<"-cp/";
-    ss<<"MHchain.cp";
-    ifstream os = openRead(ss.str());
-    //save basic data 
-    //The philosopy is that we don't need to save anything set by setup...
-    readInt(os, Ntries);
-    readInt(os, Naccept);
-    readInt(os, last_type);
-    //add_every_N;
-    readIntVector(os,types);
-    //The following block is to restore the states vector
-    int n;readInt(os,n);states.resize(n,protostate);for(int i=0;i<n;i++){string s;readString(os,s);states[i].restore_string(s);};
-    readDoubleVector(os,lposts);
-    readDoubleVector(os,llikes);
-    //cout<<"current_state before restore:"<<current_state.show()<<endl;
-    string s;
-    readString(os,s);
-    current_state.restore_string(s);
-    //cout<<"current_state after restore:"<<current_state.show()<<endl;
-    readDouble(os,current_lpost);
-    readDouble(os,current_llike);
-    readDoubleVector(os,acceptance_ratio);
-    readDoubleVector(os,invtemps);
-    //probability_function *llikelihood;
-    //const sampleable_probability_function *lprior;
-    //double minPrior;
-    //proposal_distribution *default_prop;
-    //bool default_prop_set;
-    readInt(os,Nhist);
-    readInt(os,Nzero);
-    readDouble(os,invtemp);
-  };
+  virtual void checkpoint(string path)override;
+  virtual void restart(string path)override;
   void initialize(uint n=1);
   void reboot();
   void add_state(state newstate,double log_like=999,double log_post=999);
@@ -300,7 +175,7 @@ public:
   void dumpChain(ostream &os,int Nburn=0,int ievery=1);
   //return raw_indexing point after burn-in
   virtual int i_after_burn(int nburn=0){return Ninit+int(nburn/add_every_N);}
-  virtual string show();
+  virtual string show(bool verbose=false);
   virtual string status();
   virtual double invTemp(){return invtemp;};
   void resetTemp(double new_invtemp);
@@ -317,10 +192,10 @@ class parallel_tempering_chains: public chain{
   //Mainly based on KatzenbergerEA06, but for now we don't implement any temperature
   //tuning.  For now we use aspects of Katzenberger's tuning algorithm for diagnostics.
   //Thus we say "replicas" move between chains/temps.
-  int Ntemps;
-  int add_every_N;
+  const int Ntemps;
+  const int add_every_N;
   ///swap rate per chain.  Effective max of 1/(Ntemps-1), ie 1 swap per step total.
-  double swap_rate;
+  const double swap_rate;
   double max_reboot_rate;
   int test_reboot_every;
   double reboot_thresh;
@@ -354,7 +229,9 @@ class parallel_tempering_chains: public chain{
   
  public:
   virtual ~parallel_tempering_chains(){  };//assure correct deletion of any child
-  parallel_tempering_chains(int Ntemps,int Tmax,double swap_rate=0.01,int add_every_N=1);
+  parallel_tempering_chains(int Ntemps,double Tmax,double swap_rate=0.01,int add_every_N=1);
+  virtual void checkpoint(string path)override;
+  virtual void restart(string path)override;
   void initialize( probability_function *log_likelihood, const sampleable_probability_function *log_prior,int n=1);
   void set_proposal(proposal_distribution &proposal);
   void step();
@@ -371,7 +248,7 @@ class parallel_tempering_chains: public chain{
   void dumpTempStats(ostream &os);
   virtual int i_after_burn(int nburn=0){return c0().i_after_burn(nburn);}
   virtual int capacity(){return c0().capacity();};
-  virtual string show();
+  virtual string show(bool verbose=false);
   virtual string status();
   virtual int multiplicity(){return Ntemps;};
   virtual chain* subchain(int index){

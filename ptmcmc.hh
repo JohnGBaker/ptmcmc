@@ -23,12 +23,17 @@ private:
   int Nstep,Nskip,Nptc,Nevery,save_every,pt_reboot_every,pt_reboot_grace,dump_n;;
   double nburn_frac;
   bool parallel_tempering,pt_reboot_grad;
-
+  int istep;
+  bool restarting;
+  string restart_dir;
+  int checkp_at_step;
 public:
   static proposal_distribution* new_proposal_distribution(int Npar, int &Ninit, const Options &opt, const sampleable_probability_function * prior, const valarray<double>*halfwidths);
   static proposal_distribution* new_proposal_distribution_guts(int Npar, int &Ninit, const sampleable_probability_function * prior, const valarray<double>*halfwidths, int proposal_option,int SpecNinit, double tmixfac,double reduce_gamma_by,double de_eps,double gauss_1d_frac, bool de_mixing=false);
   proposal_distribution* select_proposal();
   ptmcmc_sampler();
+  virtual void checkpoint(string path)override;
+  virtual void restart(string path)override;
   void addOptions(Options &opt,const string &prefix="");
   int run(const string & base, int ic=0);
   void setup(bayes_likelihood &llike, const sampleable_probability_function &prior,int output_precision=15);

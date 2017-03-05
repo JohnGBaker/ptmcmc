@@ -640,7 +640,7 @@ public:
 ///Base class for defining a Bayesian sampler object
 ///
 ///To begin with the only option is for MCMC sampling, though we expect soon to add a multinest option.
-class bayes_sampler : public Optioned {
+class bayes_sampler : public Optioned, public restartable {
 protected:
   string paramfile;
   bool have_paramfile;

@@ -196,7 +196,37 @@ ptmcmc_sampler::ptmcmc_sampler(){
   chain_prior=nullptr;
   have_setup=false;
   dump_n=1;
+  restarting=false;
 };
+
+///For restartable interface:
+void ptmcmc_sampler::checkpoint(string path){
+  ostringstream ss;
+  ss<<path<<"/step_"<<istep<<"-cp/";
+  string dir=ss.str();
+  cout<<"Writing checkpoint files to dir:"<<dir<<endl;
+  mkdir(dir.data(),ACCESSPERMS);
+  ss<<"ptmcmc.cp";
+  ofstream os = openWrite(ss.str());
+  cc->checkpoint(dir);
+  writeInt(os,istep);
+  //cout<<"show:"<<cc->show()<<endl;;
+  //cout<<"status:"<<cc->status()<<endl;
+}
+
+void ptmcmc_sampler::restart(string path){
+  cout<<"Restarting from checkpoint files in dir:"<<path<<endl;
+  ostringstream ss;
+  ss<<path<<"/";
+  string dir=ss.str();
+  ss<<"ptmcmc.cp";
+  ifstream os = openRead(ss.str());
+  cc->restart(dir);
+  readInt(os,istep);
+  restarting=false;
+  //cout<<"show:"<<cc->show(true)<<endl;;
+  //cout<<"status:"<<cc->status()<<endl;
+}
 
 ///\brief Provide indicative state
 ///If not initialized, then try to read params from file provided, or else draw a random state
@@ -229,6 +259,8 @@ state ptmcmc_sampler::getState(){
 
 void ptmcmc_sampler::addOptions(Options &opt,const string &prefix){
   bayes_sampler::addOptions(opt,prefix);
+  addOption("checkp_at_step","Step at which to checkpoint and stop","-1");
+  addOption("restart_dir","Directory with checkpoint data to restart from.","");
   addOption("nevery","Frequency to dump chain info. Default=5000.","5000");
   addOption("save_every","Frequency to store chain info. Default=1.","1");
   addOption("nsteps","How long to run the chain. Default=5000.","5000");
@@ -260,7 +292,9 @@ void ptmcmc_sampler::addOptions(Options &opt,const string &prefix){
 
 void ptmcmc_sampler::processOptions(){
   bayes_sampler::processOptions();
-  *optValue("nevery")>>Nevery;
+  *optValue("checkp_at_step")>>checkp_at_step;
+  *optValue("restart_dir")>>restart_dir;
+  if(not restart_dir.size()==0)restarting=true;
   *optValue("nevery")>>Nevery;
   *optValue("save_every")>>save_every;
   *optValue("nsteps")>>Nstep;
@@ -320,6 +354,8 @@ int ptmcmc_sampler::initialize(){
     exit(1);
   }
 
+  int Ninit=chain_Ninit;
+  if(restarting)Ninit=0;
   //Create the Chain 
   if(parallel_tempering){
     parallel_tempering_chains *ptc= new parallel_tempering_chains(Nptc,Tmax,swap_rate,save_every);
@@ -327,13 +363,13 @@ int ptmcmc_sampler::initialize(){
     have_cc=true;
     if(pt_evolve_rate>0)ptc->evolve_temps(pt_evolve_rate,pt_evolve_lpost_cut);
     if(pt_reboot_rate>0)ptc->do_reboot(pt_reboot_rate,pt_reboot_cut,pt_reboot_thermal,pt_reboot_every,pt_reboot_grace,pt_reboot_grad,pt_reboot_blindly);
-    ptc->initialize(chain_llike,chain_prior,chain_Ninit);
+    ptc->initialize(chain_llike,chain_prior,Ninit);
   } else {
     MH_chain *mhc= new MH_chain(chain_llike,chain_prior,-30,save_every);
     cc=mhc;
     have_cc=true;
     cprop->set_chain(cc);
-    mhc->initialize(chain_Ninit);
+    mhc->initialize(Ninit);
   }
   cc->set_proposal(*cprop);
   return 0;
@@ -346,8 +382,13 @@ int ptmcmc_sampler::run(const string & base, int ic){
     exit(1);
   }
   ios_base::openmode mode=ios_base::out;
-  if(ic>0)mode=mode|ios_base::app;
+  if(ic>0 or restarting)mode=mode|ios_base::app;
 
+  if(ic>0 and restarting){
+    cout<<"ptmcmc_sampler::run: Can't restart except for single chain ic=0.  A little more coding is required if this is needed."<<endl;
+    exit(1);
+  }
+  
   //ostringstream ss;
   //ss<<base<<".dat";
   ofstream *out=new ofstream[dump_n];
@@ -363,22 +404,29 @@ int ptmcmc_sampler::run(const string & base, int ic){
   //FIXME: add this function in "likelihood" class
   chain_llike->reset();
   
-  for(int i=0;i<=chain_Nstep;i++){
+  for(istep=0;istep<=chain_Nstep;istep++){//istep is member variable to facilitate checkpointing
+    if(restarting)restart(restart_dir);
+      
+    if(istep==checkp_at_step){//checkpointing test
+      checkpoint(".");
+      exit(0);
+    }
+    
     cc->step();
     bool stop=false;
-    if(0==i%Nevery){
-      cout<<"chain "<<ic<<" step "<<i<<endl;
+    if(0==istep%Nevery){
+      cout<<"chain "<<ic<<" step "<<istep<<endl;
       cout<<"   MaxPosterior="<<chain_llike->bestPost()<<endl;
       if(parallel_tempering){
 	parallel_tempering_chains *ptc=dynamic_cast<parallel_tempering_chains*>(cc);
-	for(int ich=0;ich<dump_n;ich++)ptc->dumpChain(ich,out[ich],i-Nevery+1,Nskip);
+	for(int ich=0;ich<dump_n;ich++)ptc->dumpChain(ich,out[ich],istep-Nevery+1,Nskip);
 	double bestErr=ptc->bestEvidenceErr();
 	if(bestErr<pt_stop_evid_err){
 	  stop=true;
-	  cout<<"ptmcmc::run: Stopping based on pt_stop_evid_err criterion."<<endl; 
+	  cout<<"ptmcmc_sampler::run: Stopping based on pt_stop_evid_err criterion."<<endl; 
 	}
       }
-      else cc->dumpChain(out[0],i-Nevery+1,Nskip);
+      else cc->dumpChain(out[0],istep-Nevery+1,Nskip);
       cout<<cc->status()<<endl;      
     }
     if(stop)break;

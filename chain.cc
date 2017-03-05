@@ -8,8 +8,75 @@
 // Static data
 int chain::idcount=0;
 
-
 //** CHAIN Classes *******
+
+//Main chain base class
+
+void chain::checkpoint(string path){
+  //save basic data 
+  ostringstream ss;
+  ss<<path<<"chain"<<id<<"-cp/";
+  string dir=ss.str();
+  mkdir(dir.data(),ACCESSPERMS);
+  ss<<"chain.cp";
+  ofstream os = openWrite(ss.str());
+  writeInt(os, id);
+  writeInt(os, Nsize);
+  writeInt(os, Ninit); //Maybe move this history stuff to a subclass
+  writeInt(os, Nearliest);
+  writeInt(os, Nfrozen);
+  writeInt(os, dim);
+  os.close();
+  //write RNG
+  rng->SetInstanceDirectory(dir.data());
+  rng->CopyInstanceSeedToDisk();
+};
+
+void chain::restart(string path){
+  //restore basic data;
+  ostringstream ss;
+  ss<<path<<"chain"<<id<<"-cp/";
+  string dir=ss.str();
+  ss<<"chain.cp";
+  ifstream is=openRead(ss.str());
+  readInt(is, id);
+  readInt(is, Nsize);
+  cout<<"id "<<id<<":Nsize="<<Nsize<<endl;
+  readInt(is, Ninit); //Maybe move this history stuff to a subclass
+  readInt(is, Nearliest);
+  readInt(is, Nfrozen);
+  readInt(is, dim);
+  is.close();
+  //write RNG
+  rng.reset(new MotherOfAll(rng->Next()));
+  rng->SetInstanceDirectory(dir.data());
+  rng->CopyInstanceSeedFromDisk();
+};
+
+void chain::inNsigma(int Nsigma,vector<int> & indicies,int nburn){
+  //cout<<" inNsigma:this="<<this->show()<<endl;
+  int ncount=size()-this->i_after_burn(nburn);
+  //cout<<"size="<<size()<<"   nburn="<<nburn<<"   i_after_burn="<<this->i_after_burn(nburn)<<endl;
+  int inNstd_count=(int)(erf(Nsigma/sqrt(2.))*ncount);
+  vector<pair<double,double> > lpmap;
+  //double zero[2]={0,0};
+  //lpmap.resize(ncount,zero);
+  //cout<<"ncount="<<ncount<<"   inNstd_count="<<inNstd_count<<endl;
+  lpmap.resize(ncount);
+  for(uint i=0;i<ncount;i++){
+    int idx=i+this->i_after_burn(nburn);
+    //cout<<idx<<" state:"<<this->getState(idx,true).get_string()<<endl;
+    lpmap[i]=make_pair(-this->getLogPost(idx,true),idx);
+  }
+  //sort(lpmap.begin(),lpmap.end(),chain::AgtB);
+  sort(lpmap.begin(),lpmap.end());
+  indicies.resize(inNstd_count);
+  for(uint i=0;i<inNstd_count;i++){
+    indicies[i]=lpmap[i].second;
+    //cout<<"  :"<<lpmap[i].first<<" "<<lpmap[i].second<<endl;
+  }
+  return;
+};
 
 // A markov (or non-Markovian) chain based on some variant of the Metropolis-Hastings algorithm
 // May add "burn-in" distinction later.
@@ -20,6 +87,77 @@ MH_chain::MH_chain(probability_function * log_likelihood, const sampleable_proba
   default_prop_set=false;
   //cout<<"creating chain at this="<<this->show()<<" with lprior="<<lprior->show()<<endl;//debug
   Ninit=0;
+};
+
+void MH_chain::checkpoint(string path){
+  chain::checkpoint(path);
+  ostringstream ss;
+  ss<<path<<"chain"<<id<<"-cp/";
+  ss<<"MHchain.cp";
+  ofstream os = openWrite(ss.str());
+  //save basic data 
+  //The philosopy is that we don't need to save anything set by setup...
+  writeInt(os, Ntries);
+  writeInt(os, Naccept);
+  writeInt(os, last_type);
+  //add_every_N;
+  writeIntVector(os,types);
+  writeInt(os,states.size());for(int i=0;i<states.size();i++)writeString(os,states[i].save_string());
+  writeDoubleVector(os,lposts);
+  writeDoubleVector(os,llikes);
+  //cout<<"current_state before:"<<current_state.show()<<endl;
+  writeString(os,current_state.save_string());
+  writeDouble(os,current_lpost);
+  writeDouble(os,current_llike);
+  writeDoubleVector(os,acceptance_ratio);
+  writeDoubleVector(os,invtemps);
+  //probability_function *llikelihood;
+  //const sampleable_probability_function *lprior;
+  //double minPrior;
+  //proposal_distribution *default_prop;
+  //bool default_prop_set;
+  writeInt(os,Nhist);
+  writeInt(os,Nzero);
+  writeDouble(os,invtemp);
+};
+
+void MH_chain::restart(string path){
+  state protostate=lprior->drawSample(*rng);//We draw a sample as seed state *before* reinstating the rng;  if the current rng were ever needed again this would fail
+  chain::restart(path);
+  ostringstream ss;
+  ss<<path<<"chain"<<id<<"-cp/";
+  ss<<"MHchain.cp";
+  ifstream os = openRead(ss.str());
+  //save basic data 
+  //The philosopy is that we don't need to save anything set by setup...
+  readInt(os, Ntries);
+  readInt(os, Naccept);
+  readInt(os, last_type);
+  //add_every_N;
+  readIntVector(os,types);
+  //The following block is to restore the states vector
+  //We build the states from an example (protostate) which includes the right stateSpace (which isn't stored) already set up...
+  int n;readInt(os,n);states.resize(n,protostate);for(int i=0;i<n;i++){string s;readString(os,s);states[i].restore_string(s);};
+  readDoubleVector(os,lposts);
+  readDoubleVector(os,llikes);
+  //cout<<"current_state before restore:"<<current_state.show()<<endl;
+  string s;
+  readString(os,s);
+  current_state=protostate;
+  current_state.restore_string(s);
+  //cout<<"current_state after restore:"<<current_state.show()<<endl;
+  readDouble(os,current_lpost);
+  readDouble(os,current_llike);
+  readDoubleVector(os,acceptance_ratio);
+  readDoubleVector(os,invtemps);
+  //probability_function *llikelihood;
+  //const sampleable_probability_function *lprior;
+  //double minPrior;
+  //proposal_distribution *default_prop;
+  //bool default_prop_set;
+  readInt(os,Nhist);
+  readInt(os,Nzero);
+  readDouble(os,invtemp);
 };
 
 void MH_chain::reserve(int nmore){//If you know how long you are going to run, it can be more efficient to reserve up front, rather than resizing ever step
@@ -290,9 +428,10 @@ void MH_chain::dumpChain(ostream &os,int Nburn,int ievery){
     }
 };
   
-string MH_chain::show(){
+string MH_chain::show(bool verbose){
     ostringstream s;
     s<<"MH_chain(id="<<id<<",every="<<add_every_N<<",invtemp="<<invtemp<<",size="<<Nsize<<",N="<<Nhist<<")\n";
+    if(verbose)s<<current_state.getSpace()->show()<<endl;
     return s.str();
 };
 
@@ -308,7 +447,7 @@ string MH_chain::status(){
 // A parallel tempering set of markov (or non-Markovian) chain
 // May add "burn-in" distinction later.
 
-parallel_tempering_chains::parallel_tempering_chains(int Ntemps,int Tmax,double swap_rate,int add_every_N):Ntemps(Ntemps),swap_rate(swap_rate),add_every_N(add_every_N){
+parallel_tempering_chains::parallel_tempering_chains(int Ntemps,double Tmax,double swap_rate,int add_every_N):Ntemps(Ntemps),swap_rate(swap_rate),add_every_N(add_every_N){
     props.resize(Ntemps);
     directions.resize(Ntemps,0);
     instances.resize(Ntemps,-1);
@@ -341,6 +480,61 @@ parallel_tempering_chains::parallel_tempering_chains(int Ntemps,int Tmax,double 
     evidence_count=0;
     evidence_records_dim=0;
     best_evidence_stderr=1e100;
+};
+
+void parallel_tempering_chains::checkpoint(string path){
+  chain::checkpoint(path);
+  ostringstream ss;
+  ss<<path<<"chain"<<id<<"-cp/";
+  ss<<"PTchain.cp";
+  ofstream os = openWrite(ss.str());
+  for(int i=0;i<Ntemps;i++)chains[i].checkpoint(path);
+  writeIntVector(os, directions);
+  writeIntVector(os, ups);
+  writeIntVector(os, downs);
+  writeIntVector(os, instances);
+  writeIntVector(os, instance_starts);
+  writeIntVector(os, swap_accept_count);
+  writeIntVector(os, swap_count);
+  writeDoubleVector(os, temps);
+  writeDoubleVector(os, log_eratio_up);
+  writeDoubleVector(os, log_eratio_down);
+  writeDoubleVector(os, tryrate);
+  writeDoubleVector(os, swaprate);
+  writeDoubleVector(os, up_frac);
+  int n=total_evidence_records.size();
+  writeInt(os,n);
+  for(int i=0;i<n;i++)writeDoubleVector(os, total_evidence_records[i]);
+  writeInt(os, evidence_count);
+  writeDouble(os, best_evidence_stderr);
+};
+
+void parallel_tempering_chains::restart(string path){
+  chain::restart(path);
+  ostringstream ss;
+  ss<<path<<"chain"<<id<<"-cp/";
+  ss<<"PTchain.cp";
+  ifstream os = openRead(ss.str());
+  for(int i=0;i<Ntemps;i++)chains[i].restart(path);
+  readIntVector(os, directions);
+  readIntVector(os, ups);
+  readIntVector(os, downs);
+  readIntVector(os, instances);
+  readIntVector(os, instance_starts);
+  readIntVector(os, swap_accept_count);
+  readIntVector(os, swap_count);
+  readDoubleVector(os, temps);
+  readDoubleVector(os, log_eratio_up);
+  readDoubleVector(os, log_eratio_down);
+  readDoubleVector(os, tryrate);
+  readDoubleVector(os, swaprate);
+  readDoubleVector(os, up_frac);
+  int n;
+  readInt(os,n);
+  total_evidence_records.resize(n);
+  for(int i=0;i<n;i++)readDoubleVector(os, total_evidence_records[i]);
+  readInt(os, evidence_count);
+  readDouble(os, best_evidence_stderr);
 };
 
 void parallel_tempering_chains::initialize( probability_function *log_likelihood, const sampleable_probability_function *log_prior,int n){
@@ -390,16 +584,16 @@ void parallel_tempering_chains::set_proposal(proposal_distribution &proposal){
 void parallel_tempering_chains::step(){
   int iswaps[maxswapsperstep];
   double x;
-  
-  //checkpoint test
+
   /*
+  //checkpoint test
   if(chains[0].size()==2000){
-    chains[0].checkpoint(".");
-    //proposal_distribution *p=props[0]->clone();
-    //props[0]=p;
-    //props[0]->set_chain(&chains[0]);
+    checkpoint(".");
+    proposal_distribution *p=props[0]->clone();
+    props[0]=p;
+    props[0]->set_chain(&chains[0]);
     chains[0].reboot();
-    chains[0].restart(".");
+    restart(".");
     }*/
   //diagnostics and steering: set up
   const int ireport=10000;//should make this user adjustable.
@@ -806,9 +1000,10 @@ void parallel_tempering_chains::dumpTempStats(ostream &os){
     os<<"\n"<<endl;
 };
 
-string parallel_tempering_chains::show(){
+string parallel_tempering_chains::show(bool verbose){
     ostringstream s;
-    s<<"parallel_tempering_chains(id="<<id<<"Ntemps="<<Ntemps<<"size="<<Nsize<<")\n";
+    s<<"parallel_tempering_chains(id="<<id<<",Ntemps="<<Ntemps<<",size="<<Nsize<<")\n";
+    if(verbose)for(int i=0;i<Ntemps;i++)s<<i<<":"<<chains[i].show(verbose)<<endl;
     return s.str();
 };
 
