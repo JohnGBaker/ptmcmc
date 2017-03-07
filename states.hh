@@ -169,13 +169,15 @@ public:
   void checkpoint(string path)override{//probably won't want to use this; woudl need a separate dir for each state...
     ostringstream ss;
     ss<<path<<"/state.cp";
-    ofstream os = openWrite(ss.str());
+    ofstream os;
+    openWrite(os,ss.str());
     writeString(os,save_string());
   };
   void restart(string path)override{//probably won't want to use this; woudl need a separate dir for each state...
     ostringstream ss;
     ss<<path<<"/state.cp";
-    ifstream os = openRead(ss.str());
+    ifstream os;
+    openRead(os,ss.str());
     string s;
     readString(os,s);
     restore_string(s);

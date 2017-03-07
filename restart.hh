@@ -29,8 +29,7 @@ public:
   };
 protected:
   //void openWrite(string path){
-  ofstream openWrite(string path, bool append=false)const{
-    ofstream os;
+  void openWrite(ofstream &os, const string path, bool append=false)const{
     if(os.is_open()){
       cout<<"restartable::openwrite: Cannot reopen stream for checkpoint! (path='"<<path<<"')."<<endl;
       exit(1);
@@ -42,11 +41,9 @@ protected:
     if(os.fail()){
       cout<<"restartable::openwrite: Could not open stream for checkpoint! (path='"<<path<<"')."<<endl;
     }      
-    return os;
   };
   //void openRead(string path){
-  ifstream openRead(string path)const{
-    ifstream is;
+  void openRead(ifstream &is,const string path)const{
     if(is.is_open()){
       cout<<"restartable::openread: Cannot reopen stream for restart! (path='"<<path<<"')."<<endl;
       exit(1);
@@ -56,11 +53,6 @@ protected:
       cout<<"restartable::openread: Could not open stream for restart! (path='"<<path<<"')."<<endl;
       exit(1);
     }      
-    return is;
-  };
-  ostringstream openStringWrite()const{
-    ostringstream oss;
-    return oss;
   };
   /*
   void close(){

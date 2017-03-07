@@ -19,7 +19,8 @@ void chain::checkpoint(string path){
   string dir=ss.str();
   mkdir(dir.data(),ACCESSPERMS);
   ss<<"chain.cp";
-  ofstream os = openWrite(ss.str());
+  ofstream os;
+  openWrite(os,ss.str());
   writeInt(os, id);
   writeInt(os, Nsize);
   writeInt(os, Ninit); //Maybe move this history stuff to a subclass
@@ -38,7 +39,8 @@ void chain::restart(string path){
   ss<<path<<"chain"<<id<<"-cp/";
   string dir=ss.str();
   ss<<"chain.cp";
-  ifstream is=openRead(ss.str());
+  ifstream is;
+  openRead(is,ss.str());
   readInt(is, id);
   readInt(is, Nsize);
   cout<<"id "<<id<<":Nsize="<<Nsize<<endl;
@@ -94,7 +96,8 @@ void MH_chain::checkpoint(string path){
   ostringstream ss;
   ss<<path<<"chain"<<id<<"-cp/";
   ss<<"MHchain.cp";
-  ofstream os = openWrite(ss.str());
+  ofstream os;
+  openWrite(os,ss.str());
   //save basic data 
   //The philosopy is that we don't need to save anything set by setup...
   writeInt(os, Ntries);
@@ -127,7 +130,8 @@ void MH_chain::restart(string path){
   ostringstream ss;
   ss<<path<<"chain"<<id<<"-cp/";
   ss<<"MHchain.cp";
-  ifstream os = openRead(ss.str());
+  ifstream os; 
+  openRead(os,ss.str());
   //save basic data 
   //The philosopy is that we don't need to save anything set by setup...
   readInt(os, Ntries);
@@ -487,7 +491,8 @@ void parallel_tempering_chains::checkpoint(string path){
   ostringstream ss;
   ss<<path<<"chain"<<id<<"-cp/";
   ss<<"PTchain.cp";
-  ofstream os = openWrite(ss.str());
+  ofstream os;
+  openWrite(os,ss.str());
   for(int i=0;i<Ntemps;i++)chains[i].checkpoint(path);
   writeIntVector(os, directions);
   writeIntVector(os, ups);
@@ -514,7 +519,8 @@ void parallel_tempering_chains::restart(string path){
   ostringstream ss;
   ss<<path<<"chain"<<id<<"-cp/";
   ss<<"PTchain.cp";
-  ifstream os = openRead(ss.str());
+  ifstream os;
+  openRead(os,ss.str());
   for(int i=0;i<Ntemps;i++)chains[i].restart(path);
   readIntVector(os, directions);
   readIntVector(os, ups);

@@ -207,7 +207,8 @@ void ptmcmc_sampler::checkpoint(string path){
   cout<<"Writing checkpoint files to dir:"<<dir<<endl;
   mkdir(dir.data(),ACCESSPERMS);
   ss<<"ptmcmc.cp";
-  ofstream os = openWrite(ss.str());
+  ofstream os;
+  openWrite(os,ss.str());
   cc->checkpoint(dir);
   writeInt(os,istep);
   //cout<<"show:"<<cc->show()<<endl;;
@@ -220,7 +221,8 @@ void ptmcmc_sampler::restart(string path){
   ss<<path<<"/";
   string dir=ss.str();
   ss<<"ptmcmc.cp";
-  ifstream os = openRead(ss.str());
+  ifstream os;
+  openRead(os,ss.str());
   cc->restart(dir);
   readInt(os,istep);
   restarting=false;
