@@ -237,10 +237,14 @@ state ptmcmc_sampler::getState(){
     cout<<"ptmcmc_sampler::getState.  Must call setup() before getState!"<<endl;
     exit(1);
   }
-  if(have_cc)
+  if(have_cc){
     return cc->getState();
-  else if(paramfile=="")
+  }
+  else if(paramfile==""){
+    //cout<<"about to draw from prior="<<endl;
+    //cout<<chain_prior->show()<<endl;
     return chain_prior->drawSample(*ProbabilityDist::getPRNG());//Probably should have the sampler own a 'global' RNG from which everything (including this) is derived...
+  }
   else {//open file, read params and set state.
     ifstream parfile(paramfile);
     vector<double>pars;
