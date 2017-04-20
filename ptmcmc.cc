@@ -361,7 +361,7 @@ int ptmcmc_sampler::initialize(){
   }
 
   int Ninit=chain_Ninit;
-  if(restarting)Ninit=0;
+  if(restarting or Nstep<=0)Ninit=0;
   //Create the Chain 
   if(parallel_tempering){
     parallel_tempering_chains *ptc= new parallel_tempering_chains(Nptc,Tmax,swap_rate,save_every);
