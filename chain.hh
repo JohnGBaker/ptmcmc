@@ -159,6 +159,7 @@ public:
   virtual void checkpoint(string path)override;
   virtual void restart(string path)override;
   void initialize(uint n=1);
+  void initialize(uint n, string initialization_file);
   void reboot();
   void add_state(state newstate,double log_like=999,double log_post=999);
   void set_proposal(proposal_distribution &proposal);
@@ -232,7 +233,7 @@ class parallel_tempering_chains: public chain{
   parallel_tempering_chains(int Ntemps,double Tmax,double swap_rate=0.01,int add_every_N=1);
   virtual void checkpoint(string path)override;
   virtual void restart(string path)override;
-  void initialize( probability_function *log_likelihood, const sampleable_probability_function *log_prior,int n=1);
+  void initialize( probability_function *log_likelihood, const sampleable_probability_function *log_prior,int n=1,string initialization_file="");
   void set_proposal(proposal_distribution &proposal);
   void step();
   ///reference to zero-temerature chain.

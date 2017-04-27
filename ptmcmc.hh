@@ -27,6 +27,7 @@ private:
   bool restarting;
   string restart_dir;
   int checkp_at_step;
+  string initialization_file;
 public:
   static proposal_distribution* new_proposal_distribution(int Npar, int &Ninit, const Options &opt, const sampleable_probability_function * prior, const valarray<double>*halfwidths);
   static proposal_distribution* new_proposal_distribution_guts(int Npar, int &Ninit, const sampleable_probability_function * prior, const valarray<double>*halfwidths, int proposal_option,int SpecNinit, double tmixfac,double reduce_gamma_by,double de_eps,double gauss_1d_frac, bool de_mixing=false);

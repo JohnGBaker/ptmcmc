@@ -294,6 +294,7 @@ void ptmcmc_sampler::addOptions(Options &opt,const string &prefix){
   addOption("de_reduce_gamma","Differential Evolution reduce gamma parameter by some factor from nominal value. Default=1.","1");
   addOption("de_mixing","Differential-Evolution support mixing of parallel chains.");
   addOption("de_Tmix","Differential-Evolution degree to encourage mixing info from different temps.(default=300)","300");
+  addOption("chain_init_file","Specify chain file from which to draw initializtion points, rather than from prior.","");
 };
 
 void ptmcmc_sampler::processOptions(){
@@ -322,6 +323,7 @@ void ptmcmc_sampler::processOptions(){
   *optValue("pt_Tmax")>>Tmax;  
   *optValue("pt_dump_n")>>dump_n;if(dump_n>Nptc||dump_n<0)dump_n=Nptc;  
   *optValue("pt_stop_evid_err")>>pt_stop_evid_err;  
+  *optValue("chain_init_file")>>initialization_file;
 };
 
 ///Setup specific for the ptmcmc sampler
@@ -369,13 +371,14 @@ int ptmcmc_sampler::initialize(){
     have_cc=true;
     if(pt_evolve_rate>0)ptc->evolve_temps(pt_evolve_rate,pt_evolve_lpost_cut);
     if(pt_reboot_rate>0)ptc->do_reboot(pt_reboot_rate,pt_reboot_cut,pt_reboot_thermal,pt_reboot_every,pt_reboot_grace,pt_reboot_grad,pt_reboot_blindly);
-    ptc->initialize(chain_llike,chain_prior,Ninit);
+    ptc->initialize(chain_llike,chain_prior,Ninit,initialization_file);
   } else {
     MH_chain *mhc= new MH_chain(chain_llike,chain_prior,-30,save_every);
     cc=mhc;
     have_cc=true;
     cprop->set_chain(cc);
-    mhc->initialize(Ninit);
+    if(initialization_file!="")mhc->initialize(Ninit,initialization_file);
+    else mhc->initialize(Ninit);
   }
   cc->set_proposal(*cprop);
   return 0;
@@ -383,7 +386,7 @@ int ptmcmc_sampler::initialize(){
 
 int ptmcmc_sampler::run(const string & base, int ic){
 
-  if(!have_cc){
+  if(!have_cc&&chain_Nstep>0){
     cout<<"ptmcmc_sampler::run.  Must call initialize() before running!"<<endl;
     exit(1);
   }

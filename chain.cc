@@ -172,6 +172,55 @@ void MH_chain::reserve(int nmore){//If you know how long you are going to run, i
     invtemps.reserve(Nsize+nmore);
   };
 
+void MH_chain::initialize(uint n, string initialization_file){
+  if(Nhist>0){
+    cout<<"MH_chain::initialize: Cannot re-initialize."<<endl;
+    exit(1);
+  }
+  Ninit=n;
+  ifstream inifile(initialization_file);
+  string line;
+  const stateSpace *space=lprior->get_space();
+  vector<double> pars(space->size());
+  //This is a rather clunky/slow way to count the relevant lines
+  int count=0;
+  while(getline(inifile,line)){
+    if(line.compare(0,1,"#")==0)continue;
+    count++;
+  }
+  int nlines=count;
+  int startline=count*0.75;//probably make this fraction a parameter;
+  inifile.clear();
+  inifile.seekg(0, ios::beg);    
+  count=0;
+  while(getline(inifile,line)){//skip first portion of file
+    if(line.compare(0,1,"#")==0)continue;
+    count++;
+    if(count>=startline-1)break;
+  }
+  int icnt=0;
+  while(getline(inifile,line)){
+    istringstream line_ss(line);
+    int num;
+    double llike,lpost,acc;
+    string typ;
+    if(line.compare(0,1,"#")==0)continue;
+    count++;
+    line_ss>>num;
+    if(num<0)continue;
+    if(not rng->Next()>(nlines-count)/(double)(Ninit-icnt))continue;       // draw with appropriate probability from the remaining lines
+    //if we make it this far then we draw the line as a state
+    line_ss>>lpost>>llike>>acc>>typ;
+    for(auto &par:pars)line_ss>>par;
+    state s=state(space,pars);
+    Nhist=0;
+    add_state(s,llike,lpost);
+    icnt++;
+  }
+  Ninit=icnt;//Should be the same unless file was short.
+  Nhist=0;
+}
+
 void MH_chain::initialize(uint n){
   if(Nhist>0){
     cout<<"MH_chain::initialize: Cannot re-initialize."<<endl;
@@ -205,7 +254,7 @@ void MH_chain::reboot(){
   llikes.clear();
   acceptance_ratio.clear();
   invtemps.clear(); 
-  initialize(Ninit);
+  initialize(Ninit);//not set up to initialize from chain file in this case.
 };
 
 //If we should decide we no longer need to hold on to part of the chain then:
@@ -543,7 +592,7 @@ void parallel_tempering_chains::restart(string path){
   readDouble(os, best_evidence_stderr);
 };
 
-void parallel_tempering_chains::initialize( probability_function *log_likelihood, const sampleable_probability_function *log_prior,int n){
+void parallel_tempering_chains::initialize( probability_function *log_likelihood, const sampleable_probability_function *log_prior,int n,string initialization_file){
   Ninit=n;
   dim=log_prior->getDim();
   for(int i=0;i<Ntemps;i++){
@@ -555,7 +604,9 @@ void parallel_tempering_chains::initialize( probability_function *log_likelihood
   for(int i=0;i<Ntemps;i++){
     ostringstream oss;oss<<"PTchain: initializing chain "<<i<<endl;
     cout<<oss.str();
-    chains[i].initialize(n);
+    if(initialization_file!="")chains[i].initialize(n,initialization_file);
+    else chains[i].initialize(n);
+      
     // chains[i].resetTemp(1/temps[i]);
     chains[i].invtemp=1/temps[i];
     instances[i]=i;
