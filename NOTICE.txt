@@ -8,4 +8,9 @@ OTHER PEOPLE'S CODE
 
 The code applies the "NewRan" random number generation package (c) R.B Davies (http://www.robertnz.net/nr02doc.htm).
 
+For convenience, this distribution also includes Eigen Version 3.3.3 in unmodified form as distributed at http://eigen.tuxfamily.org, in the directory eigen-eigen-67e894c6cd8f
+Eigen is distributed under the MPL2.0 licence.  See eigen-eigen-67e894c6cd8f/COPYING.README
+
+
+
 
