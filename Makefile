@@ -40,11 +40,11 @@ ${LIB}/libprobdist.a: ${LIB} ${INCLUDE}
 	@${MAKE} CFLAGS="${CFLAGS}" CXX="${CXX}" -C ProbabilityDist
 #@cd ProbabilityDist;${MAKE} ${MFLAGS}
 
-chain.o: chain.cc chain.hh states.hh probability_function.hh proposal_distribution.hh ${LIB}/libprobdist.a ${INCLUDE}/Eigen
+chain.o: chain.cc chain.hh states.hh probability_function.hh proposal_distribution.hh ${LIB}/libprobdist.a restart.hh ${INCLUDE}/Eigen
 proposal_distribution.o: proposal_distribution.cc states.hh probability_function.hh proposal_distribution.hh ${LIB}/libprobdist.a ${INCLUDE}/Eigen
 probability_function.o: probability_function.cc states.hh probability_function.hh ${INCLUDE}/newran.h
 ptmcmc.o: ptmcmc.cc bayesian.hh states.hh ptmcmc.hh chain.hh options.hh probability_function.hh proposal_distribution.hh
-states.o: states.hh options.hh
+states.o: states.hh options.hh restart.hh
 
 ${LIB}/libptmcmc.a: ${MCMC_OFILES}
 	@echo "archiving"

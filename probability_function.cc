@@ -329,19 +329,26 @@ independent_dist_product::independent_dist_product(const stateSpace *product_spa
   Nss=subspace_dists.size();
   ss_dists.resize(Nss);
   ss.resize(Nss);
+  ss_indices.resize(Nss);
   index_ss.resize(dim);
   index_ss_index.resize(dim);
-  ss_indices.resize(Nss);
   int dim_count=0;
+  int icount=0;
   for(size_t i=0;i<Nss;i++){
-    ss_indices[i].resize(0);
-    ss_dists[i]=subspace_dists[i];
-    ss[i]=subspace_dists[i]->get_space();
-    //int ss_dim=ss[i]->size();
-    ss[i]=subspace_dists[i]->get_space();
-    int ss_dim=ss_dists[i]->getDim();
-    dim_count+=ss_dim;
+    if(subspace_dists[i]->getDim()>0){//skip adding any empty subspaces
+      ss_indices[icount].resize(0);
+      ss_dists[icount]=subspace_dists[i];
+      ss[icount]=subspace_dists[i]->get_space();
+      int ss_dim=ss_dists[icount]->getDim();
+      dim_count+=ss_dim;
+      icount++;
+    }
   }
+  Nss=icount;
+  ss_dists.resize(Nss);//redo this incase some some empty subspaces were skipped
+  ss.resize(Nss);
+  ss_indices.resize(Nss);
+  
   //Check that the spaces are commensurate and define parameter mapping
   if(dim!=dim_count){
     cout<<"independent_dist_product(constructor): Total dimension of subspaces does not match product space dimension:"<<endl;
@@ -382,7 +389,7 @@ state independent_dist_product::drawSample(Random &rng)const{
   //draw a sample from each subspace
   //cout<<"dim="<<dim<<" Nss="<<Nss<<endl;
   for(int i=0;i<Nss;i++){
-    //cout<<"i="<<i<<":\ndist="<<ss_dists[i]->show();
+    //cout<<"i="<<i<<":\ndist="<<ss_dists[i]->show()<<endl;
     substates[i]=ss_dists[i]->drawSample(rng);
     //cout<<" [drew "<<substates[i].size()<<" parameter values.]"<<endl;
   }

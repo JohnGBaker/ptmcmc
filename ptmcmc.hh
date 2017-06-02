@@ -23,8 +23,11 @@ private:
   int Nstep,Nskip,Nptc,Nevery,save_every,pt_reboot_every,pt_reboot_grace,dump_n;;
   double nburn_frac;
   bool parallel_tempering,pt_reboot_grad;
-  bool have_covariance;
-  Eigen::MatrixXd covariance;
+  int istep;
+  bool restarting;
+  string restart_dir;
+  int checkp_at_step;
+  string initialization_file;
 public:
   static void read_covariance(const string &file,const stateSpace *ss,Eigen::MatrixXd &covar);
   static void write_covariance(const Eigen::MatrixXd &cov, const stateSpace *ss, const string &file);
@@ -32,6 +35,8 @@ public:
   static proposal_distribution* new_proposal_distribution_guts(int Npar, int &Ninit, const sampleable_probability_function * prior, const valarray<double>*halfwidths, int proposal_option,int SpecNinit, double tmixfac,double reduce_gamma_by,double de_eps,double gauss_1d_frac, double gauss_draw_frac=0.2, double cov_draw_frac=0, bool gauss_temp_scaled=false, bool de_mixing=false, const string &covariance_file="");
   proposal_distribution* select_proposal();
   ptmcmc_sampler();
+  virtual void checkpoint(string path)override;
+  virtual void restart(string path)override;
   void addOptions(Options &opt,const string &prefix="");
   int run(const string & base, int ic=0);
   void setup(bayes_likelihood &llike, const sampleable_probability_function &prior,int output_precision=15);

@@ -2,12 +2,14 @@
 ///
 ///The base class chain, is not useful, and is defined in mcmc.hh
 ///The Metropolis-Hastings MH_chain and parallel_tempering_chains types should be useful.
-///John G Baker - NASA-GSFC (2013-2014)
+///John G Baker - NASA-GSFC (2013-2017)
 #ifndef CHAIN_HH
 #define CHAIN_HH
 
 #include "states.hh"
 #include "probability_function.hh"
+#include "restart.hh"
+#include <sys/stat.h>
 //#include "probability_function.hh"
 //#include <memory>
 //#include "include/ProbabilityDist.h"
@@ -17,20 +19,23 @@
 //#include <sstream>
 //#include <cmath>
 //#include <iostream>
-
+extern bool verboseMOA;
 
 class proposal_distribution;
 
 /// A generalized chain has results like a chain, but we specify
-/// anything about *how* those results are produced.  Standard analysis can be applied. 
-class chain {
-  //TODO?
-  //autocorrelation
-  //convergence,MAP,...
+/// anything about *how* those results are produced.  Standard analysis can be applied.
+/// Notes on indexing:
+/// There are several variants of indexing.  There is a nominal step index which starts at zero at the first MCMC step,
+/// but there is also a "raw" indexing which indicates the actual indexing of the stored data array.  These can
+/// differ for several reasons: initialization, downsampling before storage, and "forgetting" early chain history that is
+/// no longer needed.
+class chain : public restartable{
   static int idcount;
 protected:
   int id;
   int Nsize,Ninit; //Maybe move this history stuff to a subclass
+  int Nearliest;
   int Nfrozen;
   int dim;
   shared_ptr<Random> rng; //Random number generator for this chain. Each chain has its own so that the results can be threading invariant
@@ -43,6 +48,7 @@ protected:
     //cout<<id<<":"<<x<<endl;//" rng="<<rng<<endl;
     return x;
   };
+  
 public:
   virtual ~chain(){};
   chain():
@@ -57,8 +63,10 @@ public:
     //As long as the chains are created in a fixed order, this should allow threading independence of the result.
     Nfrozen=-1;
   };
+  virtual void checkpoint(string path)override;
+  virtual void restart(string path)override;
   virtual shared_ptr<Random> getPRNG(){return rng;};
-  virtual string show(){
+  virtual string show(bool verbose=false){
     ostringstream s;
     s<<"chain(id="<<id<<"size="<<Nsize<<")\n";
     return s.str();
@@ -82,30 +90,7 @@ public:
   ///2. Probability of being in some bin region of param space (test_func returns 1 iff in that region)
   virtual double  Pcond(bool (*test_func)(state s)){return dim;};
   virtual int i_after_burn(int nburn=0){return nburn;}
-  virtual void inNsigma(int Nsigma,vector<int> & indicies,int nburn=0){
-    //cout<<" inNsigma:this="<<this->show()<<endl;
-    int ncount=size()-this->i_after_burn(nburn);
-    //cout<<"size="<<size()<<"   nburn="<<nburn<<"   i_after_burn="<<this->i_after_burn(nburn)<<endl;
-    int inNstd_count=(int)(erf(Nsigma/sqrt(2.))*ncount);
-    vector<pair<double,double> > lpmap;
-    //double zero[2]={0,0};
-    //lpmap.resize(ncount,zero);
-    //cout<<"ncount="<<ncount<<"   inNstd_count="<<inNstd_count<<endl;
-    lpmap.resize(ncount);
-    for(uint i=0;i<ncount;i++){
-      int idx=i+this->i_after_burn(nburn);
-      //cout<<idx<<" state:"<<this->getState(idx,true).get_string()<<endl;
-      lpmap[i]=make_pair(-this->getLogPost(idx,true),idx);
-    }
-    //sort(lpmap.begin(),lpmap.end(),chain::AgtB);
-    sort(lpmap.begin(),lpmap.end());
-    indicies.resize(inNstd_count);
-    for(uint i=0;i<inNstd_count;i++){
-      indicies[i]=lpmap[i].second;
-      //cout<<"  :"<<lpmap[i].first<<" "<<lpmap[i].second<<endl;
-    }
-    return;
-  };
+  virtual void inNsigma(int Nsigma,vector<int> & indicies,int nburn=0);
   virtual void set_proposal(proposal_distribution &proposal){
     cout<<"chain::step: No base-class set_proposal operation defined!"<<endl;
     exit(1);
@@ -128,6 +113,8 @@ public:
   ///Temporarily freeze the length of the chain as reported by size()
   void history_freeze(){Nfrozen=Nsize;};
   void history_thaw(){Nfrozen=-1;};
+  ///If it is determined that the early part of chain history before imin, is no longer needed...
+  //virtual void forget(int imin){};
   int get_id(){return id;};
 };
 
@@ -169,7 +156,10 @@ public:
   virtual void reserve(int nmore);
   virtual int capacity(){return states.capacity();};
   ///Initialize the chain with one or more states.  Technically we do consider these as part of the chain, for output/analysis purposes as they are not selected based on the MH criterion
+  virtual void checkpoint(string path)override;
+  virtual void restart(string path)override;
   void initialize(uint n=1);
+  void initialize(uint n, string initialization_file);
   void reboot();
   void add_state(state newstate,double log_like=999,double log_post=999);
   void set_proposal(proposal_distribution &proposal);
@@ -186,10 +176,11 @@ public:
   void dumpChain(ostream &os,int Nburn=0,int ievery=1);
   //return raw_indexing point after burn-in
   virtual int i_after_burn(int nburn=0){return Ninit+int(nburn/add_every_N);}
-  virtual string show();
+  virtual string show(bool verbose=false);
   virtual string status();
   virtual double invTemp(){return invtemp;};
   void resetTemp(double new_invtemp);
+  //virtual void forget(int imin)override;
   friend parallel_tempering_chains;
 };
 
@@ -202,10 +193,10 @@ class parallel_tempering_chains: public chain{
   //Mainly based on KatzenbergerEA06, but for now we don't implement any temperature
   //tuning.  For now we use aspects of Katzenberger's tuning algorithm for diagnostics.
   //Thus we say "replicas" move between chains/temps.
-  int Ntemps;
-  int add_every_N;
+  const int Ntemps;
+  const int add_every_N;
   ///swap rate per chain.  Effective max of 1/(Ntemps-1), ie 1 swap per step total.
-  double swap_rate;
+  const double swap_rate;
   double max_reboot_rate;
   int test_reboot_every;
   double reboot_thresh;
@@ -239,8 +230,10 @@ class parallel_tempering_chains: public chain{
   
  public:
   virtual ~parallel_tempering_chains(){  };//assure correct deletion of any child
-  parallel_tempering_chains(int Ntemps,int Tmax,double swap_rate=0.01,int add_every_N=1);
-  void initialize( probability_function *log_likelihood, const sampleable_probability_function *log_prior,int n=1);
+  parallel_tempering_chains(int Ntemps,double Tmax,double swap_rate=0.01,int add_every_N=1);
+  virtual void checkpoint(string path)override;
+  virtual void restart(string path)override;
+  void initialize( probability_function *log_likelihood, const sampleable_probability_function *log_prior,int n=1,string initialization_file="");
   void set_proposal(proposal_distribution &proposal);
   void step();
   ///reference to zero-temerature chain.
@@ -256,7 +249,7 @@ class parallel_tempering_chains: public chain{
   void dumpTempStats(ostream &os);
   virtual int i_after_burn(int nburn=0){return c0().i_after_burn(nburn);}
   virtual int capacity(){return c0().capacity();};
-  virtual string show();
+  virtual string show(bool verbose=false);
   virtual string status();
   virtual int multiplicity(){return Ntemps;};
   virtual chain* subchain(int index){

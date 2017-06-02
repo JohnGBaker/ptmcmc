@@ -181,12 +181,20 @@ public:
 class bayes_signal : public bayes_component {
 
 public:
-  virtual vector<double> get_model_signal(const state &st, const vector<double> &labels)=0;
+  virtual vector<double> get_model_signal(const state &st, const vector<double> &labels)const{//backward compatible if you only want the values, not the variances.
+    vector<double>variances;
+    return get_model_signal(st,labels,variances);
+  };
+  ///The signal model must be declared const to allow the same signal object to be applied on independent threads.
+  ///The variance is also returned
+  virtual vector<double> get_model_signal(const state &st, const vector<double> &labels, vector<double> &variances)const=0;
   ///Stochastic signals imply some variance, default is to return 0
   //virtual double getVariance(double tlabel){return 0;};
-  virtual vector<double> getVariances(const state &st,const vector<double> tlabel){
+  ///To work properly, when the variance depends on the parameters, the following probably needs to reevaluate the model
+  ///better to avoid that.  It is commented out here to avoid accidental use, though it could still be considered.
+  //virtual vector<double> getVariances(const state &st,const vector<double> tlabel){
     //cout<<"bayes_signal::getVariances"<<endl;
-    return vector<double>(tlabel.size(),0);};
+    //return vector<double>(tlabel.size(),0);};
 };
 
 ///Interface class for bayesian signal data. This is some kind of compound data.
@@ -334,11 +342,12 @@ public:
   virtual double getFisher(const state &s0, vector<vector<double> >&fisher_matrix){
     cout<<"getFisher not implemented for bayes_likelihood object ("<<typeid(*this).name()<<")"<<endl;
   };
-  virtual vector<double> getVariances(const state &st)const{
+  //To avoid having to recompute the signal model, we pass in the signal variances.
+  virtual vector<double> getVariances(const state &st,vector<double>&svar)const{
     checkPointers();
     const vector<double>labels=data->getLabels();
     vector<double>var=data->getVariances(transformDataState(st));
-    vector<double>svar=signal->getVariances(transformSignalState(st),labels);
+    //vector<double>svar=signal->getVariances(transformSignalState(st),labels);
     //cout<<"bayes_like::getVariances: var.size="<<var.size()<<" svar.size="<<svar.size()<<endl;
     for(int i=0;i<data->size();i++)var[i]+=svar[i];
     return var;
@@ -368,10 +377,10 @@ public:
       xfoc=data->getFocusLabel();
       x0=data->getFocusLabel(true);
     }
-    std::vector<double> model=signal->get_model_signal(transformSignalState(st),xs);
+    std::vector<double> model=signal->get_model_signal(transformSignalState(st),xs,dvar);
     if(have_dvals){
       dmags=data->getDeltaValues();
-      dvar=getVariances(st);
+      dvar=getVariances(st,dvar);
     }
     
     for(int i=0;i<xs.size();i++){
@@ -407,9 +416,10 @@ public:
     double x0=data->getFocusLabel(true);
     
     vector<double> dmags=data->getDeltaValues();
-    vector<double> model=signal->get_model_signal(transformSignalState(st),xs);
-    vector<double> dvar=getVariances(st);
-
+    vector<double> dvar;
+    vector<double> model=signal->get_model_signal(transformSignalState(st),xs,dvar);
+    dvar=getVariances(st,dvar);
+    
     for(int i=0;i<xs.size();i++){
       double x=xs[i];
       if(i==0)
@@ -449,8 +459,9 @@ protected:
     double sum=0;
     double nsum=0;
     vector<double>tlabels=data->getLabels();
-    vector<double>modelData=signal->get_model_signal(transformSignalState(s),tlabels);
-    vector<double>S=getVariances(s);
+    vector<double>svar;
+    vector<double>modelData=signal->get_model_signal(transformSignalState(s),tlabels,svar);
+    vector<double>S=getVariances(s,svar);
 #pragma omp critical  //probably don't need this critical if coded well...
     {
       for(int i=0;i<tlabels.size();i++){
@@ -477,8 +488,8 @@ protected:
     vector<double>labels=data->getLabels();
     vector<double>modelData=signal->get_model_signal(transformSignalState(s),labels);
     int ndata=labels.size();
-#pragma omp critical
-    {
+    //#pragma omp critical  //Shouldn't need critical here. Why was it there?
+     {
       for(int i=0;i<ndata;i++){
 	sum += log(modelData[i]);
       }
@@ -509,7 +520,9 @@ protected:
     nativePrior->getScales(scales);
     vector<double>labels=data->getLabels();
     double N=labels.size();
-    vector<double>Var0=getVariances(s0);
+    vector<double>Var0;
+    signal->get_model_signal(s0,labels,Var0);
+    Var0=getVariances(s0,Var0);
     double err=1;
     int count=0;
     vector< vector<double> >last_fisher_matrix(dim,vector<double>(dim,0));
@@ -523,12 +536,14 @@ protected:
 	sPlus.set_param(i,s0.get_param(i)+h);
 	state sMinus=s0;
 	sMinus.set_param(i,s0.get_param(i)-h);
-	vector<double>modelPlus=signal->get_model_signal(transformSignalState(sPlus),labels);
-	vector<double>modelMinus=signal->get_model_signal(transformSignalState(sMinus),labels);
+	vector<double>VarPlus;
+	vector<double>VarMinus;
+	vector<double>modelPlus=signal->get_model_signal(transformSignalState(sPlus),labels,VarPlus);
+	vector<double>modelMinus=signal->get_model_signal(transformSignalState(sMinus),labels,VarMinus);
 	for(int k=0;k<N;k++)dmudi[k]=(modelPlus[k]-modelMinus[k])/h/2.0;
 	//compute i derivative of Variances
-	vector<double>VarPlus=getVariances(sPlus);
-	vector<double>VarMinus=getVariances(sMinus);
+	VarPlus=getVariances(sPlus,VarPlus);
+	VarMinus=getVariances(sMinus,VarMinus);
 	for(int k=0;k<N;k++)dVdi[k]=(VarPlus[k]-VarMinus[k])/h/2.0;
 	
 
@@ -541,12 +556,14 @@ protected:
 	  sPlus.set_param(j,s0.get_param(j)+h);
 	  state sMinus=s0;
 	  sMinus.set_param(j,s0.get_param(j)-h);
-	  vector<double>modelPlus=signal->get_model_signal(transformSignalState(sPlus),labels);
-	  vector<double>modelMinus=signal->get_model_signal(transformSignalState(sMinus),labels);
+	  vector<double>VarPlus;
+	  vector<double>VarMinus;
+	  vector<double>modelPlus=signal->get_model_signal(transformSignalState(sPlus),labels,VarPlus);
+	  vector<double>modelMinus=signal->get_model_signal(transformSignalState(sMinus),labels,VarMinus);
 	  for(int k=0;k<N;k++)dmudj[k]=(modelPlus[k]-modelMinus[k])/h/2.0;
 	  //compute i derivative of Variances
-	  vector<double>VarPlus=getVariances(sPlus);
-	  vector<double>VarMinus=getVariances(sMinus);
+	  VarPlus=getVariances(sPlus,VarPlus);
+	  VarMinus=getVariances(sMinus,VarMinus);
 	  for(int k=0;k<N;k++)dVdj[k]=(VarPlus[k]-VarMinus[k])/h/2.0;
 
 	  //Compute fisher matrix element
@@ -607,21 +624,23 @@ public:
     //and that dmags provides a 1-sigma error size.
     vector<double>labels=data->getLabels();
     //First we set up instrumental-noise free data. This is so that the data object can estimate noise
-    vector<double>modelData=signal->get_model_signal(transformSignalState(s),labels);
-    vector<double>Sm=signal->getVariances(s,labels);
+    vector<double>Sm;
+    vector<double>modelData=signal->get_model_signal(transformSignalState(s),labels,Sm);
+    Sm=getVariances(s,Sm);
     vector<double>values(labels.size());
-    vector<double>dvalues(labels.size());
+    //vector<double>dvalues(labels.size())
     for(int i=0;i<labels.size();i++){
       values[i]=modelData[i]+sqrt(Sm[i])*normal.draw();
     }
     data->fill_data(values);
+    set_like0_chi_squared();
   };
 };
 
 ///Base class for defining a Bayesian sampler object
 ///
 ///To begin with the only option is for MCMC sampling, though we expect soon to add a multinest option.
-class bayes_sampler : public Optioned {
+class bayes_sampler : public Optioned, public restartable {
 protected:
   string paramfile;
   bool have_paramfile;
