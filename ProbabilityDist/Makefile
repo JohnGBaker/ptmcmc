@@ -1,6 +1,10 @@
 PROBDIST_OFILES = ProbabilityDist.o
 NEWRAN_OFILES   = newran1.o newran2.o myexcept.o simpstr.o extreal.o
-CFLAGS ?= -g
+ifeq ($(CFLAGS),)
+	CFLAGS = -g
+	CXX = /opt/local/bin/g++-mp-4.7
+endif
+
 
 all: ${LIB}/libprobdist.a  ${INCLUDE}/ProbabilityDist.h
 	@echo LIB=${LIB}

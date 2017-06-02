@@ -9,6 +9,7 @@
 #include "states.hh"
 #include "chain.hh"
 #include "probability_function.hh"
+#include <Eigen/Eigen>
 
 using namespace std;
 
@@ -61,18 +62,51 @@ public:
 ///The optional constructor argument oneDfrac indicates a fraction of times that the Gaussian
 ///draw should be restricted to one randomly and uniformly selected dimension.
 ///
+///Added feature: Nontrivial covariance.
+///This is built atop the diagonal multidimensional Gaussian
+///but we allow that and additional parameter vector transformation is performed.
+///The matrix M for this transformation is computed to diagonalize a covariance matrix
+///passed in initially.  The old behavior assumed the covariance was already diagonal
+///so that M is the identity matrix.
 class gaussian_prop: public proposal_distribution{
+  bool identity_trans;
+  Eigen::MatrixXd diagTransform;
   valarray<double>sigmas;
   gaussian_dist_product *dist;
   double oneDfrac;
+  bool scaleWithTemp;
 public:
-  gaussian_prop(valarray<double> sigmas,double oneDfrac=0.0):sigmas(sigmas),oneDfrac(oneDfrac){
+  gaussian_prop(valarray<double> sigmas,double oneDfrac=0.0, bool scaleWithTemp=false):sigmas(sigmas),oneDfrac(oneDfrac),scaleWithTemp(scaleWithTemp){
+    identity_trans=true;
     valarray<double> zeros(0.0,sigmas.size());
     dist = new gaussian_dist_product(nullptr,zeros, sigmas);
     if(oneDfrac<0||oneDfrac>1){
-      cout<<"gaussian_prop(constructor): We require 0<=oneDfrac<=1. "<<endl;
+      cout<<"gaussian_prop(constructor I): We require 0<=oneDfrac<=1. "<<endl;
       exit(1);
     }
+  };
+  gaussian_prop(Eigen::MatrixXd &covar,double oneDfrac=0.0, bool scaleWithTemp=false):sigmas(sigmas),oneDfrac(oneDfrac),scaleWithTemp(scaleWithTemp){
+    identity_trans=false;
+    if(covar.rows() != covar.cols()){
+      cout<<"gaussian_prop(constructor II): covar must be a square matrix!"<<endl;
+      exit(-1);
+    }
+    int ndim=covar.rows();
+    sigmas.resize(ndim);
+    Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> eigenSolver(covar);
+    diagTransform=eigenSolver.eigenvectors();
+    Eigen::VectorXd Evalues = eigenSolver.eigenvalues();
+    for(int i=0;i<ndim;i++)sigmas[i]=sqrt(Evalues(i));
+    valarray<double> zeros(0.0,ndim);
+    dist = new gaussian_dist_product(nullptr,zeros, sigmas);
+    if(oneDfrac<0||oneDfrac>1){
+      cout<<"gaussian_prop(constructor II): We require 0<=oneDfrac<=1. "<<endl;
+      exit(1);
+    }
+    cout<<" constructing gaussian_prop with cov matrix=\n"<<covar<<endl;
+    cout<<" Eigenvalues="<<Evalues<<endl;
+    cout<<" transform=\n"<<diagTransform<<endl;
+    cout<<" test=\n"<<diagTransform*Evalues.asDiagonal()*diagTransform.inverse()<<endl;
   };
   virtual ~gaussian_prop(){delete dist;};
   //state draw(state &s,Random &rng){
@@ -84,7 +118,7 @@ public:
     state offset=dist->drawSample(*(caller->getPRNG()));;
     double x=1;
     if(oneDfrac>0)x=caller->getPRNG()->Next();
-    if(oneDfrac>0&&x<oneDfrac){
+    if(oneDfrac>0&&x<oneDfrac){ //step along one principal axis direction
       int ndim=offset.size();
       int i=ndim*caller->getPRNG()->Next();
       valarray<double>vals(0.0,ndim);
@@ -93,10 +127,20 @@ public:
       //cout<<"gaussian_prop:drew: offset="<<offset.get_string()<<endl;
       last_type=1;
     } else last_type=0;
+    if(not identity_trans){//if non-trivial, we need to transform to state basis.
+      //cout<<"state before transform:"<<offset.get_string()<<endl;
+      valarray<double> data;
+      offset.get_params_array(data);
+      Eigen::Map<Eigen::VectorXd> vec(&data[0],offset.size());
+      vec=diagTransform*vec;
+      for(int i=0;i<offset.size();i++)offset.set_param(i,vec(i));
+      //cout<<"state after transform:"<<offset.get_string()<<endl;
+    }
+    if(scaleWithTemp)s.scalar_mult(1.0/sqrt(caller->invTemp()));
     return s.add(offset);
   };
   gaussian_prop* clone()const{return new gaussian_prop(*this);};
-  string show(){ostringstream ss; ss<<"StepBy["<<dist->show()<<"](1Dfrac="<<oneDfrac<<")";return ss.str();};
+  string show(){ostringstream ss; ss<<"StepBy"<<(identity_trans?"":"Covar")<<"["<<dist->show()<<"](1Dfrac="<<oneDfrac<<",scaleWithTemp="<<scaleWithTemp<<")";return ss.str();};
 };
 
 

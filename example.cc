@@ -1,4 +1,3 @@
-//Swift GRB code...
 //Written by John G Baker NASA-GSFC (2016)
 
 //#include "mlfit.hh"
