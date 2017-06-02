@@ -229,7 +229,6 @@ ptmcmc_sampler::ptmcmc_sampler(){
   chain_llike=nullptr;
   chain_prior=nullptr;
   have_setup=false;
-  have_covariance=false;
   dump_n=1;
   restarting=false;
 };

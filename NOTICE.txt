@@ -12,5 +12,3 @@ For convenience, this distribution also includes Eigen Version 3.3.3 in unmodifi
 Eigen is distributed under the MPL2.0 licence.  See eigen-eigen-67e894c6cd8f/COPYING.README
 
 
-
-
