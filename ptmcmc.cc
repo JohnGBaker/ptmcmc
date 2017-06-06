@@ -51,6 +51,7 @@ proposal_distribution* ptmcmc_sampler::select_proposal(){
       gauss_draw_frac/=scale;
       cov_draw_frac/=scale;
     }
+
     (*optValue("de_ni"))>>SpecNinit;
     (*optValue("de_eps"))>>de_eps;
     (*optValue("de_reduce_gamma"))>>reduce_gamma_by;
@@ -66,8 +67,8 @@ proposal_distribution* ptmcmc_sampler::select_proposal(){
 proposal_distribution* ptmcmc_sampler::new_proposal_distribution_guts(int Npar, int &Ninit, const sampleable_probability_function * prior, const valarray<double>*halfwidths,
 								      int proposal_option,int SpecNinit,
 								      double tmixfac,double reduce_gamma_by,double de_eps,double gauss_1d_frac,
-								      double gauss_draw_frac, double cov_draw_frac, bool gauss_temp_scaled,
 								      bool de_mixing,
+								      double gauss_draw_frac, double cov_draw_frac, bool gauss_temp_scaled,
 								      const string &covariance_file
 								      ){
   valarray<double> sigmas;
@@ -187,8 +188,8 @@ proposal_distribution* ptmcmc_sampler::new_proposal_distribution_guts(int Npar, 
     Ninit=SpecNinit*Npar;
     //plus range of gaussians
     int Nprop_set=7;
-    if(cov_draw_frac>0)Nprop_set+=1;
     cout<<"Selected set of Gaussian proposals option"<<endl;
+    cout<<"  gauss_draw_frac="<<gauss_draw_frac<<"\n  cov_draw_frac="<<cov_draw_frac<<endl;
     vector<proposal_distribution*> set(Nprop_set,nullptr);
     vector<double>shares(Nprop_set);
     int iprop=0;
@@ -196,8 +197,12 @@ proposal_distribution* ptmcmc_sampler::new_proposal_distribution_guts(int Npar, 
     iprop++;
     Eigen::MatrixXd covar;
     read_covariance(covariance_file,prior->get_space(),covar);
-    if(cov_draw_frac>0)set[iprop]=new gaussian_prop(covar,gauss_1d_frac,gauss_temp_scaled);
-    iprop++;
+    if(cov_draw_frac>0){
+      set[iprop]=new gaussian_prop(covar,gauss_1d_frac,gauss_temp_scaled);
+      iprop++;
+      Nprop_set+=1;
+      set.push_back(nullptr);
+    }
     double gshare=gauss_draw_frac;
     shares[0]=1-gshare-cov_draw_frac;
     //double sum=(pow(2,2*(Nprop_set-1)+1)-2)*2/3.0,stepfac=4.0;
@@ -209,6 +214,8 @@ proposal_distribution* ptmcmc_sampler::new_proposal_distribution_guts(int Npar, 
       shares[i]=fac/sum*gshare;
       cout<<"  sigmas[0]="<<sigmas[0]/100.0/fac<<", weight="<<shares[i]<<endl;
     }
+    for(int i=0;i<Nprop_set;i++)cout<<" Option 7 prop: set["<<i<<"] = "<<set[i]->show()<<endl;
+      
     prop=new proposal_distribution_set(set,shares);
     break;
   }
@@ -231,6 +238,7 @@ ptmcmc_sampler::ptmcmc_sampler(){
   have_setup=false;
   dump_n=1;
   restarting=false;
+  start_time=1e100;//A huge number we are unlikely to surpass
 };
 
 ///For restartable interface:
@@ -300,6 +308,7 @@ state ptmcmc_sampler::getState(){
 void ptmcmc_sampler::addOptions(Options &opt,const string &prefix){
   bayes_sampler::addOptions(opt,prefix);
   addOption("checkp_at_step","Step at which to checkpoint and stop","-1");
+  addOption("checkp_at_time","Walltime at which to checkpoint and stop","-1");
   addOption("restart_dir","Directory with checkpoint data to restart from.","");
   addOption("nevery","Frequency to dump chain info. Default=5000.","5000");
   addOption("save_every","Frequency to store chain info. Default=1.","1");
@@ -338,6 +347,7 @@ void ptmcmc_sampler::addOptions(Options &opt,const string &prefix){
 void ptmcmc_sampler::processOptions(){
   bayes_sampler::processOptions();
   *optValue("checkp_at_step")>>checkp_at_step;
+  *optValue("checkp_at_time")>>checkp_at_time;
   *optValue("restart_dir")>>restart_dir;
   if(not restart_dir.size()==0)restarting=true;
   *optValue("nevery")>>Nevery;
@@ -362,6 +372,7 @@ void ptmcmc_sampler::processOptions(){
   *optValue("pt_dump_n")>>dump_n;if(dump_n>Nptc||dump_n<0)dump_n=Nptc;  
   *optValue("pt_stop_evid_err")>>pt_stop_evid_err;  
   *optValue("chain_init_file")>>initialization_file;
+  if(checkp_at_time>0)start_time=omp_get_wtime();
 };
 
 ///Setup specific for the ptmcmc sampler
@@ -454,7 +465,7 @@ int ptmcmc_sampler::run(const string & base, int ic){
   for(istep=0;istep<=chain_Nstep;istep++){//istep is member variable to facilitate checkpointing
     if(restarting)restart(restart_dir);
       
-    if(istep==checkp_at_step){//checkpointing test
+    if(istep==checkp_at_step or ( checkp_at_time>0 and (omp_get_wtime()-start_time) > checkp_at_time ) ){//checkpointing test
       checkpoint(".");
       exit(0);
     }
