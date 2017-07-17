@@ -4,7 +4,7 @@ EIGEN=$(CURDIR)/eigen-eigen-67e894c6cd8f/Eigen
 LIB ?= ${CURDIR}/lib
 INCLUDE ?= ${CURDIR}/include
 ifeq ($(CFLAGS),)
-	CFLAGS = -fopenmp -g
+	CFLAGS = -fopenmp -O2
 	CXX = /opt/local/bin/g++-mp-4.7
 endif
 
@@ -71,6 +71,9 @@ testGaussian: testGaussian.cc ${LIB}/libprobdist.a ${LIB}/libptmcmc.a
 
 example: example.cc ${LIB}/libprobdist.a ${LIB}/libptmcmc.a
 	${CXX} $(CFLAGS) -std=c++11 -o example -lprobdist -lptmcmc -L${LIB} -I${INCLUDE} $<
+
+exampleLISA: exampleLISA.cc ${LIB}/libprobdist.a ${LIB}/libptmcmc.a
+	${CXX} $(CFLAGS) -std=c++11 -o exampleLISA -lprobdist -lptmcmc -L${LIB} -I${INCLUDE} $<
 
 #linear_example: linear_example.cc ${LIB}/libprobdist.a ${LIB}/libptmcmc.a
 #	${CXX} $(CFLAGS) -std=c++11 -o linear_example -lprobdist -lptmcmc -L${LIB} -I${INCLUDE} $<
