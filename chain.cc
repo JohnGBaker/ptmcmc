@@ -80,6 +80,108 @@ void chain::inNsigma(int Nsigma,vector<int> & indicies,int nburn){
   return;
 };
 
+//General chain analysis:
+
+//A routine for processing chain history to estimate autocorrelation of
+//windowed chain segments
+void chain::compute_autocorr_windows(double (*feature)(state &),vector< vector<double> >&nums,vector<double>&denoms,vector<int>outwindows,vector<int>outlags,int width,int nevery,int burn_windows, int max_lag, double dlag){
+  //inputs:
+  //  feature         function which returns a feature value from a state.
+  //  width           (>1)width in steps of each window
+  //  nevery          (>=1) sampling rate in steps for the correlation analysis
+  //  burn_windows    (>=1) number of initial windows to skip
+  //  dlag            (>=1.1) factor for logarithmic spacing of lag windows
+  //  max_lag         (<=burn_windows) maxiumum lag, in number of window widths
+  //outputs:
+  //  nums            [Nwindow][Nlag] vector array of partial numerators
+  //  denoms          [Nwindow] vector array of partial denomenators
+  //  outwindows      [Nwin+1] window start index labels for the output rows
+  //  outlags         [Nlag] lag-size labels for the output columns 
+  //
+  // Then to compute rho(lag) for some set of windows:
+  //                Sum[nums[iwin],{iwin in set}]
+  //    rho(lag) = -------------------------------
+  //               Sum[denoms[iwin],{iwin in set}]
+  // Notes:
+  //   -lags will be approximately logaritmically spaced
+  //   -for meaningful results need max_lag>=burn_windows
+  //   -last entry for outwindows be next value, for use in sums
+  //   -windows are aligned to end at latest step
+  //   -everything will be done in units of nevery
+
+  if(width<=1)width=2;
+  if(nevery<1)nevery=1;
+  swidth=int(width/nevery);
+  width=swidth*nevery;
+  if(burn_windows<1)burn_windows=1;
+  if(max_lag<burn_windows)max_lag=burn_windows;
+  if(dlag<1.1)dlag=1.1;
+
+  //determine output structure
+  int ncount=size()-i_after_burn(nburn);
+  int Nwin=ncount/width - burn_windows;
+  if(Nwin<0)Nwin=0;
+  int Nlag=log(max_lag*swidth)/log(dlag);
+  if(Nlag<0)Nlag=0;
+
+  //set up output grid
+  outwindows.resize(Nwin);
+  outlags.resize(Nlag);
+  nums.assign(Nwin,vector<double>(Nlag,0));
+  denoms.assign(Nwin,0);
+  int istart=size()-Nwin*width;
+  for(int i=0;i<=Nwin;i++)outwindows[i]=istart+i*swidth*nevery;
+  for(int i=0;i<Nlag;i++)outlags[i]=nevery*int(max_lag*swidth*pow(dlag,1+i-Nlag));
+  //Note: outlags[0]=nevery*int(maxlagswid*pow(dlag,1-int(log(maxlagswid)/log(dlag))))
+  //                >nevery*int(maxlagswid*exp(-log(dlag)*log(maxlagswid)/log(dlag))
+  //                >=nevery
+  
+  //compute feature average over the relevant data range
+  vector<double>averages(Nwin+max_lag);
+  for(int k=0;k<Nwin+max_lag;k++){
+    double sum=0;
+    for(int i=istart-width*max_lag;i<istart+Nwin*width;i+=nevery){
+      double fi=(*feature)(getState(i));
+      sum+=fi;
+    }
+    averages[k]=sum/((Nwin+max_lag)*swidth);
+  }
+     
+  //populate output vectors
+  for(int k=0;k<Nwin;k++){
+    //compute the relevant average:
+    double sum=0;
+    for(int ik=k;ik<=k+max_lag;ik++)sum+=averages[ik];
+    double favg=sum/(max_lag+1);
+    for(int i=0;i<swidth;i++){
+      double fi=(*feature)(getState(outwindows[i]+i*nevery));
+      //Thought: for disjoint parameter spaces, feature function may throw an exception to be caught. The we wouldn't count those...
+      double df=fi-favg;
+      denoms[i]+=df*df;
+      for(int j=0;j<Nlag;j++){
+	  int ilag=outlags[j];
+	  double filag=(*feature)(getState(outwindows[i]+(i-ilag)*nevery));
+	  nums[i][j]+=df*(filag-favg);
+      }
+    }
+  }
+}
+
+//Estimate autocorrelation length 
+double chain::compute_effective_samples(double (*feature)(state &), double & autocorrlen,int width,int nevery,int burn_windows, int max_lag, double dlag){
+  vector< vector<double> >&nums;
+  vector<double>&denoms;
+  vector<int>windows;
+  vector<int>lags;
+  void chain::compute_autocorr_windows(double (*feature)(state &),vector< vector<double> >&nums,vector<double>&denoms,vector<int>windows,vector<int>lags,int width,int nevery,int burn_windows, int max_lag, double dlag);
+  int Nwin=windows.size()-1;
+  int Nlag=lags.size();
+  int lmin=0;
+  double acmin=1e100;
+  for(int nwin=0;nwin<Nwin;nwin++){
+    for(
+
+
 // A markov (or non-Markovian) chain based on some variant of the Metropolis-Hastings algorithm
 // May add "burn-in" distinction later.
 MH_chain::MH_chain(probability_function * log_likelihood, const sampleable_probability_function *log_prior,double minPrior,int add_every_N):
