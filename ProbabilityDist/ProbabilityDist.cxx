@@ -102,7 +102,7 @@ double testProbabilityDist(ProbabilityDist & dist,int Nbin,ostream &os){
     if(vals[i]<vmin)vmin=vals[i];
     if(vals[i]>vmax)vmax=vals[i];
   }
-  //cout<<"range:"<<vmin<<"--"<<vmax<<endl;
+  cout<<"range:"<<vmin<<"--"<<vmax<<endl;
   //make histogram
   for(int i=0;i<Nbin;i++)counts[i]=0;
   for(int i=0;i<Nbin*Nbin;i++){

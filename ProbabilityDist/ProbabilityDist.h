@@ -200,26 +200,33 @@ public:
 
 //UniformCoPolarDist
 //Uniform polar projection distribution, with polar angle measured to +/- pi/2 from equator
+//Allow restriction to a smaller range
 class UniformCoPolarDist: public ProbabilityDist {
   double xmin,xmax;
+  double norm,cdfoff;
 public:
-  UniformCoPolarDist():xmin(-M_PI/2),xmax(M_PI/2){};
+  UniformCoPolarDist(double xmin=-M_PI/2,double xmax=M_PI/2):xmin(xmin),xmax(xmax){
+    if(xmin<-M_PI/2)xmin=-M_PI/2;
+    if(xmax>M_PI/2)xmax=M_PI/2;
+    norm=sin(xmax)-sin(xmin);
+    cdfoff=sin(xmin)/norm;
+  };
   virtual ProbabilityDist* clone(){return new UniformCoPolarDist(*this);};
   //~UniformPolarDist();
   void getLimits(double &x_min, double &x_max)const{x_min=xmin;x_max=xmax;};
   double cdf(double x)const{
     if(x<xmin)return 0;
     if(x>xmax)return 1;
-    return (1+sin(x))/2;
+    return sin(x)/norm-cdfoff;
   };
   double pdf(double x)const{
     if(x<xmin)return 0;
     if(x>xmax)return 0;
-    return cos(x)/2;
+    return cos(x)/norm;
   }
   double invcdf(double p)const{
     if(p<0||p>1)return numeric_limits<double>::signaling_NaN();
-    return asin(2*p-1);
+    return asin(norm*(p+cdfoff));
   };
   string show()const{
     ostringstream ss;

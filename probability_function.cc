@@ -213,10 +213,10 @@ mixed_dist_product::mixed_dist_product(const stateSpace *space,const valarray<in
 	dists[i]=new UniformIntervalDist(centers[i]-halfwidths[i],centers[i]+halfwidths[i]);
     else if(types[i]==gaussian)
       dists[i]=new GaussianDist(centers[i],halfwidths[i]);
-    else if(types[i]==polar)
+    else if(types[i]==polar)//Uniform polar projection distribution, with polar angle measured 0 to pi from north pole
       dists[i]=new UniformPolarDist();//note centers,halfwidths are ignored
-    else if(types[i]==copolar)
-      dists[i]=new UniformCoPolarDist();//note centers,halfwidths are ignored
+    else if(types[i]==copolar)//Uniform polar projection distribution, with polar angle measured to +/- pi/2 from equator
+      dists[i]=new UniformCoPolarDist(centers[i]-halfwidths[i],centers[i]+halfwidths[i]);
     else if(types[i]==log)
       dists[i]=new UniformLogDist(centers[i]/halfwidths[i],centers[i]*halfwidths[i]);//halfwidths is taken as multiplicative in this case
     else {

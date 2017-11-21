@@ -25,6 +25,7 @@ int main(int argc, char*argv[]){
   UniformLogDist lg(0.31,3.1e2);
   UniformPolarDist pol;
   UniformCoPolarDist copol;
+  UniformCoPolarDist copolx(.2,.6);
   GaussianDist gauss(32.3,6.8);
   GaussianFunctionDist fgauss(&fcent,&fsig,1);
 
@@ -101,6 +102,20 @@ int main(int argc, char*argv[]){
     cout<<nn<<" step : int err="<<err<<endl;
   }
   file=new ofstream("copolar.dat");
+  testProbabilityDist(*dist,n,*file);		   
+
+  dist=&copolx;
+  cout<<dist->show()<<endl;
+  for(int i=0;i<7;i++){
+    ostringstream ss;
+    n=(2<<i)*Nbin;
+    double err=testProbabilityDist(*dist,n,ss);		   
+    cout<<n<<" bins : sigma="<<err<<endl;
+    nn=(2<<i)*Nbin;
+    err=testProbabilityDistIntegral(*dist,nn);		   
+    cout<<nn<<" step : int err="<<err<<endl;
+  }
+  file=new ofstream("copolarx.dat");
   testProbabilityDist(*dist,n,*file);		   
 
   dist=&fgauss;
