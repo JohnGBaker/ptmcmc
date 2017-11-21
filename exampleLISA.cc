@@ -23,7 +23,7 @@ using namespace std;
 const double MTSUN_SI=4.9254923218988636432342917247829673e-6;
 const double PI=3.1415926535897932384626433832795029;
 const complex<double> I(0.0, 1.0);
-
+const bool narrowband=true;
 
 // Routines for simplified likelihood 22 mode, frozen LISA, lowf, fixed masses (near 1e6) and fixed t0
 static double funcphiL(double m1, double m2, double tRef,double phiRef){
@@ -85,7 +85,8 @@ public:
     string names[]={"d","phi","inc","lambda","beta","psi"};//double phiRef, double d, double inc, double lambd, double beta, double psi) 
     space.set_names(names);
     space.set_bound(1,boundary(boundary::wrap,boundary::wrap,0,2*M_PI));//set 2-pi-wrapped space for phi.  Turn on if not narrow banding
-    space.set_bound(3,boundary(boundary::wrap,boundary::wrap,0,2*M_PI));//set 2-pi-wrapped space for lambda.
+    if(not narrowband)space.set_bound(3,boundary(boundary::wrap,boundary::wrap,0,2*M_PI));//set 2-pi-wrapped space for lambda.
+    //else space.set_bound(4,boundary(boundary::limit,boundary::limit,0.2,0.6));//set narrow limits for beta
     space.set_bound(5,boundary(boundary::wrap,boundary::wrap,0,M_PI));//set pi-wrapped space for pol.
     cout<<"Parameter space:\n"<<space.show()<<endl;
     
@@ -93,11 +94,16 @@ public:
     defWorkingStateSpace(nativeSpace);
     best=state(&space,space.size());
     //Set the prior...
+
     const int uni=mixed_dist_product::uniform, gauss=mixed_dist_product::gaussian, pol=mixed_dist_product::polar, cpol=mixed_dist_product::copolar, log=mixed_dist_product::log; 
     valarray<double> centers((initializer_list<double>){  1.667,  PI, PI/2,  PI,    0, PI/2});
     valarray<double>  scales((initializer_list<double>){  1.333,  PI, PI/2,  PI, PI/2, PI/2});
     valarray<int>      types((initializer_list<int>)   {    uni, uni, pol, uni, cpol,  uni});
-    //centers[1]=PI/4.0;scales=PI/4.0;//Narrow band
+    if(narrowband){
+      centers[3] = 1.75*PI;scales[3] = PI/4.0;
+      //centers[4] = 0.4    ;scales[4] = 0.2;
+      centers[4] = PI/4    ;scales[4] = PI/4;
+    }
     setPrior(new mixed_dist_product(&nativeSpace,types,centers,scales));
   };
   void defWorkingStateSpace(const stateSpace &sp){
