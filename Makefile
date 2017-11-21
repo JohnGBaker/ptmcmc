@@ -4,7 +4,7 @@ EIGEN=$(CURDIR)/eigen-eigen-67e894c6cd8f/Eigen
 LIB ?= ${CURDIR}/lib
 INCLUDE ?= ${CURDIR}/include
 ifeq ($(CFLAGS),)
-	CFLAGS = -fopenmp -O2
+	CFLAGS = -fopenmp -O2 -g
 	CXX = /opt/local/bin/g++-mp-4.7
 endif
 

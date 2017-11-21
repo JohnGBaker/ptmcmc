@@ -47,7 +47,7 @@ bool boundary::enforce(double &x)const{
       //cout<<"  Lower limit failure."<<endl;//debug
       return false;
     }
-    if(uppertype==limit&&x<xmax){
+    if(uppertype==limit&&x>xmax){
       //cout<<"  Upper limit failure."<<endl;//debug
       return false;
     };

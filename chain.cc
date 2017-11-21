@@ -229,8 +229,9 @@ void MH_chain::initialize(uint n){
   Ninit=n;
   for(uint i=0;i<n;i++){
     state s=lprior->drawSample(*rng);
-    int icnt=0,icntmax=100;
-    while(s.invalid()&&icnt<100){
+    int icnt=0,icntmax=1000;
+    //while(s.invalid()&&icnt<2*icntmax){
+    while(s.invalid()){
       icnt++;
       if(icnt>=icntmax)
 	cout<<"MH_chain::initialize: Having trouble drawing a valid state.  Latest state:"<<s.show()<<"...was invalid in space:"<<s.getSpace()->show()<<endl;
@@ -282,6 +283,10 @@ void MH_chain::forget(int imin){
 */
 
 void MH_chain::add_state(state newstate,double log_like,double log_post){
+  if(newstate.invalid()){
+    cout<<"MH_chain::add_state: Adding an invalid state!  State is:"<<newstate.get_string()<<endl;
+    exit(1);
+  }
   //cout<<"this="<<0<<",adding state: like="<<log_like<<",post="<<log_post<<endl;
   //if log_like or log_post can be passed in to save computation.  Values passed in are assumed to equal the evaluation results.
     //Value 999 signals need to reevaluate.  If true evaluated value was 999, then reevaluating should yield 999 anyway.
@@ -335,7 +340,7 @@ void MH_chain::step(proposal_distribution &prop,void *data){
     state newstate=prop.draw(current_state,this);
     double newlike,newlpost,newlprior=lprior->evaluate_log(newstate);
     //cout<<"MH_chain::step: newlprior="<<newlprior<<endl;
-    if((!current_lpost>-1e200&&newlprior>-1e200)||newlprior-oldlprior>minPrior){//Avoid spurious likelihood calls where prior effectively vanishes. But try anyway if current_lpost is huge. 
+    if((!newstate.invalid())&&((!current_lpost>-1e200&&newlprior>-1e200)||newlprior-oldlprior>minPrior)){//Avoid spurious likelihood calls where prior effectively vanishes. But try anyway if current_lpost is huge. 
       newlike=llikelihood->evaluate_log(newstate);
       newlpost=newlike*invtemp+newlprior;
     } else {
@@ -348,8 +353,9 @@ void MH_chain::step(proposal_distribution &prop,void *data){
     log_hastings_ratio+=newlpost-current_lpost;
     //if(!(current_lpost>-1e200))  cout<<"   log_hastings_ratio="<<log_hastings_ratio<<endl;
     bool accept=true;
+    if(newstate.invalid())accept=false;
     //cout<<Nhist<<"("<<invtemp<<"): ("<<newlike<<","<<newlpost<<")vs.("<<oldlpost<<")->"<<log_hastings_ratio<<endl;//debug
-    if(log_hastings_ratio<0){
+    if(accept and log_hastings_ratio<0){
       double x=get_uniform(); //pick a number
       accept=(log(x)<log_hastings_ratio);
       //cout<<"     log(x)="<<log(x)<<" -> "<<(accept?"accept":"reject")<<endl;//debug
@@ -653,11 +659,12 @@ void parallel_tempering_chains::step(){
     restart(".");
     }*/
   //diagnostics and steering: set up
-  const int ireport=10000;//should make this user adjustable.
+  const int ievidbin=10000*(add_every_N/10+1);//make this user adjustable?
   static int icount=0;
   static vector< int > swapcounts;
   static vector< int > trycounts;
   if(icount==0){
+    cout<<"Evidence bin size = "<<ievidbin<<endl;
     trycounts.clear();
     trycounts.resize(Ntemps,0);
     swapcounts.clear();
@@ -766,14 +773,14 @@ void parallel_tempering_chains::step(){
   
   //diagnostics and steering:
   icount++;
-  if(icount>=ireport){
+  if(icount>=ievidbin){
     double evidence=0;
     for(int i=0;i<Ntemps-1;i++){
       tryrate[i]=trycounts[i]/(double)icount;
       swaprate[i]=swapcounts[i]/(double)icount;
       //Compute upside log_evidence ratio
-      log_eratio_up[i]=   log_evidence_ratio(i  ,i+1,ireport,add_every_N);
-      log_eratio_down[i]=-log_evidence_ratio(i+1,i  ,ireport,add_every_N);
+      log_eratio_up[i]=   log_evidence_ratio(i  ,i+1,ievidbin,add_every_N);
+      log_eratio_down[i]=-log_evidence_ratio(i+1,i  ,ievidbin,add_every_N);
       evidence+=(log_eratio_up[i]+log_eratio_down[i])/2.0;
     }
     double dE=(log_eratio_up[Ntemps-2]+log_eratio_down[Ntemps-2])/2.0/(chains[Ntemps-2].invTemp()/chains[Ntemps-1].invTemp()-1);    // Note, if beta 1 is small, r~1 anyway then the result will be about ~ beta1
@@ -781,6 +788,7 @@ void parallel_tempering_chains::step(){
     //evidence*=1.0/(1-chains[Ntemps-1].invTemp());
     //evidence+=evidence*chains[Ntemps-1].invTemp();
     cout<<"Total log-evidence: "<<evidence<<endl;
+    cout<<" Nsize="<<Nsize<<endl;
     //Save records of evidence:
     evidence_count++;
     int Ndim=log2(evidence_count);
@@ -802,19 +810,34 @@ void parallel_tempering_chains::step(){
 	int iend=total_evidence_records[i-1].size()-1;
 	double new_avg=(total_evidence_records[i-1][iend-1]+total_evidence_records[i-1][iend])/2.0;
 	total_evidence_records[i].push_back(new_avg);
-	cout<<"averaging ev["<<i-1<<"]["<<iend-1<<"] and ev["<<i-1<<"]["<<iend<<"] to get ev["<<i<<"]["<<total_evidence_records[i].size()-1<<"]"<<endl;
-	cout<<"ie averaging "<<total_evidence_records[i-1][iend-1]<<" and "<<total_evidence_records[i-1][iend]<<" to get "<<total_evidence_records[i].back()<<endl;
+	//cout<<"averaging ev["<<i-1<<"]["<<iend-1<<"] and ev["<<i-1<<"]["<<iend<<"] to get ev["<<i<<"]["<<total_evidence_records[i].size()-1<<"]"<<endl;
+	//cout<<"ie averaging "<<total_evidence_records[i-1][iend-1]<<" and "<<total_evidence_records[i-1][iend]<<" to get "<<total_evidence_records[i].back()<<endl;
       }
     }
     //report evidence records:
     cout<<"total_log_evs:"<<endl;
     if(Ndim>0){
-      for(int i=0;i<total_evidence_records[0].size();i++){
+      const int ndisplaymax=20;
+      int ntot=total_evidence_records[0].size();      
+      int ndisplay=ntot;
+      if(ndisplay>ndisplaymax)ndisplay=ndisplaymax;
+      for(int i=ntot-ndisplay;i<ntot;i++){
+	/*
 	for(int j=0;j<(int)log2(i+2);j++){
 	  int ind=(i+2)/(1<<j)-2;
 	  cout<<total_evidence_records[j][ind]<<"\t";
 	}
 	for(int j=(int)log2(i+2);j<total_evidence_records.size();j++)cout<<NAN<<"\t";
+	cout<<endl;
+	*/
+	for(int j=0;j<total_evidence_records.size();j++){
+	  //int ind=(i+2)/(1<<j)-2; //i-> ntot-1-(ntot-1-i)*(1<<j)
+	  int ind=(ntot+1)/(1<<j)+(i-ntot)-1;
+	  if(ind>=0)
+	    cout<<total_evidence_records[j][ind]<<"\t";
+	  else
+	    cout<<"      ---      "<<"\t";
+	}
 	cout<<endl;
       }
     }
