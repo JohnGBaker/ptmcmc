@@ -116,6 +116,8 @@ public:
   ///If it is determined that the early part of chain history before imin, is no longer needed...
   //virtual void forget(int imin){};
   int get_id(){return id;};
+  //Analysis
+  virtual void compute_autocorr_windows(double (*feature)(state &),vector< vector<double> >&nums,vector<double>&denoms,vector<int>outwindows,vector<int>outlags,int width=8192,int nevery=1,int burn_windows=1, int max_lag=1, double dlag=sqrt(2.0).);
 };
 
 
