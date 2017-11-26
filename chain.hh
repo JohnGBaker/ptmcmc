@@ -79,6 +79,9 @@ public:
   virtual void reserve(int nmore){};//If you know how long you are going to run, it can be more efficient to reserve up front, rather than resizing ever step
   virtual int capacity(){return -1;};//If you know how long you are going to run, it can be more efficient to reserve up front, rather than resizing ever step
   virtual int size(){if(Nfrozen==-1)return Nsize;else return Nfrozen;};
+  //getStep returns the count of the current step, it may not correspond to size
+  //when overloaded, getStep should always be consistent with getState(), so that getState(getStep()-1)would give the last state redorded, etc
+  virtual int getStep(){return size();};
   virtual state getState(int elem=-1,bool raw_indexing=false){cout<<"chain::getState: Warning. You've called a dummy function."<<endl;state s;return s;};//base class is not useful
   virtual double getLogPost(int elem=-1,bool raw_indexing=false){cout<<"chain::getLogPost: Warning. You've called a dummy function."<<endl;return 0;};//get log posterior from a chain sample
   virtual double getLogLike(int elem=-1,bool raw_indexing=false){cout<<"chain::getLogLike: Warning. You've called a dummy function."<<endl;return 0;};//get log prior from a chain sample
@@ -117,7 +120,12 @@ public:
   //virtual void forget(int imin){};
   int get_id(){return id;};
   //Analysis
-  virtual void compute_autocorr_windows(double (*feature)(state &),vector< vector<double> >&nums,vector<double>&denoms,vector<int>outwindows,vector<int>outlags,int width=8192,int nevery=1,int burn_windows=1, int max_lag=1, double dlag=sqrt(2.0).);
+  ///This routine computes data for autocorrelation of some feature of states
+  virtual void compute_autocorr_windows(bool (*feature)(const state &,double&value),vector< vector<double> >&nums,vector< vector<double> >&denoms,vector<int>&outwindows,vector<int>&outlags,int width=8192,int nevery=1,int burn_windows=1, int max_lag=0, double dlag=sqrt(2.0));
+  ///This routine computes an effect number of chain samples for some feature
+  virtual void compute_effective_samples(bool (*feature)(const state &,double &value), double & effSampSize, int &best_nwin ,int width=8192,int nevery=1,int burn_windows=1, int max_lag=0, double dlag=sqrt(2.0));
+  ///Testing 
+  void report_effective_samples();
 };
 
 
@@ -169,6 +177,7 @@ public:
   void step(proposal_distribution &prop,void *data=nullptr);
   double expectation(double (*test_func)(state s),int Nburn=0);
   double variance(double (*test_func)(state s),double fmean,int Nburn=0);
+  int getStep()override;
   state getState(int elem=-1,bool raw_indexing=false)override;
   double getLogPost(int elem=-1,bool raw_indexing=false)override;
   double getLogLike(int elem=-1,bool raw_indexing=false)override;
@@ -240,6 +249,7 @@ class parallel_tempering_chains: public chain{
   void step();
   ///reference to zero-temerature chain.
   MH_chain & c0(){return chains[0];};
+  int getStep()override{return c0().getStep();};
   state getState(int elem=-1,bool raw_indexing=false)override{return c0().getState(elem,raw_indexing);};
   double getLogPost(int elem=-1,bool raw_indexing=false)override{return c0().getLogPost(elem,raw_indexing);};
   double getLogLike(int elem=-1,bool raw_indexing=false)override{return c0().getLogLike(elem,raw_indexing);};

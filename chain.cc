@@ -5,6 +5,8 @@
 #include "chain.hh"
 #include "proposal_distribution.hh"
 
+bool chain_verbose=false;
+
 // Static data
 int chain::idcount=0;
 
@@ -84,7 +86,7 @@ void chain::inNsigma(int Nsigma,vector<int> & indicies,int nburn){
 
 //A routine for processing chain history to estimate autocorrelation of
 //windowed chain segments
-void chain::compute_autocorr_windows(double (*feature)(state &),vector< vector<double> >&nums,vector<double>&denoms,vector<int>outwindows,vector<int>outlags,int width,int nevery,int burn_windows, int max_lag, double dlag){
+void chain::compute_autocorr_windows(bool (*feature)(const state &, double & value),vector< vector<double> >&nums,vector< vector<double> >&denoms,vector<int>&outwindows,vector<int>&outlags,int width,int nevery,int burn_windows, int max_lag, double dlag){
   //inputs:
   //  feature         function which returns a feature value from a state.
   //  width           (>1)width in steps of each window
@@ -94,58 +96,88 @@ void chain::compute_autocorr_windows(double (*feature)(state &),vector< vector<d
   //  max_lag         (<=burn_windows) maxiumum lag, in number of window widths
   //outputs:
   //  nums            [Nwindow][Nlag] vector array of partial numerators
-  //  denoms          [Nwindow] vector array of partial denomenators
+  //  denoms          [Nwindow][Nlag] vector array of partial denomenators
   //  outwindows      [Nwin+1] window start index labels for the output rows
   //  outlags         [Nlag] lag-size labels for the output columns 
   //
   // Then to compute rho(lag) for some set of windows:
-  //                Sum[nums[iwin],{iwin in set}]
-  //    rho(lag) = -------------------------------
-  //               Sum[denoms[iwin],{iwin in set}]
+  //
+  //                Sum[nums[iwin,lag],{iwin in set}]
+  //    rho(lag) = -----------------------------------
+  //               Sum[denoms[iwin,lag],{iwin in set}]
+  //
+  //               Sum[ ( f(i)-favg )*( f(i+lag)-favg ) ]
+  //             = --------------------------------------
+  //                 Sum[ ( f(i)-favg )*( f(i)-favg ) ]
+  //
+  // where in the last line, the sum and avg is over all the points in the set
+  // of windows.
+  //
   // Notes:
-  //   -lags will be approximately logaritmically spaced
+  //   -lags are be approximately logarithmically spaced
   //   -for meaningful results need max_lag>=burn_windows
   //   -last entry for outwindows be next value, for use in sums
   //   -windows are aligned to end at latest step
   //   -everything will be done in units of nevery
-
+  //   -(*feature) should generally return true; if false then the feature is
+  //    understood to apply only to a subdomain of the state space and such
+  //    points are not included in in nums or denoms
+  //   -this is why denoms may depend on lag
+  //   -it will probably be necessary to replace these "feature" functions with
+  //    some kind of class objects, probably to be defined in states.hh
+  cout<<"Enter compute_autocorr_windows"<<endl;
+  
   if(width<=1)width=2;
   if(nevery<1)nevery=1;
-  swidth=int(width/nevery);
+  int swidth=int(width/nevery);
   width=swidth*nevery;
   if(burn_windows<1)burn_windows=1;
-  if(max_lag<burn_windows)max_lag=burn_windows;
+  if(max_lag==0 or max_lag>burn_windows)max_lag=burn_windows;
   if(dlag<1.1)dlag=1.1;
 
   //determine output structure
-  int ncount=size()-i_after_burn(nburn);
+  int ncount=getStep();
   int Nwin=ncount/width - burn_windows;
   if(Nwin<0)Nwin=0;
-  int Nlag=log(max_lag*swidth)/log(dlag);
+  //logarithmic
+  //int Nlag=log(max_lag*swidth)/log(dlag);
+  //linear
+  int Nlag=swidth*burn_windows-1;
   if(Nlag<0)Nlag=0;
-
+  cout<<"ncount,Nwin,Bwin,Nlag:"<<ncount<<" "<<Nwin<<" "<<burn_windows<<" "<<Nlag<<endl;
+  
   //set up output grid
-  outwindows.resize(Nwin);
+  outwindows.resize(Nwin+1);
   outlags.resize(Nlag);
   nums.assign(Nwin,vector<double>(Nlag,0));
-  denoms.assign(Nwin,0);
-  int istart=size()-Nwin*width;
-  for(int i=0;i<=Nwin;i++)outwindows[i]=istart+i*swidth*nevery;
-  for(int i=0;i<Nlag;i++)outlags[i]=nevery*int(max_lag*swidth*pow(dlag,1+i-Nlag));
+  denoms.assign(Nwin,vector<double>(Nlag,0));
+  int istart=getStep()-Nwin*width;
+  cout<<"istart,width,swidth:"<<istart<<" "<<width<<" "<<swidth<<endl;
+  for(int i=0;i<=Nwin;i++)outwindows[i]=istart+i*width;
+  //logarithmic
+  //for(int i=0;i<Nlag;i++)outlags[i]=nevery*int(max_lag*swidth*pow(dlag,1+i-Nlag));
+  //linear
+  for(int i=0;i<Nlag;i++)outlags[i]=nevery*(i+1);
   //Note: outlags[0]=nevery*int(maxlagswid*pow(dlag,1-int(log(maxlagswid)/log(dlag))))
   //                >nevery*int(maxlagswid*exp(-log(dlag)*log(maxlagswid)/log(dlag))
   //                >=nevery
-  
+  cout<<"computed windows"<<endl;
+
   //compute feature average over the relevant data range
   vector<double>averages(Nwin+max_lag);
   for(int k=0;k<Nwin+max_lag;k++){
     double sum=0;
+    int count=0;
     for(int i=istart-width*max_lag;i<istart+Nwin*width;i+=nevery){
-      double fi=(*feature)(getState(i));
-      sum+=fi;
+      double fi;
+      if((*feature)(getState(i),fi)){
+	sum+=fi;
+	count++;
+      }
     }
-    averages[k]=sum/((Nwin+max_lag)*swidth);
+    averages[k]=sum/count;;
   }
+  cout<<"computed averages"<<endl;
      
   //populate output vectors
   for(int k=0;k<Nwin;k++){
@@ -153,34 +185,129 @@ void chain::compute_autocorr_windows(double (*feature)(state &),vector< vector<d
     double sum=0;
     for(int ik=k;ik<=k+max_lag;ik++)sum+=averages[ik];
     double favg=sum/(max_lag+1);
+    cout<<"iwin="<<k<<" favg="<<favg<<endl;
     for(int i=0;i<swidth;i++){
-      double fi=(*feature)(getState(outwindows[i]+i*nevery));
+      double fi;
+      int idx=outwindows[k]+i*nevery;
+      if(not(*feature)(getState(idx),fi))continue;
       //Thought: for disjoint parameter spaces, feature function may throw an exception to be caught. The we wouldn't count those...
       double df=fi-favg;
-      denoms[i]+=df*df;
       for(int j=0;j<Nlag;j++){
-	  int ilag=outlags[j];
-	  double filag=(*feature)(getState(outwindows[i]+(i-ilag)*nevery));
-	  nums[i][j]+=df*(filag-favg);
+	int ilag=outlags[j];
+	double filag;
+	int idx=outwindows[k]+i*nevery-ilag;
+	if((*feature)(getState(idx),filag)){
+	  //if(j==0)cout<<"k,j,i,idx;df,dflag"<<k<<" "<<j<<"("<<ilag<<")"<<" "<<i<<" "<<idx<<"; "<<df<<" "<<filag-favg<<endl;
+	  //if(j==Nlag-1)cout<<"k,j,i,idx;df,dflag"<<k<<" "<<j<<"("<<ilag<<")"<<" "<<i<<" "<<idx<<";                       "<<df<<" "<<filag-favg<<endl;
+	  nums[k][j]+=df*(filag-favg);
+	  denoms[k][j]+=df*df;
+	}
       }
     }
+    //for(int j=0;j<Nlag;j++)cout<<"lag="<<outlags[j]<<" "<<nums[k][j]<<" "<<denoms[k][j]<<endl;
   }
+  
+  cout<<"finished"<<endl;
 }
 
-//Estimate autocorrelation length 
-double chain::compute_effective_samples(double (*feature)(state &), double & autocorrlen,int width,int nevery,int burn_windows, int max_lag, double dlag){
-  vector< vector<double> >&nums;
-  vector<double>&denoms;
+//Estimate effective number of samples for some feature of the state samples
+void chain::compute_effective_samples(bool (*feature)(const state &,double & value), double &effSampSize, int &best_nwin, int width,int nevery,int burn_windows, int max_lag, double dlag){
+  //inputs:
+  //  feature         function which returns a feature value from a state.
+  //  width           (>1)width in steps of each window
+  //  nevery          (>=1) sampling rate in steps for the correlation analysis
+  //  burn_windows    (>=1) number of initial windows to skip
+  //  dlag            (>=1.1) factor for logarithmic spacing of lag windows
+  //  max_lag         (<=burn_windows) maxiumum lag, in number of window widths
+  //outputs:
+  //  effSampSize     the estimate for effective sample size     
+  //  best_nwin       the number of windows which optimized effSampSize
+  //
+  //  This routine uses compute_autocorr_windows to compute autocorrelation
+  //  lenghts for the state feature function provided.  Then, as if downsampling
+  //  by this length, computes the effective number of samples.  The routine
+  //  considers a range of possible sample sizes, beginning at the end of the
+  //  chain and working backward.  Generally, one expects to find an optimal
+  //  effective length which maximizes the effective sample size as correlation
+  //  lengths should be longer when earlier, more immature parts of the chain
+  //  are included in the calculation.
+  //
+  // Notes:
+  //   -the autocorrlength over best_nwin is ac_len=width*best_nwin/effSampSize
+  //   -See also notes for compute_autocorr_windows
+
+  cout<<"Enter compute_effective_samples"<<endl;
+  vector< vector<double> >nums;
+  vector< vector<double> >denoms;
   vector<int>windows;
   vector<int>lags;
-  void chain::compute_autocorr_windows(double (*feature)(state &),vector< vector<double> >&nums,vector<double>&denoms,vector<int>windows,vector<int>lags,int width,int nevery,int burn_windows, int max_lag, double dlag);
+  compute_autocorr_windows(feature,nums,denoms,windows,lags,width,nevery,burn_windows, max_lag, dlag);
   int Nwin=windows.size()-1;
   int Nlag=lags.size();
-  int lmin=0;
-  double acmin=1e100;
-  for(int nwin=0;nwin<Nwin;nwin++){
-    for(
+  cout<<"ESS: Nwin="<<Nwin<<" Nlag="<<Nlag<<endl;
 
+  int lmin=0;
+  double ess_max=0;
+  int nwin_max=0;
+  //Loop over options for how much of the chain is used for the computation
+  for(int nwin=1;nwin<=Nwin;nwin++){
+    //Compute autocorr length
+    //We compute an naive autocorrelation length
+    // ac_len =  1 + 2*sum( corr[i] )
+    int last_lag=0;
+    double ac_len=1.0;
+    for(int ilag=0;ilag<Nlag;ilag++){
+      int lag=lags[ilag];
+      //compute the correlation for each lag
+      double num=0;
+      double denom=0;
+      for(int iwin=Nwin-nwin;iwin<Nwin;iwin++){
+	num+=nums[iwin][ilag];
+	denom+=denoms[iwin][ilag];
+      }
+      //cout<<"num,denom:"<<num<<" "<<denom<<endl;
+      double corr=num/denom;
+      ac_len+=2.0*(lag-last_lag)*corr;
+      //cout<<"nwin,lag,corr,acsum:"<<nwin<<" "<<lag<<" "<<corr<<" "<<ac_len<<endl;
+      last_lag=lag;
+    }
+    //cout<<"baselen="<<nwin*width<<"  aclen="<<ac_len<<endl;
+    //compute effective sample size estimate
+    double ess=nwin*width/ac_len;
+    if(ess>ess_max){
+      ess_max=ess;
+      nwin_max=nwin;
+    }
+  }
+  best_nwin=nwin_max;
+  effSampSize=ess_max;
+};
+
+//Report effective samples
+//This is a testing function for developing the effective samples code
+void chain::report_effective_samples(){
+  double ess;
+  int nwin;
+  int width=20000;
+  int every=100;
+  int burn=5;
+  if(dim>0){
+    //set up really hacky feature functions
+    auto feature = [](const state &s,double &val) { val=s.get_param(1);return true;};
+    cout<<"Computing effective sample size for par 1"<<endl;
+    //chain_verbose=true;
+    compute_effective_samples(feature, ess, nwin, width, every, burn);
+    chain_verbose=false;
+    cout<<"Par 1: ess="<<ess<<"  useful chain length is: "<<width*nwin<<" autocorrlen="<<width*nwin/ess<<endl;
+  }
+  if(dim>1){
+    //set up really hacky feature functions
+    auto feature = [](const state &s,double &val) { val=s.get_param(2);return true;};
+    cout<<"Computing effective sample size for par 2"<<endl;
+    compute_effective_samples(feature, ess, nwin, width, every, burn);
+    cout<<"Par 2: ess="<<ess<<"  useful chain length is: "<<width*nwin<<endl;
+  }
+};
 
 // A markov (or non-Markovian) chain based on some variant of the Metropolis-Hastings algorithm
 // May add "burn-in" distinction later.
@@ -487,6 +614,16 @@ double MH_chain::expectation(double (*test_func)(state s),int Nburn){
   return sum/int((Nhist-Nburn)/add_every_N);
 };
 
+double MH_chain::variance(double (*test_func)(state s),double fmean,int Nburn){
+  //should probably add a check that Nburn>Nzero
+    double sum=0;
+    for(int i=Nburn;i<Nhist;i+=add_every_N){
+      double diff=test_func(states[get_state_idx(i)])-fmean;
+      sum+=diff*diff;
+    }
+    return sum/int((Nhist-Nburn)/add_every_N);
+};
+
 int MH_chain::get_state_idx(int i){
   //should probably add a check that Nburn>Nzero
   if(i<0||i>=Nhist)i=Nhist-1;
@@ -498,26 +635,20 @@ int MH_chain::get_state_idx(int i){
   return irequest;
 }
 
-double MH_chain::variance(double (*test_func)(state s),double fmean,int Nburn){
-  //should probably add a check that Nburn>Nzero
-    double sum=0;
-    for(int i=Nburn;i<Nhist;i+=add_every_N){
-      double diff=test_func(states[get_state_idx(i)])-fmean;
-      sum+=diff*diff;
-    }
-    return sum/int((Nhist-Nburn)/add_every_N);
+int MH_chain::getStep(){
+  return Nhist;
 };
 
 state MH_chain::getState(int elem,bool raw_indexing){//defaults (-1,false)  
   //cout<<"MH_chain::getState()"<<endl;
-  if(elem<0||elem>=Nsize||(!raw_indexing&&elem>=Nhist)){
-    //cout<<"returning current state."<<endl;
+  if(elem<0||(raw_indexing&&elem>=Nsize)||(!raw_indexing&&elem>=Nhist)){
+    if(chain_verbose)cout<<"returning current state: elem="<<elem<<" Nhist="<<Nhist<<endl;
     return current_state;//Current state by default
   } else if (raw_indexing) { 
     //cout<<"returning states["<<elem<<"]"<<endl;
     return states[elem];
   } else {
-    //cout<<"returning states["<<get_state_idx(elem)<<"]"<<endl;
+    if(chain_verbose)cout<<"returning states["<<get_state_idx(elem)<<"]"<<endl;
     return states[get_state_idx(elem)];
   }
 };
@@ -749,7 +880,7 @@ void parallel_tempering_chains::set_proposal(proposal_distribution &proposal){
 void parallel_tempering_chains::step(){
   int iswaps[maxswapsperstep];
   double x;
-
+  
   /*
   //checkpoint test
   if(chains[0].size()==2000){
@@ -786,7 +917,8 @@ void parallel_tempering_chains::step(){
   //for(int j=0;j<maxswapsperstep;j++)cout<<"\t"<<iswaps[j];
   //cout<<endl;
   //Now perform the swap trials:
-  for(int j=0;j<maxswapsperstep;j++)if(iswaps[j]>=0){
+  for(int j=0;j<maxswapsperstep;j++){
+    if(iswaps[j]>=0){
       bool accept=true;
       trycounts[iswaps[j]]++;
       //cout<<"iswaps["<<j<<"]="<<iswaps[j]<<endl;
@@ -851,11 +983,12 @@ void parallel_tempering_chains::step(){
       }	
       swap_count[i]++;
     }
-
-    //Here we perform the standard (non-swap) step for the remaining chains.
-    //Either guided or dynamic scheduling seems to work about the same.
-    //#pragma omp parallel for schedule (guided, 1)  ///try big chunks first, then specialize 
-#pragma omp parallel for schedule (dynamic, 1) ///take one pass/thread at a time until done. 
+  }  
+  //Here we perform the standard (non-swap) step for the remaining chains.
+  //Either guided or dynamic scheduling seems to work about the same.
+  //#pragma omp parallel for schedule (guided, 1)  
+  ///take one pass/thread at a time until done.
+#pragma omp parallel for schedule (dynamic, 1) 
   for(int i=0;i<Ntemps;i++){
     //NOTE: for thread-independent results with omp and DE-cross-breeding temp chains,
     //we need to restrict the de history for each chain to the part before any updates here. 
@@ -869,12 +1002,21 @@ void parallel_tempering_chains::step(){
     chains[i].step(*props[i]);
   }
   
-  for(int i=0;i<Ntemps;i++)chains[i].history_thaw();
+  for(int i=0;i<Ntemps;i++){
+    chains[i].history_thaw();
+  }
   Nsize=c0().size();
   //cout<<status()<<endl;
   
   //diagnostics and steering:
   icount++;
+
+  //cout<<"taco "<<Nsize<<"  "<<Ninit<<endl;
+  if(icount%20000==0){
+    cout<<"Effective sample size test"<<endl;
+    chains[0].report_effective_samples();
+  } 
+  
   if(icount>=ievidbin){
     double evidence=0;
     for(int i=0;i<Ntemps-1;i++){
@@ -971,7 +1113,7 @@ void parallel_tempering_chains::step(){
       ups[i]=downs[i]=0;
     }
     icount=0;
-  } 
+  }
 
   //***** Reboot *****//
   if((Nsize-Ninit)%test_reboot_every==0){
