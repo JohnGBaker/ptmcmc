@@ -229,9 +229,9 @@ void chain::compute_autocorr_windows(bool (*feature)(const state &, double & val
 }
 
 //Estimate effective number of samples for some feature of the state samples
-void chain::compute_effective_samples(bool (*feature)(const state &,double & value), double &effSampSize, int &best_nwin, int width,int nevery,int burn_windows, bool loglag, int max_lag, double dlag){
+void chain::compute_effective_samples(vector<bool (*)(const state &,double & value)>&features, double &effSampSize, int &best_nwin, int width,int nevery,int burn_windows, bool loglag, int max_lag, double dlag){
   //inputs:
-  //  feature         function which returns a feature value from a state.
+  //  features        functions which return feature values from a state.
   //  width           (>1)width in steps of each window
   //  nevery          (>=1) sampling rate in steps for the correlation analysis
   //  burn_windows    (>=1) number of initial windows to skip
@@ -242,9 +242,10 @@ void chain::compute_effective_samples(bool (*feature)(const state &,double & val
   //  best_nwin       the number of windows which optimized effSampSize
   //
   //  This routine uses compute_autocorr_windows to compute autocorrelation
-  //  lenghts for the state feature function provided.  Then, as if downsampling
-  //  by this length, computes the effective number of samples.  The routine
-  //  considers a range of possible sample sizes, beginning at the end of the
+  //  lenghts for the state feature functions provided.  Then, downsampling
+  //  by this length, computes the effective number of samples for each
+  //  feature, taking the minium of the set.  The routine does this repeatedly,
+  //  considering a range of possible sample sizes, beginning at the end of the
   //  chain and working backward.  Generally, one expects to find an optimal
   //  effective length which maximizes the effective sample size as correlation
   //  lengths should be longer when earlier, more immature parts of the chain
@@ -255,11 +256,16 @@ void chain::compute_effective_samples(bool (*feature)(const state &,double & val
   //   -See also notes for compute_autocorr_windows
 
   //cout<<"Enter compute_effective_samples"<<endl;
-  vector< vector<double> >nums;
-  vector< vector<double> >denoms;
+  int nf=features.size();
+  cout<<"nf="<<nf<<endl;
+  vector< vector< vector<double> > > nums(nf);
+  vector< vector< vector<double> > > denoms(nf);
+  //vector<double>esses(nf);
+  double essi;
   vector<int>windows;
   vector<int>lags;
-  compute_autocorr_windows(feature,nums,denoms,windows,lags,width,nevery,burn_windows, loglag, max_lag, dlag);
+  for(int i=0;i<nf;i++)
+    compute_autocorr_windows(features[i],nums[i],denoms[i],windows,lags,width,nevery,burn_windows, loglag, max_lag, dlag);
   int Nwin=windows.size()-1;
   int Nlag=lags.size();
   cout<<"ESS: Nwin="<<Nwin<<" Nlag="<<Nlag<<endl;
@@ -272,40 +278,51 @@ void chain::compute_effective_samples(bool (*feature)(const state &,double & val
     //Compute autocorr length
     //We compute an naive autocorrelation length
     // ac_len =  1 + 2*sum( corr[i] )
-    int last_lag=0;
-    double ac_len=1.0;
-    double lastcorr=1;
-    double dacl=0;
-    for(int ilag=0;ilag<Nlag;ilag++){
-      int lag=lags[ilag];
-      //compute the correlation for each lag
-      double num=0;
-      double denom=0;
-      for(int iwin=Nwin-nwin;iwin<Nwin;iwin++){
-	num+=nums[iwin][ilag];
-	denom+=denoms[iwin][ilag];
+    double ess=1e100;
+    for(int ifeat=0;ifeat<nf;ifeat++){
+      int last_lag=0;
+      double ac_len=1.0;
+      double lastcorr=1;
+      double dacl=0;
+      for(int ilag=0;ilag<Nlag;ilag++){
+	int lag=lags[ilag];
+	//compute the correlation for each lag
+	double num=0;
+	double denom=0;
+	for(int iwin=Nwin-nwin;iwin<Nwin;iwin++){
+	  num+=nums[ifeat][iwin][ilag];
+	  denom+=denoms[ifeat][iwin][ilag];
+	}
+	//cout<<"num,denom:"<<num<<" "<<denom<<endl;
+	double corr=num/denom;
+	if(lastcorr<0 and corr<0){
+	  //keep only "initally positive sequence" (IPS)
+	  ac_len-=dacl;
+	  break;
+	}
+	lastcorr=corr;
+	dacl=2.0*(lag-last_lag)*corr;
+	ac_len+=dacl;
+	//cout<<"nwin,lag,corr,acsum:"<<nwin<<" "<<lag<<" "<<corr<<" "<<ac_len<<endl;
+	last_lag=lag;
       }
-      //cout<<"num,denom:"<<num<<" "<<denom<<endl;
-      double corr=num/denom;
-      if(lastcorr<0 and corr<0){
-	//keep only "initally positive sequence" (IPS)
-	ac_len-=dacl;
-	break;
+      //cout<<"baselen="<<nwin*width<<"  aclen="<<ac_len<<endl;
+      //compute effective sample size estimate
+      //esses[ifeat]=nwin*width/ac_len;
+      essi=nwin*width/ac_len;
+      //cout<<"nwin,lag,aclen,effss:"<<nwin<<" "<<last_lag<<" "<<ac_len<<" "<<ess<<endl;
+      if(ac_len<nevery){
+	//Ignore as spurious any
+	//cout<<"aclen<nevery!: "<<ac_len<<" < "<<nevery<<endl;
+        //esses[ifeat]=0;
+	essi=0;
       }
-      lastcorr=corr;
-      dacl=2.0*(lag-last_lag)*corr;
-      ac_len+=dacl;
-      //cout<<"nwin,lag,corr,acsum:"<<nwin<<" "<<lag<<" "<<corr<<" "<<ac_len<<endl;
-      last_lag=lag;
-    }
-    //cout<<"baselen="<<nwin*width<<"  aclen="<<ac_len<<endl;
-    //compute effective sample size estimate
-    double ess=nwin*width/ac_len;
-    //cout<<"nwin,lag,aclen,effss:"<<nwin<<" "<<last_lag<<" "<<ac_len<<" "<<ess<<endl;
-    if(ac_len<nevery){
-      //Ignore as spurious any
-      //cout<<"aclen<nevery!: "<<ac_len<<" < "<<nevery<<endl;
-      continue;
+      // if(esses[ifeat]<ess){
+      //ess=esses[ifeat];
+      if(essi<ess){
+	ess=essi;
+	//cout<<"nwin,ifeat="<<nwin<<","<<ifeat<<": lowest -> "<<ess<<endl;
+      }
     }
     if(ess>ess_max){
       ess_max=ess;
@@ -314,7 +331,7 @@ void chain::compute_effective_samples(bool (*feature)(const state &,double & val
   }
   best_nwin=nwin_max;
   effSampSize=ess_max;
-
+  
   //For testing, we dump everything and quit
   static int icount=0;
   icount++;
@@ -325,7 +342,7 @@ void chain::compute_effective_samples(bool (*feature)(const state &,double & val
       for(int i=0;i<int(width/nevery);i++){
 	int idx=windows[iwin]+i*nevery;
 	double fi;
-	if((*feature)(getState(idx),fi)){
+	if((*features[0])(getState(idx),fi)){
 	  os<<idx<<" "<<fi<<endl;
 	}
       }
@@ -344,9 +361,9 @@ void chain::compute_effective_samples(bool (*feature)(const state &,double & val
 //Report the best case effective sample size for the minimum over all features
 //allowing the length of the late part of the chain under consideration to vary
 //to optimize the ESS.
-//int chain::report_effective_samples(vector<bool (*feature)(const state &,double & value)>){
-//return 0;
-//}
+int chain::report_effective_samples(vector< bool (*)(const state &,double & value) > & features){
+  return 0;
+}
 
 //Report effective samples
 //This is a testing function for developing the effective samples code
@@ -354,37 +371,49 @@ void chain::report_effective_samples(){
   double ess,essl;
   int nwin;
   int width=20000;
+  while(width/getStep()<0.01)width*=2;
   int every=20;
   int burn=2;
+  vector<bool (*)(const state &,double & value)> features;
+  vector<bool (*)(const state &,double & value)> feature_tmp(1);
   if(dim>0){
     //set up really hacky feature functions
     auto feature = [](const state &s,double &val) { val=s.get_param(0);return true;};
-    cout<<"Computing effective sample size for par 1"<<endl;
-    compute_effective_samples(feature, ess, nwin, width, every, burn, false);
-    cout<<"Par 1:      ess="<<ess<<"  useful chain length is: "<<width*nwin<<" autocorrlen="<<width*nwin/ess<<endl;
-    compute_effective_samples(feature, essl, nwin, width, every, burn, true);
-    cout<<"Par 1(1.4): ess="<<essl<<"  useful chain length is: "<<width*nwin<<" autocorrlen="<<width*nwin/essl<<endl;
-    compute_effective_samples(feature, essl, nwin, width, every, burn, true,0,1.2);
-    cout<<"Par 1(1.2):ess="<<essl<<"  useful chain length is: "<<width*nwin<<" autocorrlen="<<width*nwin/essl<<endl;
-    compute_effective_samples(feature, essl, nwin, width, every, burn, true,0,1.1);
+    features.push_back(feature);
+    feature_tmp[0]=feature;
+    cout<<"\nComputing effective sample size for par 1"<<endl;
+    //compute_effective_samples(feature_tmp, ess, nwin, width, every, burn, false);
+    //cout<<"Par 1:      ess="<<ess<<"  useful chain length is: "<<width*nwin<<" autocorrlen="<<width*nwin/ess<<endl;
+    //compute_effective_samples(feature_tmp, essl, nwin, width, every, burn, true);
+    //cout<<"Par 1(1.4): ess="<<essl<<"  useful chain length is: "<<width*nwin<<" autocorrlen="<<width*nwin/essl<<endl;
+    //compute_effective_samples(feature_tmp, essl, nwin, width, every, burn, true,0,1.2);
+    //cout<<"Par 1(1.2):ess="<<essl<<"  useful chain length is: "<<width*nwin<<" autocorrlen="<<width*nwin/essl<<endl;
+    compute_effective_samples(feature_tmp, essl, nwin, width, every, burn, true,0,1.1);
     cout<<"Par 1(1.1):ess="<<essl<<"  useful chain length is: "<<width*nwin<<" autocorrlen="<<width*nwin/essl<<endl;
   }
   if(dim>1){
     //set up really hacky feature functions
     auto feature = [](const state &s,double &val) { val=s.get_param(1);return true;};
-    cout<<"Computing effective sample size for par 2"<<endl;
+    features.push_back(feature);
+    feature_tmp[0]=feature;
+    cout<<"\nComputing effective sample size for par 2"<<endl;
     //compute_effective_samples(feature, ess, nwin, width, every, burn, false);
     //cout<<"Par 2:      ess="<<ess<<"  useful chain length is: "<<width*nwin<<" autocorrlen="<<width*nwin/ess<<endl;
-    compute_effective_samples(feature, essl, nwin, width, every, burn, true,1.1);
+    compute_effective_samples(feature_tmp, essl, nwin, width, every, burn, true,0,1.1);
     cout<<"Par 2(1.1): ess="<<essl<<"  useful chain length is: "<<width*nwin<<" autocorrlen="<<width*nwin/essl<<endl;
   }
-  if(dim>1){
+  if(dim>2){
     //set up really hacky feature functions
     auto feature = [](const state &s,double &val) { val=s.get_param(2);return true;};
-    cout<<"Computing effective sample size for par 3"<<endl;
-    compute_effective_samples(feature, essl, nwin, width, every, burn, true,1.1);
+    features.push_back(feature);
+    feature_tmp[0]=feature;
+    cout<<"\nComputing effective sample size for par 3"<<endl;
+    compute_effective_samples(feature_tmp, essl, nwin, width, every, burn, true,0,1.1);
     cout<<"Par 3(1.1): ess="<<essl<<"  useful chain length is: "<<width*nwin<<" autocorrlen="<<width*nwin/essl<<endl;
   }
+  cout<<"\nComputing effective sample size for pars 1--3"<<endl;
+  compute_effective_samples(features, essl, nwin, width, every, burn, true,0,1.1);
+  cout<<"Pars 1--3: ess="<<essl<<"  useful chain length is: "<<width*nwin<<" autocorrlen="<<width*nwin/essl<<endl;
 };
 
 // A markov (or non-Markovian) chain based on some variant of the Metropolis-Hastings algorithm
