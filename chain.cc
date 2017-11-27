@@ -4,6 +4,7 @@
 ///John G Baker - NASA-GSFC (2013-2014)
 #include "chain.hh"
 #include "proposal_distribution.hh"
+#include <iostream>
 
 bool chain_verbose=false;
 
@@ -86,13 +87,14 @@ void chain::inNsigma(int Nsigma,vector<int> & indicies,int nburn){
 
 //A routine for processing chain history to estimate autocorrelation of
 //windowed chain segments
-void chain::compute_autocorr_windows(bool (*feature)(const state &, double & value),vector< vector<double> >&nums,vector< vector<double> >&denoms,vector<int>&outwindows,vector<int>&outlags,int width,int nevery,int burn_windows, int max_lag, double dlag){
+void chain::compute_autocorr_windows(bool (*feature)(const state &, double & value),vector< vector<double> >&nums,vector< vector<double> >&denoms,vector<int>&outwindows,vector<int>&outlags,int width,int nevery,int burn_windows, bool loglag, int max_lag, double dlag){
   //inputs:
   //  feature         function which returns a feature value from a state.
   //  width           (>1)width in steps of each window
   //  nevery          (>=1) sampling rate in steps for the correlation analysis
   //  burn_windows    (>=1) number of initial windows to skip
-  //  dlag            (>=1.1) factor for logarithmic spacing of lag windows
+  //  loglag          flag to use logarithmic lag spacing
+  //  dlag            (>=1.01) factor for logarithmic spacing of lag windows
   //  max_lag         (<=burn_windows) maxiumum lag, in number of window widths
   //outputs:
   //  nums            [Nwindow][Nlag] vector array of partial numerators
@@ -125,7 +127,7 @@ void chain::compute_autocorr_windows(bool (*feature)(const state &, double & val
   //   -this is why denoms may depend on lag
   //   -it will probably be necessary to replace these "feature" functions with
   //    some kind of class objects, probably to be defined in states.hh
-  cout<<"Enter compute_autocorr_windows"<<endl;
+  //cout<<"Enter compute_autocorr_windows"<<endl;
   
   if(width<=1)width=2;
   if(nevery<1)nevery=1;
@@ -133,35 +135,51 @@ void chain::compute_autocorr_windows(bool (*feature)(const state &, double & val
   width=swidth*nevery;
   if(burn_windows<1)burn_windows=1;
   if(max_lag==0 or max_lag>burn_windows)max_lag=burn_windows;
-  if(dlag<1.1)dlag=1.1;
+  if(dlag<1.01)dlag=1.01;
 
   //determine output structure
   int ncount=getStep();
   int Nwin=ncount/width - burn_windows;
   if(Nwin<0)Nwin=0;
-  //logarithmic
-  //int Nlag=log(max_lag*swidth)/log(dlag);
-  //linear
-  int Nlag=swidth*burn_windows-1;
-  if(Nlag<0)Nlag=0;
-  cout<<"ncount,Nwin,Bwin,Nlag:"<<ncount<<" "<<Nwin<<" "<<burn_windows<<" "<<Nlag<<endl;
+  int Nlag;
+  //if(loglag){
+    //logarithmic
+    //Nlag=log(max_lag*swidth)/log(dlag);
+  //} else {
+    //linear
+    //Nlag=swidth*burn_windows-1;
+  //}
+  //if(Nlag<0)Nlag=0;
+  //cout<<"ncount,Nwin,Bwin,Nlag:"<<ncount<<" "<<Nwin<<" "<<burn_windows<<" "<<Nlag<<endl;
   
   //set up output grid
   outwindows.resize(Nwin+1);
-  outlags.resize(Nlag);
+  int istart=getStep()-Nwin*width;
+  //cout<<"istart,width,swidth:"<<istart<<" "<<width<<" "<<swidth<<endl;
+  for(int i=0;i<=Nwin;i++)outwindows[i]=istart+i*width;
+  if(loglag){
+    //logarithmic
+    outlags.resize(0);
+    double fac=1;
+    int idx=1;
+    while(idx<max_lag*swidth){
+      outlags.push_back(nevery*idx);
+      //cout<<"lag="<<nevery*idx<<endl;
+      int lastidx=idx;
+      while(lastidx==idx){
+	fac*=dlag;
+	idx=int(fac);
+      }
+    }
+    Nlag=outlags.size();
+  } else {
+    //linear
+    Nlag=swidth*burn_windows-1;
+    outlags.resize(Nlag);
+    for(int i=0;i<Nlag;i++)outlags[i]=nevery*(i+1);
+  }
   nums.assign(Nwin,vector<double>(Nlag,0));
   denoms.assign(Nwin,vector<double>(Nlag,0));
-  int istart=getStep()-Nwin*width;
-  cout<<"istart,width,swidth:"<<istart<<" "<<width<<" "<<swidth<<endl;
-  for(int i=0;i<=Nwin;i++)outwindows[i]=istart+i*width;
-  //logarithmic
-  //for(int i=0;i<Nlag;i++)outlags[i]=nevery*int(max_lag*swidth*pow(dlag,1+i-Nlag));
-  //linear
-  for(int i=0;i<Nlag;i++)outlags[i]=nevery*(i+1);
-  //Note: outlags[0]=nevery*int(maxlagswid*pow(dlag,1-int(log(maxlagswid)/log(dlag))))
-  //                >nevery*int(maxlagswid*exp(-log(dlag)*log(maxlagswid)/log(dlag))
-  //                >=nevery
-  cout<<"computed windows"<<endl;
 
   //compute feature average over the relevant data range
   vector<double>averages(Nwin+max_lag);
@@ -177,7 +195,7 @@ void chain::compute_autocorr_windows(bool (*feature)(const state &, double & val
     }
     averages[k]=sum/count;;
   }
-  cout<<"computed averages"<<endl;
+  //cout<<"computed averages"<<endl;
      
   //populate output vectors
   for(int k=0;k<Nwin;k++){
@@ -185,7 +203,7 @@ void chain::compute_autocorr_windows(bool (*feature)(const state &, double & val
     double sum=0;
     for(int ik=k;ik<=k+max_lag;ik++)sum+=averages[ik];
     double favg=sum/(max_lag+1);
-    cout<<"iwin="<<k<<" favg="<<favg<<endl;
+    //cout<<"iwin="<<k<<" favg="<<favg<<endl;
     for(int i=0;i<swidth;i++){
       double fi;
       int idx=outwindows[k]+i*nevery;
@@ -207,11 +225,11 @@ void chain::compute_autocorr_windows(bool (*feature)(const state &, double & val
     //for(int j=0;j<Nlag;j++)cout<<"lag="<<outlags[j]<<" "<<nums[k][j]<<" "<<denoms[k][j]<<endl;
   }
   
-  cout<<"finished"<<endl;
+  //cout<<"finished"<<endl;
 }
 
 //Estimate effective number of samples for some feature of the state samples
-void chain::compute_effective_samples(bool (*feature)(const state &,double & value), double &effSampSize, int &best_nwin, int width,int nevery,int burn_windows, int max_lag, double dlag){
+void chain::compute_effective_samples(bool (*feature)(const state &,double & value), double &effSampSize, int &best_nwin, int width,int nevery,int burn_windows, bool loglag, int max_lag, double dlag){
   //inputs:
   //  feature         function which returns a feature value from a state.
   //  width           (>1)width in steps of each window
@@ -236,12 +254,12 @@ void chain::compute_effective_samples(bool (*feature)(const state &,double & val
   //   -the autocorrlength over best_nwin is ac_len=width*best_nwin/effSampSize
   //   -See also notes for compute_autocorr_windows
 
-  cout<<"Enter compute_effective_samples"<<endl;
+  //cout<<"Enter compute_effective_samples"<<endl;
   vector< vector<double> >nums;
   vector< vector<double> >denoms;
   vector<int>windows;
   vector<int>lags;
-  compute_autocorr_windows(feature,nums,denoms,windows,lags,width,nevery,burn_windows, max_lag, dlag);
+  compute_autocorr_windows(feature,nums,denoms,windows,lags,width,nevery,burn_windows, loglag, max_lag, dlag);
   int Nwin=windows.size()-1;
   int Nlag=lags.size();
   cout<<"ESS: Nwin="<<Nwin<<" Nlag="<<Nlag<<endl;
@@ -256,6 +274,8 @@ void chain::compute_effective_samples(bool (*feature)(const state &,double & val
     // ac_len =  1 + 2*sum( corr[i] )
     int last_lag=0;
     double ac_len=1.0;
+    double lastcorr=1;
+    double dacl=0;
     for(int ilag=0;ilag<Nlag;ilag++){
       int lag=lags[ilag];
       //compute the correlation for each lag
@@ -267,13 +287,26 @@ void chain::compute_effective_samples(bool (*feature)(const state &,double & val
       }
       //cout<<"num,denom:"<<num<<" "<<denom<<endl;
       double corr=num/denom;
-      ac_len+=2.0*(lag-last_lag)*corr;
+      if(lastcorr<0 and corr<0){
+	//keep only "initally positive sequence" (IPS)
+	ac_len-=dacl;
+	break;
+      }
+      lastcorr=corr;
+      dacl=2.0*(lag-last_lag)*corr;
+      ac_len+=dacl;
       //cout<<"nwin,lag,corr,acsum:"<<nwin<<" "<<lag<<" "<<corr<<" "<<ac_len<<endl;
       last_lag=lag;
     }
     //cout<<"baselen="<<nwin*width<<"  aclen="<<ac_len<<endl;
     //compute effective sample size estimate
     double ess=nwin*width/ac_len;
+    //cout<<"nwin,lag,aclen,effss:"<<nwin<<" "<<last_lag<<" "<<ac_len<<" "<<ess<<endl;
+    if(ac_len<nevery){
+      //Ignore as spurious any
+      //cout<<"aclen<nevery!: "<<ac_len<<" < "<<nevery<<endl;
+      continue;
+    }
     if(ess>ess_max){
       ess_max=ess;
       nwin_max=nwin;
@@ -281,31 +314,76 @@ void chain::compute_effective_samples(bool (*feature)(const state &,double & val
   }
   best_nwin=nwin_max;
   effSampSize=ess_max;
+
+  //For testing, we dump everything and quit
+  static int icount=0;
+  icount++;
+  //cout<<"COUNT="<<icount<<endl;
+  if(false and icount>280 and not loglag){
+    ofstream os("ess_test.dat");
+    for(int iwin=Nwin-best_nwin-burn_windows;iwin<Nwin;iwin++){
+      for(int i=0;i<int(width/nevery);i++){
+	int idx=windows[iwin]+i*nevery;
+	double fi;
+	if((*feature)(getState(idx),fi)){
+	  os<<idx<<" "<<fi<<endl;
+	}
+      }
+    }
+    cout<<"aclen="<<best_nwin*width/ess_max<<endl;
+    cout<<"range="<<best_nwin*width<<endl;
+    cout<<"ess="<<ess_max<<endl;
+    cout<<"burnfrac="<<burn_windows/(1.0*best_nwin+burn_windows)<<endl;
+    cout<<"Quitting for test!"<<endl;
+    exit(0);
+  }
 };
+
+//Report effective samples
+//Compute effective samples for the vector of features provided.
+//Report the best case effective sample size for the minimum over all features
+//allowing the length of the late part of the chain under consideration to vary
+//to optimize the ESS.
+//int chain::report_effective_samples(vector<bool (*feature)(const state &,double & value)>){
+//return 0;
+//}
 
 //Report effective samples
 //This is a testing function for developing the effective samples code
 void chain::report_effective_samples(){
-  double ess;
+  double ess,essl;
   int nwin;
   int width=20000;
-  int every=100;
-  int burn=5;
+  int every=20;
+  int burn=2;
   if(dim>0){
     //set up really hacky feature functions
-    auto feature = [](const state &s,double &val) { val=s.get_param(1);return true;};
+    auto feature = [](const state &s,double &val) { val=s.get_param(0);return true;};
     cout<<"Computing effective sample size for par 1"<<endl;
-    //chain_verbose=true;
-    compute_effective_samples(feature, ess, nwin, width, every, burn);
-    chain_verbose=false;
-    cout<<"Par 1: ess="<<ess<<"  useful chain length is: "<<width*nwin<<" autocorrlen="<<width*nwin/ess<<endl;
+    compute_effective_samples(feature, ess, nwin, width, every, burn, false);
+    cout<<"Par 1:      ess="<<ess<<"  useful chain length is: "<<width*nwin<<" autocorrlen="<<width*nwin/ess<<endl;
+    compute_effective_samples(feature, essl, nwin, width, every, burn, true);
+    cout<<"Par 1(1.4): ess="<<essl<<"  useful chain length is: "<<width*nwin<<" autocorrlen="<<width*nwin/essl<<endl;
+    compute_effective_samples(feature, essl, nwin, width, every, burn, true,0,1.2);
+    cout<<"Par 1(1.2):ess="<<essl<<"  useful chain length is: "<<width*nwin<<" autocorrlen="<<width*nwin/essl<<endl;
+    compute_effective_samples(feature, essl, nwin, width, every, burn, true,0,1.1);
+    cout<<"Par 1(1.1):ess="<<essl<<"  useful chain length is: "<<width*nwin<<" autocorrlen="<<width*nwin/essl<<endl;
+  }
+  if(dim>1){
+    //set up really hacky feature functions
+    auto feature = [](const state &s,double &val) { val=s.get_param(1);return true;};
+    cout<<"Computing effective sample size for par 2"<<endl;
+    //compute_effective_samples(feature, ess, nwin, width, every, burn, false);
+    //cout<<"Par 2:      ess="<<ess<<"  useful chain length is: "<<width*nwin<<" autocorrlen="<<width*nwin/ess<<endl;
+    compute_effective_samples(feature, essl, nwin, width, every, burn, true,1.1);
+    cout<<"Par 2(1.1): ess="<<essl<<"  useful chain length is: "<<width*nwin<<" autocorrlen="<<width*nwin/essl<<endl;
   }
   if(dim>1){
     //set up really hacky feature functions
     auto feature = [](const state &s,double &val) { val=s.get_param(2);return true;};
-    cout<<"Computing effective sample size for par 2"<<endl;
-    compute_effective_samples(feature, ess, nwin, width, every, burn);
-    cout<<"Par 2: ess="<<ess<<"  useful chain length is: "<<width*nwin<<endl;
+    cout<<"Computing effective sample size for par 3"<<endl;
+    compute_effective_samples(feature, essl, nwin, width, every, burn, true,1.1);
+    cout<<"Par 3(1.1): ess="<<essl<<"  useful chain length is: "<<width*nwin<<" autocorrlen="<<width*nwin/essl<<endl;
   }
 };
 
