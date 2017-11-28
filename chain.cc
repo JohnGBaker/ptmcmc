@@ -4,7 +4,6 @@
 ///John G Baker - NASA-GSFC (2013-2014)
 #include "chain.hh"
 #include "proposal_distribution.hh"
-#include <iostream>
 
 bool chain_verbose=false;
 
@@ -254,7 +253,8 @@ void chain::compute_effective_samples(vector<bool (*)(const state &,double & val
   // Notes:
   //   -the autocorrlength over best_nwin is ac_len=width*best_nwin/effSampSize
   //   -See also notes for compute_autocorr_windows
-
+    
+  
   //cout<<"Enter compute_effective_samples"<<endl;
   int nf=features.size();
   cout<<"nf="<<nf<<endl;
@@ -262,6 +262,7 @@ void chain::compute_effective_samples(vector<bool (*)(const state &,double & val
   vector< vector< vector<double> > > denoms(nf);
   //vector<double>esses(nf);
   double essi;
+  vector<double> esses(nf),best_esses(nf);
   vector<int>windows;
   vector<int>lags;
   for(int i=0;i<nf;i++)
@@ -310,7 +311,7 @@ void chain::compute_effective_samples(vector<bool (*)(const state &,double & val
       //compute effective sample size estimate
       //esses[ifeat]=nwin*width/ac_len;
       essi=nwin*width/ac_len;
-      //cout<<"nwin,lag,aclen,effss:"<<nwin<<" "<<last_lag<<" "<<ac_len<<" "<<ess<<endl;
+      //cout<<"nwin,lag,aclen,effss:"<<nwin<<" "<<last_lag<<" "<<ac_len<<" "<<essi<<endl;
       if(ac_len<nevery){
 	//Ignore as spurious any
 	//cout<<"aclen<nevery!: "<<ac_len<<" < "<<nevery<<endl;
@@ -321,16 +322,23 @@ void chain::compute_effective_samples(vector<bool (*)(const state &,double & val
       //ess=esses[ifeat];
       if(essi<ess){
 	ess=essi;
-	//cout<<"nwin,ifeat="<<nwin<<","<<ifeat<<": lowest -> "<<ess<<endl;
       }
+      esses[ifeat]=essi;
+      //cout<<"nwin,ifeat="<<nwin<<","<<ifeat<<":  -> "<<essi<<endl;
     }
     if(ess>ess_max){
       ess_max=ess;
       nwin_max=nwin;
+      best_esses=esses;
     }
   }
   best_nwin=nwin_max;
   effSampSize=ess_max;
+
+  //dump info
+  cout<<"len="<<nwin_max<<"*"<<width<<": ";
+  for(auto ess : best_esses)cout<<" "<<ess;
+  cout<<endl;
   
   //For testing, we dump everything and quit
   static int icount=0;
@@ -361,60 +369,124 @@ void chain::compute_effective_samples(vector<bool (*)(const state &,double & val
 //Report the best case effective sample size for the minimum over all features
 //allowing the length of the late part of the chain under consideration to vary
 //to optimize the ESS.
-int chain::report_effective_samples(vector< bool (*)(const state &,double & value) > & features){
-  return 0;
+//Returns (ess,length)
+pair<double,int> chain::report_effective_samples(vector< bool (*)(const state &,double & value) > & features,int width,int nevery){
+  double ess;
+  int nwin;
+  int burn=2;
+  vector<bool (*)(const state &,double & value)> onefeature(1);
+
+  int i=1;
+
+  if(false)for(auto feature:features){
+    onefeature[0]=feature;
+    compute_effective_samples(onefeature, ess, nwin, width, nevery, burn, true,0,1.1);
+    cout<<"Par "<<i<<": ess="<<ess<<"  useful chain length is: "<<width*nwin<<" autocorrlen="<<width*nwin/ess<<endl;
+    i++;
+  }
+  compute_effective_samples(features, ess, nwin, width, nevery, burn, true,0,1.1);
+  cout<<"Over "<<features.size()<<" pars: ess="<<ess<<"  useful chain length is: "<<width*nwin<<" autocorrlen="<<width*nwin/ess<<endl;
+  return make_pair(ess,width*nwin);
 }
 
 //Report effective samples
 //This is a testing function for developing the effective samples code
-void chain::report_effective_samples(){
-  double ess,essl;
-  int nwin;
-  int width=20000;
-  while(width/getStep()<0.01)width*=2;
-  int every=20;
-  int burn=2;
+void chain::report_effective_samples(int imax){
+  int width=40000;
+  while(width<getStep()*0.05)width*=2;
+  int every=100;
+  if(imax<0)imax=dim;
+  if(imax>dim)imax=dim;
   vector<bool (*)(const state &,double & value)> features;
-  vector<bool (*)(const state &,double & value)> feature_tmp(1);
-  if(dim>0){
-    //set up really hacky feature functions
+  //We have to make an explicit function for each parameter, so there seems
+  //to be no way to make this pretty with a loop
+  if(imax>0){
     auto feature = [](const state &s,double &val) { val=s.get_param(0);return true;};
     features.push_back(feature);
-    feature_tmp[0]=feature;
-    cout<<"\nComputing effective sample size for par 1"<<endl;
-    //compute_effective_samples(feature_tmp, ess, nwin, width, every, burn, false);
-    //cout<<"Par 1:      ess="<<ess<<"  useful chain length is: "<<width*nwin<<" autocorrlen="<<width*nwin/ess<<endl;
-    //compute_effective_samples(feature_tmp, essl, nwin, width, every, burn, true);
-    //cout<<"Par 1(1.4): ess="<<essl<<"  useful chain length is: "<<width*nwin<<" autocorrlen="<<width*nwin/essl<<endl;
-    //compute_effective_samples(feature_tmp, essl, nwin, width, every, burn, true,0,1.2);
-    //cout<<"Par 1(1.2):ess="<<essl<<"  useful chain length is: "<<width*nwin<<" autocorrlen="<<width*nwin/essl<<endl;
-    compute_effective_samples(feature_tmp, essl, nwin, width, every, burn, true,0,1.1);
-    cout<<"Par 1(1.1):ess="<<essl<<"  useful chain length is: "<<width*nwin<<" autocorrlen="<<width*nwin/essl<<endl;
   }
-  if(dim>1){
-    //set up really hacky feature functions
+  if(imax>1){
     auto feature = [](const state &s,double &val) { val=s.get_param(1);return true;};
     features.push_back(feature);
-    feature_tmp[0]=feature;
-    cout<<"\nComputing effective sample size for par 2"<<endl;
-    //compute_effective_samples(feature, ess, nwin, width, every, burn, false);
-    //cout<<"Par 2:      ess="<<ess<<"  useful chain length is: "<<width*nwin<<" autocorrlen="<<width*nwin/ess<<endl;
-    compute_effective_samples(feature_tmp, essl, nwin, width, every, burn, true,0,1.1);
-    cout<<"Par 2(1.1): ess="<<essl<<"  useful chain length is: "<<width*nwin<<" autocorrlen="<<width*nwin/essl<<endl;
   }
-  if(dim>2){
-    //set up really hacky feature functions
+  if(imax>2){
     auto feature = [](const state &s,double &val) { val=s.get_param(2);return true;};
     features.push_back(feature);
-    feature_tmp[0]=feature;
-    cout<<"\nComputing effective sample size for par 3"<<endl;
-    compute_effective_samples(feature_tmp, essl, nwin, width, every, burn, true,0,1.1);
-    cout<<"Par 3(1.1): ess="<<essl<<"  useful chain length is: "<<width*nwin<<" autocorrlen="<<width*nwin/essl<<endl;
   }
-  cout<<"\nComputing effective sample size for pars 1--3"<<endl;
-  compute_effective_samples(features, essl, nwin, width, every, burn, true,0,1.1);
-  cout<<"Pars 1--3: ess="<<essl<<"  useful chain length is: "<<width*nwin<<" autocorrlen="<<width*nwin/essl<<endl;
+  if(imax>3){
+    auto feature = [](const state &s,double &val) { val=s.get_param(3);return true;};
+    features.push_back(feature);
+  }
+  if(imax>4){
+    auto feature = [](const state &s,double &val) { val=s.get_param(4);return true;};
+    features.push_back(feature);
+  }
+  if(imax>5){
+    auto feature = [](const state &s,double &val) { val=s.get_param(5);return true;};
+    features.push_back(feature);
+  }
+  if(imax>6){
+    auto feature = [](const state &s,double &val) { val=s.get_param(6);return true;};
+    features.push_back(feature);
+  }
+  if(imax>7){
+    auto feature = [](const state &s,double &val) { val=s.get_param(7);return true;};
+    features.push_back(feature);
+  }
+  if(imax>8){
+    auto feature = [](const state &s,double &val) { val=s.get_param(8);return true;};
+    features.push_back(feature);
+  }
+  if(imax>9){
+    auto feature = [](const state &s,double &val) { val=s.get_param(9);return true;};
+    features.push_back(feature);
+  }
+  if(imax>10){
+    auto feature = [](const state &s,double &val) { val=s.get_param(10);return true;};
+    features.push_back(feature);
+  }
+  if(imax>11){
+    auto feature = [](const state &s,double &val) { val=s.get_param(11);return true;};
+    features.push_back(feature);
+  }
+  if(imax>12){
+    auto feature = [](const state &s,double &val) { val=s.get_param(12);return true;};
+    features.push_back(feature);
+  }
+  if(imax>13){
+    auto feature = [](const state &s,double &val) { val=s.get_param(13);return true;};
+    features.push_back(feature);
+  }
+  if(imax>14){
+    auto feature = [](const state &s,double &val) { val=s.get_param(14);return true;};
+    features.push_back(feature);
+  }
+  if(imax>15){
+    auto feature = [](const state &s,double &val) { val=s.get_param(15);return true;};
+    features.push_back(feature);
+  }
+  if(imax>16){
+    auto feature = [](const state &s,double &val) { val=s.get_param(16);return true;};
+    features.push_back(feature);
+  }
+  if(imax>17){
+    auto feature = [](const state &s,double &val) { val=s.get_param(17);return true;};
+    features.push_back(feature);
+  }
+  if(imax>18){
+    auto feature = [](const state &s,double &val) { val=s.get_param(18);return true;};
+    features.push_back(feature);
+  }
+  if(imax>19){
+    auto feature = [](const state &s,double &val) { val=s.get_param(19);return true;};
+    features.push_back(feature);
+  }
+  if(imax>20){
+    cout<<"chain::report_effective_samples(): Currently only supports the first 20 params, by default."<<endl;
+  }
+  
+  report_effective_samples(features,width,every);
 };
+
 
 // A markov (or non-Markovian) chain based on some variant of the Metropolis-Hastings algorithm
 // May add "burn-in" distinction later.
