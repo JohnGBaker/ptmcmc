@@ -482,10 +482,15 @@ int ptmcmc_sampler::run(const string & base, int ic){
 	if(bestErr<pt_stop_evid_err){
 	  stop=true;
 	  cout<<"ptmcmc_sampler::run: Stopping based on pt_stop_evid_err criterion."<<endl; 
-	}
+	}	
       }
       else cc->dumpChain(out[0],istep-Nevery+1,Nskip);
       cout<<cc->status()<<endl;      
+      
+      if(0==istep%(Nevery*4)){
+	cout<<"Effective sample size test"<<endl;
+	cc->report_effective_samples();
+      }
     }
     if(stop)break;
   }

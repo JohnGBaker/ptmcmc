@@ -274,7 +274,7 @@ void chain::compute_effective_samples(vector<bool (*)(const state &,double & val
   
   //cout<<"Enter compute_effective_samples"<<endl;
   int nf=features.size();
-  cout<<"nf="<<nf<<endl;
+  //cout<<"nf="<<nf<<endl;
   vector< vector< vector<double> > > covar(nf);
   vector< vector< vector<double> > > means(nf);
   vector< vector< vector< int > > >counts(nf);
@@ -288,7 +288,7 @@ void chain::compute_effective_samples(vector<bool (*)(const state &,double & val
     compute_autocovar_windows(features[i],covar[i],means[i],counts[i],windows,lags,width,nevery,burn_windows, loglag, max_lag, dlag);
   int Nwin=windows.size()-1;
   int Nlag=lags.size();
-  cout<<"ESS: Nwin="<<Nwin<<" Nlag="<<Nlag<<endl;
+  //cout<<"ESS: Nwin="<<Nwin<<" Nlag="<<Nlag<<endl;
 
   int lmin=0;
   double ess_max=0;
@@ -371,7 +371,7 @@ void chain::compute_effective_samples(vector<bool (*)(const state &,double & val
   cout<<"len="<<nwin_max<<"*"<<width<<": ";
   for(auto ess : best_esses)cout<<" "<<ess;
   cout<<endl;
-  cout<<"   means = ";
+  cout<<"     means = ";
   for(auto val : best_means)cout<<" "<<val;
   cout<<endl;
   
@@ -379,7 +379,7 @@ void chain::compute_effective_samples(vector<bool (*)(const state &,double & val
   static int icount=0;
   icount++;
   //cout<<"COUNT="<<icount<<endl;
-  if(true and not loglag){
+  if(false and not loglag){
     ofstream os("ess_test.dat");
     for(int iwin=Nwin-best_nwin-burn_windows;iwin<Nwin;iwin++){
       for(int i=0;i<int(width/nevery);i++){
@@ -413,18 +413,19 @@ pair<double,int> chain::report_effective_samples(vector< bool (*)(const state &,
 
   int i=1;
 
-  static int ic=0;
-  ic++;
-  int icstop=200;
-  if(ic>icstop)for(auto feature:features){
-    onefeature[0]=feature;
-    compute_effective_samples(onefeature, ess, nwin, width, nevery, burn, false);
-    cout<<"Par "<<i<<": ess="<<ess<<"  useful chain length is: "<<width*nwin<<" autocorrlen="<<width*nwin/ess<<endl;
-    i++;
-  }
+  //static int ic=0;
+  //ic++;
+  //int icstop=200;
+  //if(ic>icstop)for(auto feature:features){
+  //  onefeature[0]=feature;
+  //  compute_effective_samples(onefeature, ess, nwin, width, nevery, burn, false);
+  //  cout<<"Par "<<i<<": ess="<<ess<<"  useful chain length is: "<<width*nwin<<" autocorrlen="<<width*nwin/ess<<endl;
+  //  i++;
+  //}
   compute_effective_samples(features, ess, nwin, width, nevery, burn, true,0,1.1);
   cout<<"Over "<<features.size()<<" pars: ess="<<ess<<"  useful chain length is: "<<width*nwin<<" autocorrlen="<<width*nwin/ess<<endl;
-  if(ic>icstop)exit(0);
+  //if(ic>icstop)exit(0);
+
   return make_pair(ess,width*nwin);
 }
 
@@ -1229,12 +1230,6 @@ void parallel_tempering_chains::step(){
   //diagnostics and steering:
   icount++;
 
-  //cout<<"taco "<<Nsize<<"  "<<Ninit<<endl;
-  if(icount%20000==0){
-    cout<<"Effective sample size test"<<endl;
-    chains[0].report_effective_samples(1);
-  } 
-  
   if(icount>=ievidbin){
     double evidence=0;
     for(int i=0;i<Ntemps-1;i++){
