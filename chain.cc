@@ -86,7 +86,7 @@ void chain::inNsigma(int Nsigma,vector<int> & indicies,int nburn){
 
 //A routine for processing chain history to estimate autocorrelation of
 //windowed chain segments
-void chain::compute_autocorr_windows(bool (*feature)(const state &, double & value),vector< vector<double> >&nums,vector< vector<double> >&denoms,vector<int>&outwindows,vector<int>&outlags,int width,int nevery,int burn_windows, bool loglag, int max_lag, double dlag){
+void chain::compute_autocovar_windows(bool (*feature)(const state &, double & value),vector< vector<double> >&covar,vector< vector<double> >&means,vector< vector <int> >&counts,vector<int>&outwindows,vector<int>&outlags,int width,int nevery,int burn_windows, bool loglag, int max_lag, double dlag){
   //inputs:
   //  feature         function which returns a feature value from a state.
   //  width           (>1)width in steps of each window
@@ -96,26 +96,37 @@ void chain::compute_autocorr_windows(bool (*feature)(const state &, double & val
   //  dlag            (>=1.01) factor for logarithmic spacing of lag windows
   //  max_lag         (<=burn_windows) maxiumum lag, in number of window widths
   //outputs:
-  //  nums            [Nwindow][Nlag] vector array of partial numerators
-  //  denoms          [Nwindow][Nlag] vector array of partial denomenators
+  //  covar           [Nwin][Nlag] lag covariance covar[iwin][0] is variance
+  //  denoms          [Nwin][Nlag] vector array of partial denomenators
+  //  means           [Nwin][Nlag] Array of per-window feature means. 
+  //  counts          [Nwin][Nlag] Number of samples included.
   //  outwindows      [Nwin+1] window start index labels for the output rows
   //  outlags         [Nlag] lag-size labels for the output columns 
   //
-  // Then to compute rho(lag) for some set of windows:
+  // Then to compute rho(lag) for each window:
   //
-  //                Sum[nums[iwin,lag],{iwin in set}]
-  //    rho(lag) = -----------------------------------
-  //               Sum[denoms[iwin,lag],{iwin in set}]
+  //                Sum[covar[iwin,lag] + (avg-avg[iwin,lag])^2,{iwin in set}]
+  //    rho(lag) = ----------------------------------------------------------
+  //                  Sum[covar[iwin,0] + (avg-avg[iwin,0])^2,{iwin in set}]
   //
-  //               Sum[ ( f(i)-favg )*( f(i+lag)-favg ) ]
-  //             = --------------------------------------
-  //                 Sum[ ( f(i)-favg )*( f(i)-favg ) ]
+  //                    Sum[ ( f(i)-avg[iwin,lag] )*( f(i-lag)-avg[iwin,lag] ) ]
+  // covar[iwin,lag] = ---------------------------------------------------------
+  //                                           count
   //
-  // where in the last line, the sum and avg is over all the points in the set
-  // of windows.
+  //   avg[iwin,lag] = Sum[f(i)+f(i-lag)]/2/count
+  //
+  // where in the last lines, the sum and avg is over all the points in iwin,
+  // and, for simplicity, we have left out weighting by count[iwin,lag] in the
+  // expression for rho.  It is not obvious, but happens to be true, that the
+  // particular form of mean given in the last line allows the covariances to
+  // be simply combined as in the first line.
   //
   // Notes:
-  //   -lags are be approximately logarithmically spaced
+  //   -length of averages will be Nwin+max_lag, with first "window" segment
+  //    mean at averages[max_lag], and the earlier ones corresponding to the
+  //    buffer windows
+  //   -Each window variance is w.r.t its avg in averages[max_lag+iwin] 
+  //   -if (loglag==true) lags are approximately logarithmically spaced 
   //   -for meaningful results need max_lag>=burn_windows
   //   -last entry for outwindows be next value, for use in sums
   //   -windows are aligned to end at latest step
@@ -126,7 +137,6 @@ void chain::compute_autocorr_windows(bool (*feature)(const state &, double & val
   //   -this is why denoms may depend on lag
   //   -it will probably be necessary to replace these "feature" functions with
   //    some kind of class objects, probably to be defined in states.hh
-  //cout<<"Enter compute_autocorr_windows"<<endl;
   
   if(width<=1)width=2;
   if(nevery<1)nevery=1;
@@ -149,7 +159,6 @@ void chain::compute_autocorr_windows(bool (*feature)(const state &, double & val
     //Nlag=swidth*burn_windows-1;
   //}
   //if(Nlag<0)Nlag=0;
-  //cout<<"ncount,Nwin,Bwin,Nlag:"<<ncount<<" "<<Nwin<<" "<<burn_windows<<" "<<Nlag<<endl;
   
   //set up output grid
   outwindows.resize(Nwin+1);
@@ -159,6 +168,7 @@ void chain::compute_autocorr_windows(bool (*feature)(const state &, double & val
   if(loglag){
     //logarithmic
     outlags.resize(0);
+    outlags.push_back(0);
     double fac=1;
     int idx=1;
     while(idx<max_lag*swidth){
@@ -173,58 +183,65 @@ void chain::compute_autocorr_windows(bool (*feature)(const state &, double & val
     Nlag=outlags.size();
   } else {
     //linear
-    Nlag=swidth*burn_windows-1;
+    Nlag=swidth*burn_windows+1;
     outlags.resize(Nlag);
-    for(int i=0;i<Nlag;i++)outlags[i]=nevery*(i+1);
+    for(int i=0;i<Nlag;i++)outlags[i]=nevery*i;
   }
-  nums.assign(Nwin,vector<double>(Nlag,0));
-  denoms.assign(Nwin,vector<double>(Nlag,0));
+  covar.assign(Nwin,vector<double>(Nlag,0));
+  means.assign(Nwin,vector<double>(Nlag,0));
+  counts.assign(Nwin,vector<int>(Nlag,0));
+  //cout<<"ncount,Nwin,Bwin,Nlag:"<<ncount<<" "<<Nwin<<" "<<burn_windows<<" "<<Nlag<<endl;
 
-  //compute feature average over the relevant data range
-  vector<double>averages(Nwin+max_lag);
-  for(int k=0;k<Nwin+max_lag;k++){
-    double sum=0;
-    int count=0;
-    for(int i=istart-width*max_lag;i<istart+Nwin*width;i+=nevery){
-      double fi;
-      if((*feature)(getState(i),fi)){
-	sum+=fi;
-	count++;
-      }
-    }
-    averages[k]=sum/count;;
-  }
-  //cout<<"computed averages"<<endl;
-     
   //populate output vectors
   for(int k=0;k<Nwin;k++){
-    //compute the relevant average:
-    double sum=0;
-    for(int ik=k;ik<=k+max_lag;ik++)sum+=averages[ik];
-    double favg=sum/(max_lag+1);
-    //cout<<"iwin="<<k<<" favg="<<favg<<endl;
+    //cout<<"k="<<k<<endl;
+    double xsum=0;
+    double xxsum=0;
+    //We hold on to the zero-lag results
+    vector<double>f(swidth,0);
+    vector<bool>ok(swidth,false);
     for(int i=0;i<swidth;i++){
-      double fi;
       int idx=outwindows[k]+i*nevery;
-      if(not(*feature)(getState(idx),fi))continue;
-      //Thought: for disjoint parameter spaces, feature function may throw an exception to be caught. The we wouldn't count those...
-      double df=fi-favg;
-      for(int j=0;j<Nlag;j++){
-	int ilag=outlags[j];
-	double filag;
-	int idx=outwindows[k]+i*nevery-ilag;
-	if((*feature)(getState(idx),filag)){
-	  //if(j==0)cout<<"k,j,i,idx;df,dflag"<<k<<" "<<j<<"("<<ilag<<")"<<" "<<i<<" "<<idx<<"; "<<df<<" "<<filag-favg<<endl;
-	  //if(j==Nlag-1)cout<<"k,j,i,idx;df,dflag"<<k<<" "<<j<<"("<<ilag<<")"<<" "<<i<<" "<<idx<<";                       "<<df<<" "<<filag-favg<<endl;
-	  nums[k][j]+=df*(filag-favg);
-	  denoms[k][j]+=df*df;
-	}
+      //cout<<"idx="<<idx<<endl;
+      //state s=getState(idx);
+      //double fi;
+      //cout<<"state="<<s.show()<<endl;      
+      ok[i]=(*feature)(getState(idx),f[i]);
+      //bool okay;
+      //okay=(*feature)(s,fi);
+      //cout<<"okay="<<okay<<endl;
+      //ok[i]=okay;
+      //cout<<"fi="<<fi<<endl;
+      //f[i]=fi;
+      //cout<<"..."<<endl;
+      if(ok[i]){
+	xsum+=f[i];
+	xxsum+=f[i]*f[i];
+	counts[k][0]++;
       }
     }
-    //for(int j=0;j<Nlag;j++)cout<<"lag="<<outlags[j]<<" "<<nums[k][j]<<" "<<denoms[k][j]<<endl;
+    means[k][0]=xsum/counts[k][0];
+    covar[k][0]=xxsum/counts[k][0]-means[k][0]*means[k][0];
+    for(int j=1;j<Nlag;j++){
+      int ilag=outlags[j];
+      xsum=0;
+      xxsum=0;
+      for(int i=0;i<swidth;i++){
+	double fi;
+	int idx=outwindows[k]+i*nevery-ilag;
+	//cout<<"idx="<<idx<<endl;
+	//cout<<"state="<<getState(idx).show()<<endl;      
+	bool oklag=(*feature)(getState(idx),fi);
+	if(oklag and ok[i]){
+	  xsum+=(fi+f[i]);
+	  xxsum+=fi*f[i];
+	  counts[k][j]++;
+	}
+      }
+      means[k][j]=xsum/counts[k][j]/2; //this is the avg of mean and lagged-mean
+      covar[k][j]=xxsum/counts[k][j]-means[k][j]*means[k][j];//this equals covar wrt above mean
+    }
   }
-  
-  //cout<<"finished"<<endl;
 }
 
 //Estimate effective number of samples for some feature of the state samples
@@ -240,7 +257,7 @@ void chain::compute_effective_samples(vector<bool (*)(const state &,double & val
   //  effSampSize     the estimate for effective sample size     
   //  best_nwin       the number of windows which optimized effSampSize
   //
-  //  This routine uses compute_autocorr_windows to compute autocorrelation
+  //  This routine uses compute_covar_windows to compute autocorrelation
   //  lenghts for the state feature functions provided.  Then, downsampling
   //  by this length, computes the effective number of samples for each
   //  feature, taking the minium of the set.  The routine does this repeatedly,
@@ -252,21 +269,23 @@ void chain::compute_effective_samples(vector<bool (*)(const state &,double & val
   //
   // Notes:
   //   -the autocorrlength over best_nwin is ac_len=width*best_nwin/effSampSize
-  //   -See also notes for compute_autocorr_windows
+  //   -See also notes for compute_autocovar_windows
     
   
   //cout<<"Enter compute_effective_samples"<<endl;
   int nf=features.size();
   cout<<"nf="<<nf<<endl;
-  vector< vector< vector<double> > > nums(nf);
-  vector< vector< vector<double> > > denoms(nf);
+  vector< vector< vector<double> > > covar(nf);
+  vector< vector< vector<double> > > means(nf);
+  vector< vector< vector< int > > >counts(nf);
   //vector<double>esses(nf);
   double essi;
   vector<double> esses(nf),best_esses(nf);
+  vector<double> best_means(nf);
   vector<int>windows;
   vector<int>lags;
   for(int i=0;i<nf;i++)
-    compute_autocorr_windows(features[i],nums[i],denoms[i],windows,lags,width,nevery,burn_windows, loglag, max_lag, dlag);
+    compute_autocovar_windows(features[i],covar[i],means[i],counts[i],windows,lags,width,nevery,burn_windows, loglag, max_lag, dlag);
   int Nwin=windows.size()-1;
   int Nlag=lags.size();
   cout<<"ESS: Nwin="<<Nwin<<" Nlag="<<Nlag<<endl;
@@ -280,19 +299,30 @@ void chain::compute_effective_samples(vector<bool (*)(const state &,double & val
     //We compute an naive autocorrelation length
     // ac_len =  1 + 2*sum( corr[i] )
     double ess=1e100;
+    vector<double> feature_means(nf);
     for(int ifeat=0;ifeat<nf;ifeat++){
+      //Compute sample mean.
+      double sum=0;
+      for(int i=Nwin-nwin;i<Nwin;i++)sum+=means[ifeat][i][0];
+      double mean=sum/nwin;
       int last_lag=0;
       double ac_len=1.0;
       double lastcorr=1;
       double dacl=0;
-      for(int ilag=0;ilag<Nlag;ilag++){
+      for(int ilag=1;ilag<Nlag;ilag++){
 	int lag=lags[ilag];
 	//compute the correlation for each lag
 	double num=0;
 	double denom=0;
 	for(int iwin=Nwin-nwin;iwin<Nwin;iwin++){
-	  num+=nums[ifeat][iwin][ilag];
-	  denom+=denoms[ifeat][iwin][ilag];
+	  double dmean=mean-means[ifeat][iwin][ilag];
+	  double dmean0=mean-means[ifeat][iwin][0];
+	  double cov=covar[ifeat][iwin][ilag]+dmean*dmean;
+	  double var=covar[ifeat][iwin][0]+dmean0*dmean0;
+	  int c=counts[ifeat][iwin][ilag];
+	  num   += cov*c;
+	  denom += var*c;
+	  //cout<<nwin<<" "<<ifeat<<" "<<ilag<<" "<<iwin<<": count,mean,dmean,num,den="<<c<<", "<<mean<<", "<<dmean<<", "<<num<<", "<<denom<<endl;
 	}
 	//cout<<"num,denom:"<<num<<" "<<denom<<endl;
 	double corr=num/denom;
@@ -324,12 +354,14 @@ void chain::compute_effective_samples(vector<bool (*)(const state &,double & val
 	ess=essi;
       }
       esses[ifeat]=essi;
+      feature_means[ifeat]=mean;
       //cout<<"nwin,ifeat="<<nwin<<","<<ifeat<<":  -> "<<essi<<endl;
     }
     if(ess>ess_max){
       ess_max=ess;
       nwin_max=nwin;
       best_esses=esses;
+      best_means=feature_means;
     }
   }
   best_nwin=nwin_max;
@@ -339,12 +371,15 @@ void chain::compute_effective_samples(vector<bool (*)(const state &,double & val
   cout<<"len="<<nwin_max<<"*"<<width<<": ";
   for(auto ess : best_esses)cout<<" "<<ess;
   cout<<endl;
+  cout<<"   means = ";
+  for(auto val : best_means)cout<<" "<<val;
+  cout<<endl;
   
   //For testing, we dump everything and quit
   static int icount=0;
   icount++;
   //cout<<"COUNT="<<icount<<endl;
-  if(false and icount>280 and not loglag){
+  if(true and not loglag){
     ofstream os("ess_test.dat");
     for(int iwin=Nwin-best_nwin-burn_windows;iwin<Nwin;iwin++){
       for(int i=0;i<int(width/nevery);i++){
@@ -360,7 +395,7 @@ void chain::compute_effective_samples(vector<bool (*)(const state &,double & val
     cout<<"ess="<<ess_max<<endl;
     cout<<"burnfrac="<<burn_windows/(1.0*best_nwin+burn_windows)<<endl;
     cout<<"Quitting for test!"<<endl;
-    exit(0);
+    //exit(0);
   }
 };
 
@@ -378,14 +413,18 @@ pair<double,int> chain::report_effective_samples(vector< bool (*)(const state &,
 
   int i=1;
 
-  if(false)for(auto feature:features){
+  static int ic=0;
+  ic++;
+  int icstop=200;
+  if(ic>icstop)for(auto feature:features){
     onefeature[0]=feature;
-    compute_effective_samples(onefeature, ess, nwin, width, nevery, burn, true,0,1.1);
+    compute_effective_samples(onefeature, ess, nwin, width, nevery, burn, false);
     cout<<"Par "<<i<<": ess="<<ess<<"  useful chain length is: "<<width*nwin<<" autocorrlen="<<width*nwin/ess<<endl;
     i++;
   }
   compute_effective_samples(features, ess, nwin, width, nevery, burn, true,0,1.1);
   cout<<"Over "<<features.size()<<" pars: ess="<<ess<<"  useful chain length is: "<<width*nwin<<" autocorrlen="<<width*nwin/ess<<endl;
+  if(ic>icstop)exit(0);
   return make_pair(ess,width*nwin);
 }
 
@@ -1193,7 +1232,7 @@ void parallel_tempering_chains::step(){
   //cout<<"taco "<<Nsize<<"  "<<Ninit<<endl;
   if(icount%20000==0){
     cout<<"Effective sample size test"<<endl;
-    chains[0].report_effective_samples();
+    chains[0].report_effective_samples(1);
   } 
   
   if(icount>=ievidbin){

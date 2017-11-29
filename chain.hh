@@ -121,7 +121,7 @@ public:
   int get_id(){return id;};
   //Analysis
   ///This routine computes data for autocorrelation of some feature of states
-  virtual void compute_autocorr_windows(bool (*feature)(const state &,double&value),vector< vector<double> >&nums,vector< vector<double> >&denoms,vector<int>&outwindows,vector<int>&outlags,int width=8192,int nevery=1,int burn_windows=1, bool loglag=false, int max_lag=0, double dlag=sqrt(2.0));
+  virtual void compute_autocovar_windows(bool (*feature)(const state &,double&value),vector< vector<double> >&covar,vector< vector<double> >&mean,vector< vector <int> >&counts,vector<int>&outwindows,vector<int>&outlags,int width=8192,int nevery=1,int burn_windows=1, bool loglag=false, int max_lag=0, double dlag=sqrt(2.0));
   ///This routine computes an effect number of chain samples for some feature
   virtual void compute_effective_samples(vector< bool (*)(const state &,double &value) >&features, double & effSampSize, int &best_nwin ,int width=8192,int nevery=1,int burn_windows=1, bool loglag=false, int max_lag=0, double dlag=sqrt(2.0));
   ///Useful interface
