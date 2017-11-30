@@ -29,6 +29,7 @@ private:
   int checkp_at_step;
   double checkp_at_time;
   double start_time;
+  double ess_stop;
   string initialization_file;
 public:
   static void read_covariance(const string &file,const stateSpace *ss,Eigen::MatrixXd &covar);

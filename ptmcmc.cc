@@ -341,7 +341,9 @@ void ptmcmc_sampler::addOptions(Options &opt,const string &prefix){
   addOption("de_reduce_gamma","Differential Evolution reduce gamma parameter by some factor from nominal value. Default=1.","1");
   addOption("de_mixing","Differential-Evolution support mixing of parallel chains.");
   addOption("de_Tmix","Differential-Evolution degree to encourage mixing info from different temps.(default=300)","300");
-  addOption("chain_init_file","Specify chain file from which to draw initializtion points, rather than from prior.","");
+  addOption("chain_init_file","Specify chain file from which to draw initializtion points, rather than from prior.","");  
+  addOption("chain_ess_stop","Stop MCMC sampling the first time the specified effective sample size is reached. (default never)","-1.0");
+  
 };
 
 void ptmcmc_sampler::processOptions(){
@@ -372,6 +374,7 @@ void ptmcmc_sampler::processOptions(){
   *optValue("pt_dump_n")>>dump_n;if(dump_n>Nptc||dump_n<0)dump_n=Nptc;  
   *optValue("pt_stop_evid_err")>>pt_stop_evid_err;  
   *optValue("chain_init_file")>>initialization_file;
+  *optValue("chain_ess_stop")>>ess_stop;
   if(checkp_at_time>0)start_time=omp_get_wtime();
 };
 
@@ -489,7 +492,11 @@ int ptmcmc_sampler::run(const string & base, int ic){
       
       if(0==istep%(Nevery*4)){
 	cout<<"Effective sample size test"<<endl;
-	cc->report_effective_samples();
+	auto ess_len=cc->report_effective_samples();
+	if(ess_stop>0 and ess_len.first>ess_stop){
+	  stop=true;
+	  cout<<"ptmcmc_sampler::run: Stopping based on chain_ess_stop Effective Sample Size criterion."<<endl; 
+	}	
       }
     }
     if(stop)break;

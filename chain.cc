@@ -431,7 +431,7 @@ pair<double,int> chain::report_effective_samples(vector< bool (*)(const state &,
 
 //Report effective samples
 //This is a testing function for developing the effective samples code
-void chain::report_effective_samples(int imax){
+pair<double,int>  chain::report_effective_samples(int imax){
   int width=40000;
   while(width<getStep()*0.05)width*=2;
   int every=100;
@@ -524,7 +524,7 @@ void chain::report_effective_samples(int imax){
     cout<<"chain::report_effective_samples(): Currently only supports the first 20 params, by default."<<endl;
   }
   
-  report_effective_samples(features,width,every);
+  return report_effective_samples(features,width,every);
 };
 
 
