@@ -679,7 +679,8 @@ void MH_chain::initialize(uint n){
     state s=lprior->drawSample(*rng);
     int icnt=0,icntmax=1000;
     //while(s.invalid()&&icnt<2*icntmax){
-    while(s.invalid()){
+    double slike;
+    while(s.invalid() or (slike=llikelihood->evaluate_log(s))<-1e100){
       icnt++;
       if(icnt>=icntmax)
 	cout<<"MH_chain::initialize: Having trouble drawing a valid state.  Latest state:"<<s.show()<<"...was invalid in space:"<<s.getSpace()->show()<<endl;

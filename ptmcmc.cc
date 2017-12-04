@@ -308,7 +308,7 @@ state ptmcmc_sampler::getState(){
 void ptmcmc_sampler::addOptions(Options &opt,const string &prefix){
   bayes_sampler::addOptions(opt,prefix);
   addOption("checkp_at_step","Step at which to checkpoint and stop","-1");
-  addOption("checkp_at_time","Walltime at which to checkpoint and stop","-1");
+  addOption("checkp_at_time","Elapsed walltime (hours) after which to checkpoint and stop","-1");
   addOption("restart_dir","Directory with checkpoint data to restart from.","");
   addOption("nevery","Frequency to dump chain info. Default=5000.","5000");
   addOption("save_every","Frequency to store chain info. Default=1.","1");
@@ -468,7 +468,7 @@ int ptmcmc_sampler::run(const string & base, int ic){
   for(istep=0;istep<=chain_Nstep;istep++){//istep is member variable to facilitate checkpointing
     if(restarting)restart(restart_dir);
       
-    if(istep==checkp_at_step or ( checkp_at_time>0 and (omp_get_wtime()-start_time) > checkp_at_time ) ){//checkpointing test
+    if(istep==checkp_at_step or ( checkp_at_time>0 and (omp_get_wtime()-start_time)/3600 > checkp_at_time ) ){//checkpointing test
       checkpoint(".");
       exit(0);
     }
