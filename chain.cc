@@ -647,25 +647,48 @@ void MH_chain::initialize(uint n, string initialization_file){
     if(count>=startline-1)break;
   }
   int icnt=0;
+  cout<<"Reading initial samples from file: "<<initialization_file<<endl;
   while(getline(inifile,line)){
     istringstream line_ss(line);
     int num;
     double llike,lpost,acc;
     string typ;
+    //cout<<line<<endl;
     if(line.compare(0,1,"#")==0)continue;
     count++;
     line_ss>>num;
     if(num<0)continue;
-    if(not rng->Next()>(nlines-count)/(double)(Ninit-icnt))continue;       // draw with appropriate probability from the remaining lines
+    if(not rng->Next()>(nlines-count)/(double)(Ninit-1-icnt))continue;       // draw with appropriate probability from the remaining lines
     //if we make it this far then we draw the line as a state
     line_ss>>lpost>>llike>>acc>>typ;
     for(auto &par:pars)line_ss>>par;
     state s=state(space,pars);
-    Nhist=0;
-    add_state(s,llike,lpost);
-    icnt++;
+    double slike=-1e100;
+    double sprior=-1e100;
+    //cout<<"state="<<s.show()<<endl;
+    if(not s.invalid()){
+      //cout<<"=valid"<<endl;
+      if( (sprior=lprior->evaluate_log(s))>-1e9){
+	//Note: we need not trust the llike/lpost from the file
+	if( (slike=llikelihood->evaluate_log(s))>-1e9){
+	  //cout<<"ADDED state llike="<<slike<<endl;
+	  Nhist=0;
+	  add_state(s,slike,sprior+slike);
+	  icnt++;
+	}else{
+	  //cout<<"rejected state llike="<<slike<<endl;
+	}
+      }else{
+	//cout<<"rejected state lprior="<<sprior<<endl;
+      }
+    }else{
+      //cout<<"rejected state as invalid"<<endl;
+    }
   }
+  //cout<<"Ninit="<<Ninit<<endl;
   Ninit=icnt;//Should be the same unless file was short.
+  //cout<<"icnt="<<icnt<<endl;
+  //cout<<"Ninit="<<Ninit<<endl;
   Nhist=0;
 }
 
@@ -929,8 +952,8 @@ void MH_chain::dumpChain(ostream &os,int Nburn,int ievery){
     for(int i=Nburn;i<Nhist;i+=ievery){
       int idx=Ninit+i;
       if(i>=0)idx=get_state_idx(i);
-      os<<i<<" "<<lposts[idx]<<" "<<llikes[idx]<<" "<<acceptance_ratio[idx]<<" "<<types[idx]<<": ";
       //cout<<"i="<<i<<" "<<idx<<"=idx<states.size()="<<states.size()<<"?"<<endl;//debug
+      os<<i<<" "<<lposts[idx]<<" "<<llikes[idx]<<" "<<acceptance_ratio[idx]<<" "<<types[idx]<<": ";
       vector<double>pars=states[idx].get_params_vector();
       //cout<<"state:"<<states[i].show()<<endl;
       for(int j=0;j<np-1;j++)os<<pars[j]<<" ";
