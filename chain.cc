@@ -621,11 +621,22 @@ void MH_chain::reserve(int nmore){//If you know how long you are going to run, i
   };
 
 void MH_chain::initialize(uint n, string initialization_file){
+//Initialize chain from an file in the format of a chain output file
+//Generally we presume that the input file is consistent with a unit-temperature
+//chain.  If this chain's temp isnot one, then we mix in prior samples as well
+//so that the initial distribution is not too narrow.  Clearly at unit-temp
+//we want all samples from the file, and at zero inverse temp we want all 
+//samples from the prior.  We linearly interpolate the intervening mix.
+//We assume the order is not interesting. We read first from the file, then
+//supplement from the prior.
+
   if(Nhist>0){
     cout<<"MH_chain::initialize: Cannot re-initialize."<<endl;
     exit(1);
   }
   Ninit=n;
+  int n_file=n*invtemp;
+  
   ifstream inifile(initialization_file);
   string line;
   const stateSpace *space=lprior->get_space();
@@ -658,7 +669,7 @@ void MH_chain::initialize(uint n, string initialization_file){
     count++;
     line_ss>>num;
     if(num<0)continue;
-    if(not rng->Next()>(nlines-count)/(double)(Ninit-1-icnt))continue;       // draw with appropriate probability from the remaining lines
+    if(not rng->Next()>(nlines-count)/(double)(n-1-icnt))continue;       // draw with appropriate probability from the remaining lines
     //if we make it this far then we draw the line as a state
     line_ss>>lpost>>llike>>acc>>typ;
     for(auto &par:pars)line_ss>>par;
@@ -686,9 +697,23 @@ void MH_chain::initialize(uint n, string initialization_file){
     }
   }
   //cout<<"Ninit="<<Ninit<<endl;
-  Ninit=icnt;//Should be the same unless file was short.
-  //cout<<"icnt="<<icnt<<endl;
-  //cout<<"Ninit="<<Ninit<<endl;
+  //Ninit=icnt;//Should be the same unless file was short.
+  //Now (if needed) add points from the prior
+  for(uint i=0;i<Ninit-icnt;i++){
+    state s=lprior->drawSample(*rng);
+    int icnt=0,icntmax=1000;
+    //while(s.invalid()&&icnt<2*icntmax){
+    double slike;
+    while(s.invalid() or (slike=llikelihood->evaluate_log(s))<-1e100){
+      icnt++;
+      if(icnt>=icntmax)
+	cout<<"MH_chain::initialize: Having trouble drawing a valid state.  Latest state:"<<s.show()<<"...was invalid in space:"<<s.getSpace()->show()<<endl;
+      s=lprior->drawSample(*rng);
+    }
+    //cout <<"starting with Nsize="<<Nsize<<endl;//debug
+    Nhist=0;//As long as Nhist remains zero we will add the state regardless of add_every_N
+    add_state(s);
+  }
   Nhist=0;
 }
 
@@ -1086,11 +1111,10 @@ void parallel_tempering_chains::initialize( probability_function *log_likelihood
   for(int i=0;i<Ntemps;i++){
     ostringstream oss;oss<<"PTchain: initializing chain "<<i<<endl;
     cout<<oss.str();
+    chains[i].invtemp=1/temps[i];
     if(initialization_file!="")chains[i].initialize(n,initialization_file);
     else chains[i].initialize(n);
       
-    // chains[i].resetTemp(1/temps[i]);
-    chains[i].invtemp=1/temps[i];
     instances[i]=i;
     instance_starts[i]=chains[i].size();
     //cout<<"initialized chain "<<i<<" at "<<&chains[i]<<endl;
