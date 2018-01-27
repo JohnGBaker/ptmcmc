@@ -1111,10 +1111,11 @@ void parallel_tempering_chains::initialize( probability_function *log_likelihood
   for(int i=0;i<Ntemps;i++){
     ostringstream oss;oss<<"PTchain: initializing chain "<<i<<endl;
     cout<<oss.str();
-    chains[i].invtemp=1/temps[i];
+    //chains[i].invtemp=1/temps[i];
     if(initialization_file!="")chains[i].initialize(n,initialization_file);
     else chains[i].initialize(n);
       
+    chains[i].invtemp=1/temps[i];
     instances[i]=i;
     instance_starts[i]=chains[i].size();
     //cout<<"initialized chain "<<i<<" at "<<&chains[i]<<endl;

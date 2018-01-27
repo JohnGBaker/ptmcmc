@@ -58,7 +58,7 @@ proposal_distribution* ptmcmc_sampler::select_proposal(){
     (*optValue("de_Tmix"))>>tmixfac;
     gauss_temp_scaled=optSet("gauss_temp_scaled");
     de_mixing=optSet("de_mixing");
-    cprop=new_proposal_distribution_guts(Npar, chain_Ninit, chain_prior, &scales, proposal_option, SpecNinit, tmixfac, reduce_gamma_by, de_eps, gauss_1d_frac,gauss_draw_frac,cov_draw_frac,gauss_temp_scaled, de_mixing,covariance_file);
+    cprop=new_proposal_distribution_guts(Npar, chain_Ninit, chain_prior, &scales, proposal_option, SpecNinit, tmixfac, reduce_gamma_by, de_eps, gauss_1d_frac,de_mixing,gauss_draw_frac,cov_draw_frac,gauss_temp_scaled,covariance_file);
     //cprop=new_proposal_distribution(Npar, chain_Ninit, opt, chain_prior, scales);
     cout<<"Proposal distribution is:\n"<<cprop->show()<<endl;
     have_cprop=true;
