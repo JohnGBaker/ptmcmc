@@ -41,6 +41,12 @@ protected:
   void setPrior(const sampleable_probability_function* prior){
     nativePrior.reset(prior);have_prior=true;
   };
+  ///set up with null parameter space
+  void setNoParams(){
+    nativeSpace=stateSpace(0);
+    setPrior(new sampleable_probability_function(&nativeSpace));//dummy
+  }
+
   ///This assert checks that the object is already set up.
   bool checkSetup(bool quiet=false)const{
     if((!quiet)&&!have_setup){
