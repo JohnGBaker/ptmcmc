@@ -1093,6 +1093,7 @@ void parallel_tempering_chains::restart(string path){
   readDoubleVector(os, up_frac);
   int n;
   readInt(os,n);
+  evidence_records_dim=n;
   total_evidence_records.resize(n);
   for(int i=0;i<n;i++)readDoubleVector(os, total_evidence_records[i]);
   readInt(os, evidence_count);

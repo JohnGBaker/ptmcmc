@@ -107,10 +107,13 @@ x,y=get_xydata(data,0,c0,10**d0,10**s0)
 scat = plt.scatter(x, y, s=1)
 
 axcolor = 'lightgoldenrodyellow'
-axstart = plt.axes([0.25, 0.1, 0.65, 0.03], facecolor=axcolor)
-axdens = plt.axes([0.25, 0.15, 0.65, 0.03], facecolor=axcolor)
+#axstart = plt.axes([0.25, 0.1, 0.65, 0.03], facecolor=axcolor)
+#axdens = plt.axes([0.25, 0.15, 0.65, 0.03], facecolor=axcolor)
+axstart = plt.axes([0.25, 0.1, 0.65, 0.03])
+axdens = plt.axes([0.25, 0.15, 0.65, 0.03])
 height=(len(parnames)-1)*0.05
-rax = plt.axes([0.025, 0.5-height/2, 0.1, height], facecolor=axcolor)
+#rax = plt.axes([0.025, 0.5-height/2, 0.1, height], facecolor=axcolor)
+rax = plt.axes([0.025, 0.5-height/2, 0.1, height])
 resetax = plt.axes([0.8, 0.025, 0.1, 0.04])
 
 ilogS=(math.log10(N*dSdN))

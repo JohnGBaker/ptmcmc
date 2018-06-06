@@ -233,7 +233,7 @@ class parallel_tempering_chains: public chain{
   vector<double> temps;
   vector<double> log_eratio_up,log_eratio_down,tryrate,swaprate,up_frac;
   vector<vector<double> >total_evidence_records;
-  int evidence_count,evidence_records_dim;
+  int evidence_count,evidence_records_dim;//evidence_records_dim is redundant with evidence_records_size TODO.
   double best_evidence_stderr;
   bool do_evolve_temps;
   double evolve_temp_rate,evolve_temp_lpost_cut;
