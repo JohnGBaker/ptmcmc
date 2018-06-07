@@ -5,7 +5,7 @@ LIB ?= ${CURDIR}/lib
 INCLUDE ?= ${CURDIR}/include
 ifeq ($(CFLAGS),)
 	CFLAGS = -fopenmp -O2 -g
-	CXX = $(shell which g++)
+	CXX = g++
 endif
 
 
