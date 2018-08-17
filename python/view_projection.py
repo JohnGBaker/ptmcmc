@@ -62,8 +62,8 @@ def get_xydata(data,i,j,dens,samps):
 ##################
 
 def update(val):
-    cx=2+parnames.index(radioX.value_selected)
-    cy=2+parnames.index(radioY.value_selected)
+    cx=1+parnames.index(radioX.value_selected)
+    cy=1+parnames.index(radioY.value_selected)
     print("index->",cx,cy)
     start = int(10**sstart.val)
     samps = int(10**sdens.val)
@@ -95,7 +95,7 @@ print ("data[1]=",data[1])
 maxPost=max(data[:,1])
 data=np.delete(data,[2,3,4,len(data[0])-1],1)
 print ("data[1]=",data[1])
-parnames=get_par_names(chainname)
+parnames=["post",]+get_par_names(chainname)
 print (parnames)
 
 fig, ax = plt.subplots()
@@ -109,13 +109,17 @@ x,y=get_xydata(data,2+cx0,2+cy0,10**d0,10**s0)
 scat = plt.scatter(x, y, s=1)
 
 axcolor = 'lightgoldenrodyellow'
-axstart = plt.axes([0.35, 0.1, 0.55, 0.03], facecolor=axcolor)
-axdens = plt.axes([0.35, 0.15, 0.55, 0.03], facecolor=axcolor)
+#axstart = plt.axes([0.35, 0.1, 0.55, 0.03], facecolor=axcolor)
+#axdens = plt.axes([0.35, 0.15, 0.55, 0.03], facecolor=axcolor)
+axstart = plt.axes([0.35, 0.1, 0.55, 0.03])
+axdens = plt.axes([0.35, 0.15, 0.55, 0.03])
 height=(len(parnames)-1)*0.05
-rXax = plt.axes([0.025, 0.5-height/2, 0.1, height], facecolor=axcolor)
+#rXax = plt.axes([0.025, 0.5-height/2, 0.1, height], facecolor=axcolor)
+rXax = plt.axes([0.025, 0.5-height/2, 0.1, height])
 rXax.text(0.9, 0.95, "X", transform=rXax.transAxes, fontsize=12,
           verticalalignment='top',horizontalalignment='right')
-rYax = plt.axes([0.15, 0.5-height/2, 0.1, height], facecolor=axcolor)
+#rYax = plt.axes([0.15, 0.5-height/2, 0.1, height], facecolor=axcolor)
+rYax = plt.axes([0.15, 0.5-height/2, 0.1, height])
 rYax.text(0.9, 0.95, "Y", transform=rYax.transAxes, fontsize=12,
           verticalalignment='top',horizontalalignment='right')
 resetax = plt.axes([0.8, 0.025, 0.1, 0.04])

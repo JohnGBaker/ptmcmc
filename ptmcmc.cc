@@ -492,7 +492,7 @@ int ptmcmc_sampler::run(const string & base, int ic){
       
       if(0==istep%(Nevery*4)){
 	cout<<"Effective sample size test"<<endl;
-	auto ess_len=cc->report_effective_samples();
+	auto ess_len=cc->report_effective_samples(-1,save_every*1000,save_every);
 	if(ess_stop>0 and ess_len.first>ess_stop){
 	  stop=true;
 	  cout<<"ptmcmc_sampler::run: Stopping based on chain_ess_stop Effective Sample Size criterion."<<endl; 

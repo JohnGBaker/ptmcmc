@@ -84,8 +84,33 @@ void chain::inNsigma(int Nsigma,vector<int> & indicies,int nburn){
 
 //General chain analysis:
 
-//A routine for processing chain history to estimate autocorrelation of
-//windowed chain segments
+///A routine for processing chain history to estimate autocorrelation of
+///windowed chain segments
+///
+///For some feature function \f$f({\bf x})\f$ over the state space, we will
+///compute the correlation length \f$\rho\f$ over various segments 
+///\f$\mathcal{S}\f$of the chain history data. Given some \f$f\f$, 
+///the correltation length is defined as:
+///\f[
+/// \rho =  1 + 2*\sum_k^{n_{\mathrm{lag}}} \rho(\tau_i)
+///\f]
+///where \f$ \rho(\tau_k) \f$ is the autocorrelation with lag \f$\tau_k\f$
+///computed by
+///\f[
+//    \rho(\tau) = \frac{\sum_{i\in\mathcal{S}}( f(x_i)-\bar f_{\mathcal{S},\tau})( f(x_{i-\tau})-\bar f_{\mathcal{S},\tau})}{\sum_{i\in\mathcal{S}}( f(x_i)-\bar f_{\mathcal{S},\tau})^2}.
+///\f]
+///We define the average symmetrically over the nominal data segment \f$\mathcal{S}\f$ and the lagged segment, specifically
+///\f[
+  //   \bar f_{\mathcal{S},\tau}=\sum_{i\in\mathcal{S}}(f(x_i)+f(x_(i-\tau__)/2/N_{\mathcal{S}}
+///\f]
+//                    Sum[ ( f(i)-avg[iwin,lag] )*( f(i-lag)-avg[iwin,lag] ) ]
+  // covar[iwin,lag] = ---------------------------------------------------------
+  //                                           count
+//                Sum[covar[iwin,lag] + (avg-avg[iwin,lag])^2,{iwin in set}]
+//    \rho(\tau) \= ----------------------------------------------------------
+//                  Sum[covar[iwin,0] + (avg-avg[iwin,0])^2,{iwin in set}]
+///
+///is basednecessary to perform autocorrelation analysis are computed block-wise over a set of window subdomains \f$\mathcal{W}_i\f$ in the step history.  
 void chain::compute_autocovar_windows(bool (*feature)(const state &, double & value),vector< vector<double> >&covar,vector< vector<double> >&means,vector< vector <int> >&counts,vector<int>&outwindows,vector<int>&outlags,int width,int nevery,int burn_windows, bool loglag, int max_lag, double dlag){
   //inputs:
   //  feature         function which returns a feature value from a state.
@@ -242,6 +267,11 @@ void chain::compute_autocovar_windows(bool (*feature)(const state &, double & va
       covar[k][j]=xxsum/counts[k][j]-means[k][j]*means[k][j];//this equals covar wrt above mean
     }
   }
+  //cout<<"autocorr: Nwin,ncount,width,burn ="<<Nwin<<", "<<ncount<<", "<<width<<", "<<burn_windows<<endl;
+  //for(int k=0;k<Nwin;k++){
+  //  cout<<"window k=:"<<k<<endl;
+  //  for(int j=1;j<Nlag;j++)cout<<" "<<j<<" "<<counts[k][j]<<" "<<means[k][j]<<" "<<covar[k][j]<<endl;
+  //}
 }
 
 //Estimate effective number of samples for some feature of the state samples
@@ -257,10 +287,10 @@ void chain::compute_effective_samples(vector<bool (*)(const state &,double & val
   //  effSampSize     the estimate for effective sample size     
   //  best_nwin       the number of windows which optimized effSampSize
   //
-  //  This routine uses compute_covar_windows to compute autocorrelation
+  //  This routine uses compute_autocovar_windows to compute autocorrelation
   //  lenghts for the state feature functions provided.  Then, downsampling
   //  by this length, computes the effective number of samples for each
-  //  feature, taking the minium of the set.  The routine does this repeatedly,
+  //  feature, taking the minimum of the set.  The routine does this repeatedly,
   //  considering a range of possible sample sizes, beginning at the end of the
   //  chain and working backward.  Generally, one expects to find an optimal
   //  effective length which maximizes the effective sample size as correlation
@@ -272,6 +302,9 @@ void chain::compute_effective_samples(vector<bool (*)(const state &,double & val
   //   -See also notes for compute_autocovar_windows
     
   
+  //controls
+  double oversmall_aclen_fac=3.0;
+
   //cout<<"Enter compute_effective_samples"<<endl;
   int nf=features.size();
   //cout<<"nf="<<nf<<endl;
@@ -344,9 +377,10 @@ void chain::compute_effective_samples(vector<bool (*)(const state &,double & val
       //cout<<"nwin,lag,aclen,effss:"<<nwin<<" "<<last_lag<<" "<<ac_len<<" "<<essi<<endl;
       if(ac_len<nevery){
 	//Ignore as spurious any
-	//cout<<"aclen<nevery!: "<<ac_len<<" < "<<nevery<<endl;
+	cout<<"aclen<nevery!: "<<ac_len<<" < "<<nevery<<endl;
         //esses[ifeat]=0;
-	essi=0;
+	//We don't really trust this result, and so instead set ess supposing aclen=nevery*oversmall_aclen_fac
+	essi=nwin*width/oversmall_aclen_fac/nevery;
       }
       // if(esses[ifeat]<ess){
       //ess=esses[ifeat];
@@ -430,11 +464,11 @@ pair<double,int> chain::report_effective_samples(vector< bool (*)(const state &,
 }
 
 //Report effective samples
-//This is a testing function for developing the effective samples code
-pair<double,int>  chain::report_effective_samples(int imax){
-  int width=40000;
+//This is simplified interface producing effective sample estimates for each parameter
+pair<double,int>  chain::report_effective_samples(int imax,int width, int every){
+  //int width=40000;
   while(width<getStep()*0.05)width*=2;
-  int every=100;
+  //int every=100;
   if(imax<0)imax=dim;
   if(imax>dim)imax=dim;
   vector<bool (*)(const state &,double & value)> features;

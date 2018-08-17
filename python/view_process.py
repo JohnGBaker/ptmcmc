@@ -48,6 +48,7 @@ def get_par_names(fname):
 
 def get_xydata(data,i,j,dens,samps):
     d=data[data[:,0]>samps]
+    #d=d[d[:,6]>4]
     Nd=len(d)
     #print("Reduced data len =",Nd)
     every=int(Nd/dens)

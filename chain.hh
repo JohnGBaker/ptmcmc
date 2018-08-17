@@ -127,7 +127,7 @@ public:
   ///Useful interface
   pair<double,int> report_effective_samples(vector< bool (*)(const state &,double & value) > & features,int width=40000, int nevery=100);
   ///Testing
-  pair<double,int>  report_effective_samples(int imax=-1);
+  pair<double,int>  report_effective_samples(int imax=-1,int width=40000, int nevery=100);
 };
 
 
