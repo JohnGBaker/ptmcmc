@@ -360,6 +360,7 @@ void ptmcmc_sampler::processOptions(){
   //parallel_tempering=optSet("pt");
   *optValue("pt")>>Nptc;
   if(Nptc>1)parallel_tempering=true;
+  else parallel_tempering=false;
   *optValue("pt_evolve_rate")>>pt_evolve_rate;
   *optValue("pt_evolve_lpost_cut")>>pt_evolve_lpost_cut;
   *optValue("pt_reboot_rate")>>pt_reboot_rate;
@@ -371,7 +372,9 @@ void ptmcmc_sampler::processOptions(){
   pt_reboot_grad=optSet("pt_reboot_grad");
   *optValue("pt_swap_rate")>>swap_rate;
   *optValue("pt_Tmax")>>Tmax;  
-  *optValue("pt_dump_n")>>dump_n;if(dump_n>Nptc||dump_n<0)dump_n=Nptc;  
+  *optValue("pt_dump_n")>>dump_n;
+  if(dump_n>Nptc||dump_n<0)dump_n=Nptc;
+  if(Nptc==0)dump_n=1;
   *optValue("pt_stop_evid_err")>>pt_stop_evid_err;  
   *optValue("chain_init_file")>>initialization_file;
   *optValue("chain_ess_stop")>>ess_stop;
@@ -391,6 +394,7 @@ void ptmcmc_sampler::setup(int Ninit,bayes_likelihood &llike, const sampleable_p
   chain_prior=&prior;
   chain_llike = &llike;
   have_setup=true;
+  have_cprop=true;
 }
 
 void ptmcmc_sampler::setup(bayes_likelihood &llike, const sampleable_probability_function &prior, int output_precision_){
@@ -486,8 +490,9 @@ int ptmcmc_sampler::run(const string & base, int ic){
 	  stop=true;
 	  cout<<"ptmcmc_sampler::run: Stopping based on pt_stop_evid_err criterion."<<endl; 
 	}	
+      } else {
+	cc->dumpChain(out[0],istep-Nevery+1,Nskip);
       }
-      else cc->dumpChain(out[0],istep-Nevery+1,Nskip);
       cout<<cc->status()<<endl;      
       
       if(0==istep%(Nevery*4)){
