@@ -25,6 +25,42 @@ print(args)
 
 
 #####################################
+#general functions
+
+#make sample names from the most relevant part of the filenames
+def make_short_labels(files):
+    longnames=[os.path.basename(filename) for filename in files]
+    if(len(set(longnames))<len(longnames)):
+        longnames=[os.path.basename(os.path.dirname(os.path.abspath(filename))) for filename in files]
+    si=0;ei=1
+    sgood=True;egood=True
+    if(len(longnames)>1):
+        for c in longnames[0]:
+            #print("sitest",[name[si] for name in longnames])
+            #print("s set:",set([name[si] for name in longnames]))
+            if(sgood and len(set([name[si] for name in longnames]))==1):
+                si+=1
+            else:sgood=False
+            #print("eitest",[name[-ei] for name in longnames])
+            #print("e set:",set([name[-ei] for name in longnames]))
+            if(egood and len(set([name[-ei] for name in longnames]))==1):
+                ei+=1
+            else:egood=False
+            #print("si,ei=",si,ei)
+            if(not (sgood or egood)):break
+    #print([si+ei-len(name) for name in longnames])
+    if(np.min([si+ei-len(name) for name in longnames])<0):
+        si=0
+        ei=1
+    if(ei<=1):
+        sample_labels=[name[si:] for name in longnames]
+    else:
+        sample_labels=[name[si:-(ei-1)] for name in longnames]
+    #print("si/ei:",si,ei)
+    print(sample_labels)
+    return sample_labels
+
+#####################################
 #ptmcmc-specific functions:
 
 #process given filename to get basename and chainfile name
@@ -81,7 +117,7 @@ def get_xydata(data,i,j,dens,samps):
     #d=d[d[:,6]>4]
     Nd=len(d)
     #print("Reduced data len =",Nd)
-    every=int(Nd/dens)
+    every=int(1+Nd/dens)
     #print(Nd,dens,every)
     x=d[::every,i]
     y=d[::every,j]
@@ -91,7 +127,7 @@ def get_xydata(data,i,j,dens,samps):
 ##################
 #Widget functions
 ##################
-
+import matplotlib.patches as mpatches
 
 def update(val):
     #c0=1+allparnames[1:].index(radio.value_selected)
@@ -102,23 +138,23 @@ def update(val):
     ymin=1e100;ymax=-1e100
     xy=np.array([])
     cc=np.array([])
-    ic=0.5;
+    ic0=0.5;
+    ind=0
+    plotlabels=[]
     for data,parnames in alldata:
         if(radio.value_selected in parnames):
             c0=1+parnames[1:].index(radio.value_selected)
             x,y=get_xydata(data,0,c0,samps,start)
             n=len(x)
-            #print("n=",n);
             #xy=np.array([xyi for xyi in xy if np.all(np.isfinite(xyi))])
+            colorval=ic0+ind
             if(cc.size>0):
-                cc = np.concatenate((cc,[ic]*n))
+                cc = np.concatenate((cc,[colorval]*n))
                 xy = np.vstack((xy,np.vstack((x, y)).T))
             else:
-                cc=np.array([ic]*n)
+                cc=np.array([colorval]*n)
                 xy = np.vstack((x, y)).T
-            #print("lens xy,cc:",xy.shape[0],cc.shape[0])
-            #print("ic=",ic)
-            ic=ic+1.0            
+            if(n==0):continue
             lim=x.min()
             if(xmin>lim):xmin=lim
             lim=x.max()
@@ -127,13 +163,17 @@ def update(val):
             if(ymin>lim):ymin=lim
             lim=y.max()
             if(ymax<lim):ymax=lim
-            
+            plotlabels.append(mpatches.Patch(color=cmap(colorval/cmap_norm), label=labels[ind],hatch='.'))
+        ind=ind+1            
+    
     scat.set_offsets(xy)
     scat.set_array(cc)
     ax.set_xlim(xmin-0.1*(xmax-xmin),xmax+0.1*(xmax-xmin))
     ax.set_ylim(ymin-0.1*(ymax-ymin),ymax+0.1*(ymax-ymin))
+    print("plot labels=",plotlabels)
+    ax.legend(handles=plotlabels)
     fig.canvas.draw_idle()
-
+    
 def reset(event):
     alldata=read_data(args.fname)
     sstart.reset()
@@ -145,6 +185,7 @@ def reset(event):
 
 alldata = read_data(args.fname)
 [data,parnames]=alldata[0]
+labels=make_short_labels(args.fname)
 
 fig, ax = plt.subplots()
 plt.subplots_adjust(left=0.25, bottom=0.25)
@@ -153,7 +194,9 @@ s0 = 3
 d0 = 2
 
 x,y=get_xydata(data,0,c0,10**d0,10**s0)
-scat = plt.scatter(x, y, s=1, c=x, cmap="tab10",norm=colors.Normalize(0,10))
+cmap = matplotlib.cm.get_cmap('tab10')
+cmap_norm=10
+scat = plt.scatter(x, y, s=1, c=x, cmap="tab10",norm=colors.Normalize(0,cmap_norm))
 #scat = plt.scatter([], [], s=1,cmap="tab10")
 
 axcolor = 'lightgoldenrodyellow'
@@ -180,6 +223,7 @@ sstart.on_changed(update)
 sdens.on_changed(update)
 radio.on_clicked(update)
 button.on_clicked(reset)
+
 update(0)
 
 plt.show()
