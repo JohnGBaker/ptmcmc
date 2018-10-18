@@ -238,8 +238,10 @@ class parallel_tempering_chains: public chain{
   bool do_evolve_temps;
   double evolve_temp_rate,evolve_temp_lpost_cut;
   int maxswapsperstep;
-  //internal function
-  void pry_temps(int ipry, double rate);
+  //MPI
+  int myproc,nproc;
+  vector<int> mychains;
+  vector<bool> is_my_chain;
   
  public:
   virtual ~parallel_tempering_chains(){  };//assure correct deletion of any child
@@ -285,5 +287,15 @@ class parallel_tempering_chains: public chain{
   void do_reboot(double rate,double threshhold,double thermal,int every,int grace=0,bool graduate=false,double aggression=0){max_reboot_rate=rate;reboot_thresh=threshhold;reboot_thermal_thresh=thermal;test_reboot_every=every;reboot_grace=grace;reboot_aggression=aggression;reboot_graduate=graduate;
     cout<<"Will reboot every "<<" aggression="<<reboot_aggression<<endl;
   };
+
+private:  
+  //internal functions
+  void pry_temps(int ipry, double rate);//defunct
+  void pry_temps(const vector<int> &ipry, const double rate, vector<double> &all_invtemps, const vector<double> &all_invlposts );
+  vector<state> gather_states();
+  vector<double> gather_invtemps();
+  vector<double> gather_llikes();
+  vector<double> gather_lposts();  
+  
 }; 
 #endif    
