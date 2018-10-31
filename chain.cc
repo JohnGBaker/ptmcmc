@@ -1294,7 +1294,6 @@ void parallel_tempering_chains::step(){
   vector<state>states=gather_states();
   vector<double>loglikes=gather_llikes();
   vector<double>invtemps=gather_invtemps();
-  for(int s :iswaps)cout<<"proc "<<myproc<<": to swap "<<s<<endl;
   for(int j=0;j<maxswapsperstep;j++){
     if(iswaps[j]>=0){
       bool accept=true;
