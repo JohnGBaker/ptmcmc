@@ -5,6 +5,13 @@
 #include <algorithm>
 #include "chain.hh"
 #include "proposal_distribution.hh"
+#ifdef USE_MPI
+#include <mpi.h>
+#else
+#define MPI_Allgather(a,b,c,d,e,f,g)
+#define MPI_DOUBLE
+#define MPI_COMM_WORLD
+#endif
 
 bool chain_verbose=false;
 
@@ -1149,7 +1156,9 @@ void parallel_tempering_chains::initialize( probability_function *log_likelihood
   //Need a global indexing of chains, and maps to and from the local indices.
   mychains.clear();//probably don't need this
   is_my_chain.clear();//probably don't need this
+  interproc_unpack_index.clear();//probably don't need this
 #ifdef USE_MPI
+  use_mpi=true;
   MPI_Comm_rank(MPI_COMM_WORLD, &myproc);
   MPI_Comm_size(MPI_COMM_WORLD, &nproc);
   is_my_chain.resize(Ntemps,false);
@@ -1160,12 +1169,23 @@ void parallel_tempering_chains::initialize( probability_function *log_likelihood
     mychains.push_back(i);
     is_my_chain[i]=true;
   }
+  interproc_stride=(Ntemps-1)/nproc+1;
+  for(int i=0;i<Ntemps;i++){
+    int p=i%nproc;
+    interproc_unpack_index.push_back(p*interproc_stride+i/nproc);
+    if(p==myproc){
+      cout<<"proc "<<myproc<<": index="<<p*interproc_stride+i/nproc<<"  i="<<i<<endl;
+    }
+  }
+  MPI_Barrier(MPI_COMM_WORLD);  
 #else
+  use_mpi=false;
   myproc=0;
   nproc=1;
   is_my_chain.resize(Ntemps,true);
   mychains.resize(Ntemps);
   for(int i=0;i<Ntemps;i++)mychains[i]=i;
+  interproc_stride=1;
 #endif
   
   //MPI For thread-safe set-up, to avoid some issues are with the global indexing of chains, and the initialization of chain RNGs, we instantiate all chains, though most will not be used.
@@ -1216,7 +1236,7 @@ void parallel_tempering_chains::set_proposal(proposal_distribution &proposal){
     //cout<<"                    chain=("<<&chains[i]<<")"<<chains[i].show()<<endl;
     if(props[i]->support_mixing()){
       props[i]->set_chain(this);
-      cout<<"Supporting chain mixing in proposal distribution."<<endl;
+      if(myproc==0)cout<<"Supporting chain mixing in proposal distribution."<<endl;
     }
     else
       props[i]->set_chain(&chains[i]); //*** This seems to set the last chain to all props...***
@@ -1224,17 +1244,22 @@ void parallel_tempering_chains::set_proposal(proposal_distribution &proposal){
   }
 };
 
+bool parallel_tempering_chains::outputAllowed()const{
+  //only allow output if base proc
+  return myproc==0;
+};
+
 void parallel_tempering_chains::step(){
   int iswaps[maxswapsperstep];
   double x;
-  
+
   //diagnostics and steering: set up
   const int ievidbin=10000*(add_every_N/10+1);//make this user adjustable?
   static int icount=0;
   static vector< int > swapcounts;
   static vector< int > trycounts;
   if(icount==0){
-    cout<<"Evidence bin size = "<<ievidbin<<endl;
+    if(myproc==0)cout<<"Evidence bin size = "<<ievidbin<<endl;
     trycounts.clear();
     trycounts.resize(Ntemps,0);
     swapcounts.clear();
@@ -1245,8 +1270,10 @@ void parallel_tempering_chains::step(){
   //MPI all global loop
   for(int i=0;i<maxswapsperstep;i++){
     iswaps[i]=-2;
-    if(Ntemps>1&&get_uniform()<(Ntemps-1)*swap_rate/maxswapsperstep){//do swap 
-      iswaps[i]=int(get_uniform()*(Ntemps-1));
+    double x=get_uniform();
+    if(Ntemps>1&&x<(Ntemps-1)*swap_rate/maxswapsperstep){//do swap 
+      x=get_uniform();
+      iswaps[i]=int(x*(Ntemps-1));
       //cout<<"trying "<<iswaps[i]<<endl;
       for(int j=0;j<i;j++)//Don't allow adjacent swaps in same step;
 	if(iswaps[j]==iswaps[i]||iswaps[j]+1==iswaps[i])iswaps[i]=-2;
@@ -1267,6 +1294,7 @@ void parallel_tempering_chains::step(){
   vector<state>states=gather_states();
   vector<double>loglikes=gather_llikes();
   vector<double>invtemps=gather_invtemps();
+  for(int s :iswaps)cout<<"proc "<<myproc<<": to swap "<<s<<endl;
   for(int j=0;j<maxswapsperstep;j++){
     if(iswaps[j]>=0){
       bool accept=true;
@@ -1369,7 +1397,8 @@ void parallel_tempering_chains::step(){
       }	
       swap_count[i]++;
     }
-  }  
+  }
+
   //Here we perform the standard (non-swap) step for the remaining chains.
   //Either guided or dynamic scheduling seems to work about the same.
   //#pragma omp parallel for schedule (guided, 1)  
@@ -1413,9 +1442,11 @@ void parallel_tempering_chains::step(){
       tryrate[i]=trycounts[i]/(double)icount;
       swaprate[i]=swapcounts[i]/(double)icount;
       //Compute upside log_evidence ratio
-      log_eratio_up[i]=   log_evidence_ratio(i  ,i+1,ievidbin,add_every_N);
-      log_eratio_down[i]=-log_evidence_ratio(i+1,i  ,ievidbin,add_every_N);
-      evidence+=(log_eratio_up[i]+log_eratio_down[i])/2.0;
+      if(nproc==1){
+	log_eratio_up[i]=   log_evidence_ratio(i  ,i+1,ievidbin,add_every_N);
+	log_eratio_down[i]=-log_evidence_ratio(i+1,i  ,ievidbin,add_every_N);
+	evidence+=(log_eratio_up[i]+log_eratio_down[i])/2.0;
+      } else evidence+=1; //MPI not yet implemented with MPI
     }
     //MPI: For this we need the temps of all chains That can be precommunicated now, or globally maintained.
     //preMPI double dE=(log_eratio_up[Ntemps-2]+log_eratio_down[Ntemps-2])/2.0/(chains[Ntemps-2].invTemp()/chains[Ntemps-1].invTemp()-1);    // Note, if beta 1 is small, r~1 anyway then the result will be about ~ beta1
@@ -1423,9 +1454,9 @@ void parallel_tempering_chains::step(){
     evidence+=dE;
     //evidence*=1.0/(1-chains[Ntemps-1].invTemp());
     //evidence+=evidence*chains[Ntemps-1].invTemp();
-    cout<<"Total log-evidence: "<<evidence<<endl;
+    if(myproc==0)cout<<"Total log-evidence: "<<evidence<<endl;
     //MPI: Nsize
-    cout<<" Nsize="<<Nsize<<endl;
+    //cout<<" Nsize="<<Nsize<<endl;
     //Save records of evidence:
     evidence_count++;
     int Ndim=log2(evidence_count);
@@ -1435,14 +1466,14 @@ void parallel_tempering_chains::step(){
     }
     if(evidence_records_dim>0){//Note that we begin saving once we reach the *second* epoch at each scale.
       total_evidence_records[0].push_back(evidence);
-      cout<<"total_evidence_records[0]["<<evidence_count-2<<"]="<<evidence<<endl;	
+      if(myproc==0)cout<<"total_evidence_records[0]["<<evidence_count-2<<"]="<<evidence<<endl;	
     }
     for(int i=1;i<evidence_records_dim;i++){
       //We store evidence records averaged on various periods
       //the period here is 2^i, so we store a new sample when
       //then next lower bit in the count rolls over...
       if(evidence_count % (1<<i) == 0 ){
-	cout<<"i="<<i<<" ec="<<evidence_count<<" 1<<(i)="<<(1<<i)<<" mod="<<(evidence_count % (1<<i))<<endl;
+	if(myproc==0)cout<<"i="<<i<<" ec="<<evidence_count<<" 1<<(i)="<<(1<<i)<<" mod="<<(evidence_count % (1<<i))<<endl;
 	//we average the last two entries at the next shorter period
 	int iend=total_evidence_records[i-1].size()-1;
 	double new_avg=(total_evidence_records[i-1][iend-1]+total_evidence_records[i-1][iend])/2.0;
@@ -1581,6 +1612,7 @@ void parallel_tempering_chains::step(){
       
     }
   }
+
 };
 
 
@@ -1695,52 +1727,102 @@ void parallel_tempering_chains::pry_temps(int ipry, double rate){
 }
   
 //MPI parallelism supporting functions
+  //interproc_stride: Maximum number of chains per proc.  Fixed at start
+  //interproc_unpack_index[i]: Index, within the master package for chain i.
 
 //Collect values for invtemps from all chain
 vector<state> parallel_tempering_chains::gather_states(){
-#ifndef USE_MPI
   vector<state> states(Ntemps);
-  for(int i=0;i<Ntemps;i++)
-    states[i]=chains[i].getState();
-#else
-  FIXME;
-#endif
+  if(not use_mpi){
+    for(int i=0;i<Ntemps;i++){
+      states[i]=chains[i].getState();
+      //if(myproc==0)cout<<"state "<<i<<": "<<states[i].get_string()<<endl;
+    }
+  } else {
+    //This one is a little trickier than the others
+    //MPI doesn't directly support passing around class instances
+    //We need to also know what the size of each states data is
+    //We assume the state-space is the same
+    //We need to know the size of each state (number of pars), should not evolve.
+    //For transdimensional (not yet supported) this should be the max size.
+    const stateSpace *sp=chains[mychains[0]].getState().getSpace();
+    int statesize=sp->size();
+    int stride=interproc_stride*statesize;
+    double sendbuf[stride];
+    int recvtotalcount=stride*nproc;
+    double recvbuf[recvtotalcount];
+    for(int iloc=0;iloc<mychains.size();iloc++){
+      state st=chains[mychains[iloc]].getState();
+      for(int j=0;j<statesize;j++)
+	sendbuf[iloc*statesize+j]=st.get_param(j);
+    }
+    for(int j=mychains.size()*statesize;j<stride;j++)sendbuf[j]=0;//pad with zeros, probl. unnec.
+    MPI_Allgather(&sendbuf, stride, MPI_DOUBLE, &recvbuf, stride, MPI_DOUBLE,MPI_COMM_WORLD);
+    for(int i=0;i<Ntemps;i++){
+      vector<double> params(statesize);
+      for(int j=0;j<statesize;j++)params[j]=recvbuf[interproc_unpack_index[i]*statesize+j];  
+      state st=state(sp,params);
+      states[i]=st;
+      //if(myproc==0)cout<<"state "<<i<<": "<<states[i].get_string()<<endl;
+    }
+  }
   return states;
 }
 
 //Collect values for invtemps from all chains
 vector<double> parallel_tempering_chains::gather_invtemps(){
-#ifndef USE_MPI
   vector<double> invtemps(Ntemps);
-  for(int i=0;i<Ntemps;i++)
-    invtemps[i]=chains[i].invTemp();
-#else
-  FIXME;
-#endif
+  if(not use_mpi){
+    for(int i=0;i<Ntemps;i++)
+      invtemps[i]=chains[i].invTemp();
+  } else {
+    double sendbuf[interproc_stride];
+    int recvcount=interproc_stride*nproc;
+    double recvbuf[recvcount];
+    for(int iloc=0;iloc<mychains.size();iloc++)sendbuf[iloc]=chains[mychains[iloc]].invTemp();
+    for(int iloc=mychains.size();iloc<interproc_stride;iloc++)sendbuf[iloc]=0;//pad with zeros, maybe unnec.
+    MPI_Allgather(&sendbuf, interproc_stride, MPI_DOUBLE, &recvbuf, interproc_stride, MPI_DOUBLE,MPI_COMM_WORLD);
+    for(int i=0;i<Ntemps;i++)
+      invtemps[i]=recvbuf[interproc_unpack_index[i]];
+  }
   return invtemps;
 }
 
 //Collect values for current_lpost from all chains
 vector<double> parallel_tempering_chains::gather_lposts(){
-#ifndef USE_MPI
   vector<double> lposts(Ntemps);
-  for(int i=0;i<Ntemps;i++)
-    lposts[i]=chains[i].current_lpost;
-#else
-  FIXME;
-#endif
+  if(not use_mpi){
+    for(int i=0;i<Ntemps;i++)
+      lposts[i]=chains[i].current_lpost;
+  } else {
+    double sendbuf[interproc_stride];
+    int recvcount=interproc_stride*nproc;
+    double recvbuf[recvcount];
+    for(int iloc=0;iloc<mychains.size();iloc++)sendbuf[iloc]=chains[mychains[iloc]].current_lpost;
+    for(int iloc=mychains.size();iloc<interproc_stride;iloc++)sendbuf[iloc]=0;//pad with zeros, maybe unnec.
+    MPI_Allgather(&sendbuf, interproc_stride, MPI_DOUBLE, &recvbuf, interproc_stride, MPI_DOUBLE,MPI_COMM_WORLD);
+    for(int i=0;i<Ntemps;i++)
+      lposts[i]=recvbuf[interproc_unpack_index[i]];  
+  }
   return lposts;
 }
 
 //Collect values for log like from all chains
 vector<double> parallel_tempering_chains::gather_llikes(){
-#ifndef USE_MPI
   vector<double> llikes(Ntemps);
-  for(int i=0;i<Ntemps;i++)
-    llikes[i]=chains[i].getLogLike();
-#else
-  FIXME;
-#endif
+  if(not use_mpi){
+    for(int i=0;i<Ntemps;i++)
+      llikes[i]=chains[i].getLogLike();
+  } else {
+    double sendbuf[interproc_stride];
+    int recvcount=interproc_stride*nproc;
+    double recvbuf[recvcount];
+    for(int iloc=0;iloc<mychains.size();iloc++)sendbuf[iloc]=chains[mychains[iloc]].getLogLike();
+    for(int iloc=mychains.size();iloc<interproc_stride;iloc++)sendbuf[iloc]=0;//pad with zeros, maybe unnec.
+    MPI_Allgather(&sendbuf, interproc_stride, MPI_DOUBLE, &recvbuf, interproc_stride, MPI_DOUBLE,MPI_COMM_WORLD);
+    for(int i=0;i<Ntemps;i++)
+      llikes[i]=recvbuf[interproc_unpack_index[i]];    
+  }
   return llikes;
 }
 
@@ -1824,15 +1906,36 @@ string parallel_tempering_chains::show(bool verbose){
 //MPI: This routine will require communication or coordination among procs.
 //MPI: One possibility is to do some kind of MPI_Barrier to force procs to take turns in order
 string parallel_tempering_chains::status(){
-    ostringstream s;
-    s<<"chain(id="<<id<<", Ntemps="<<Ntemps<<"):\n";
+  ostringstream s;
+  s<<"chain(id="<<id<<", Ntemps="<<Ntemps<<"):\n";
+  if(not use_mpi){
     for(int i=0;i<Ntemps;i++){
       s<<"instance \033[1;31m"<<instances[i]<<"\033[0m["<<Nsize-instance_starts[instances[i]]<<"]("<<(directions[i]>0?"+":"-")<<" , "<<up_frac[i]<<"):                     "<<chains[i].status()<<"\n";
       //cout<<swaprate.size()<<" "<<tryrate.size()<<" "<< log_eratio_down.size()<<" "<< log_eratio_up.size()<<endl;
       if(i<Ntemps-1)s<<"-><-("<<swaprate[i]<<" of "<<tryrate[i]<<"): log eratio:("<<log_eratio_down[i]<<","<<log_eratio_up[i]<<")"<<endl;
     }
-    s<<"Best evidence stderr="<<best_evidence_stderr<<endl; 
-    return s.str();
+  } else {
+    int maxwid=2000;
+    char allstrings[interproc_stride*maxwid*nproc];
+    char mystrings[maxwid*interproc_stride];
+    for(int ii=0;ii<interproc_stride;ii++){
+      ostringstream ss;
+      if(ii<mychains.size()){
+	int i=mychains[ii];
+	ss<<"instance \033[1;31m"<<instances[i]<<"\033[0m["<<Nsize-instance_starts[instances[i]]<<"]("<<(directions[i]>0?"+":"-")<<" , "<<up_frac[i]<<"):                     "<<chains[i].status()<<"\n";
+	if(i<Ntemps-1)ss<<"-><-("<<swaprate[i]<<" of "<<tryrate[i]<<"): log eratio:("<<log_eratio_down[i]<<","<<log_eratio_up[i]<<")"<<endl;
+      }
+      strncpy(mystrings+ii*maxwid,ss.str().c_str(),maxwid-1);
+      //if(ii<mychains.size())cout<<"proc "<<myproc<<" setting up temp "<<mychains[ii]<<":\n"<<(mystrings+ii*maxwid)<<endl;
+    }
+    MPI_Allgather(mystrings, interproc_stride*maxwid, MPI_CHAR, allstrings, interproc_stride*maxwid, MPI_CHAR,MPI_COMM_WORLD);
+    for(int i=0;i<Ntemps;i++){
+      s<<(allstrings+i*maxwid);
+      //cout<<"proc "<<myproc<<" appending temp "<<i<<":\n"<<(allstrings+i*maxwid)<<endl;
+    }
+  }
+  s<<"Best evidence stderr="<<best_evidence_stderr<<endl; 
+  return s.str();
 };
  
   

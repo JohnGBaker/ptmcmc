@@ -19,6 +19,7 @@
 //#include <sstream>
 //#include <cmath>
 //#include <iostream>
+
 extern bool verboseMOA;
 
 class proposal_distribution;
@@ -62,6 +63,7 @@ public:
     //Each chain has its own pseudo (newran) random number generator seeded with a seed drawn from the master PRNG
     //As long as the chains are created in a fixed order, this should allow threading independence of the result.
     Nfrozen=-1;
+    
   };
   virtual void checkpoint(string path)override;
   virtual void restart(string path)override;
@@ -102,6 +104,8 @@ public:
     cout<<"chain::step: No base-class step() operation defined!"<<endl;
     exit(1);
   };
+  //Uniform interface for reporting whether output is allowed for this chain
+  virtual bool outputAllowed()const{return true;};
   virtual void dumpChain(ostream &os,int Nburn=0,int ievery=1){
     cout<<"chain::step: No base-class dumpChain() operation defined!"<<endl;
     exit(1);
@@ -239,8 +243,9 @@ class parallel_tempering_chains: public chain{
   double evolve_temp_rate,evolve_temp_lpost_cut;
   int maxswapsperstep;
   //MPI
-  int myproc,nproc;
-  vector<int> mychains;
+  bool use_mpi;
+  int myproc,nproc,interproc_stride;
+  vector<int> mychains,interproc_unpack_index;
   vector<bool> is_my_chain;
   
  public:
@@ -250,8 +255,12 @@ class parallel_tempering_chains: public chain{
   virtual void restart(string path)override;
   void initialize( probability_function *log_likelihood, const sampleable_probability_function *log_prior,int n=1,string initialization_file="");
   void set_proposal(proposal_distribution &proposal);
+  bool outputAllowed()const override;
   void step();
   ///reference to zero-temerature chain.
+  //MPI The following functions need to be rethought for MPI
+  //MPI if these are only needed as examples, then c0() could provide the proc-local chain[mychains[0]]
+  //MPI otherwise (for getStep?) it might make senst to track some info independently of the subchains
   MH_chain & c0(){return chains[0];};
   int getStep()override{return c0().getStep();};
   state getState(int elem=-1,bool raw_indexing=false)override{return c0().getState(elem,raw_indexing);};
@@ -296,6 +305,14 @@ private:
   vector<double> gather_invtemps();
   vector<double> gather_llikes();
   vector<double> gather_lposts();  
-  
+protected:
+  //below is just for debugging
+  /*
+  virtual double get_uniform(){
+    double x=chain::get_uniform();
+#pragma omp critical
+    cout<<myproc<<":"<<id<<":"<<x<<endl;//" rng="<<rng<<endl;
+    return x;
+    };*/  
 }; 
 #endif    

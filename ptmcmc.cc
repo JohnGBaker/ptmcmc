@@ -461,7 +461,7 @@ int ptmcmc_sampler::run(const string & base, int ic){
     ostringstream ssi;
     if(parallel_tempering)ssi<<base<<"_t"<<ich<<".dat";
     else ssi<<base<<".dat";
-    out[ich].open(ssi.str().c_str(),mode);
+    if(cc->outputAllowed())out[ich].open(ssi.str().c_str(),mode);
     out[ich].precision(output_precision);
   }
   
