@@ -159,7 +159,7 @@ int main(int argc, char*argv[]){
   int myproc,nproc;
   MPI_Comm_rank(MPI_COMM_WORLD, &myproc);
   MPI_Comm_size(MPI_COMM_WORLD, &nproc);
-  if(true or myproc==0)cout<<"MPI running on "<<nproc<<" MPI processes."<<endl;
+  if(myproc==0)cout<<"MPI running on "<<nproc<<" MPI processes.\n"<<endl;
 #endif
 
   Options opt(true);
