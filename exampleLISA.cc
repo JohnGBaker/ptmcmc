@@ -17,6 +17,9 @@
 #include "bayesian.hh"
 #include "proposal_distribution.hh"
 #include "ptmcmc.hh"
+#ifdef USE_MPI
+#include <mpi.h>
+#endif
 
 using namespace std;
 
@@ -151,6 +154,14 @@ shared_ptr<Random> globalRNG;//used for some debugging...
 //main test program
 int main(int argc, char*argv[]){
 
+#ifdef USE_MPI
+  MPI_Init( &argc, &argv );
+  int myproc,nproc;
+  MPI_Comm_rank(MPI_COMM_WORLD, &myproc);
+  MPI_Comm_size(MPI_COMM_WORLD, &nproc);
+  if(true or myproc==0)cout<<"MPI running on "<<nproc<<" MPI processes."<<endl;
+#endif
+
   Options opt(true);
   //Create the sampler
   ptmcmc_sampler mcmc;
@@ -252,5 +263,9 @@ int main(int argc, char*argv[]){
   //delete data;
   //delete signal;
   delete like;
+#ifdef USE_MPI
+  MPI_Finalize();
+#endif
+
 }
 
