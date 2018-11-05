@@ -4,6 +4,10 @@
 #include <fstream>
 #include <iostream>
 #include "ptmcmc.hh"
+#ifdef USE_MPI
+#include <mpi.h>
+#endif
+
 using namespace std;
 
 ///Set the proposal distribution. Calling routing responsible for deleting.
@@ -226,6 +230,23 @@ proposal_distribution* ptmcmc_sampler::new_proposal_distribution_guts(int Npar, 
   return prop;
 };
 
+void ptmcmc_sampler::Init(int &argc, char*argv[]){
+#ifdef USE_MPI
+  MPI_Init( &argc, &argv );
+  int myproc,nproc;
+  MPI_Comm_rank(MPI_COMM_WORLD, &myproc);
+  MPI_Comm_size(MPI_COMM_WORLD, &nproc);
+  if(myproc==0)cout<<"MPI running on "<<nproc<<" MPI processes.\n"<<endl;
+#endif
+};
+
+void ptmcmc_sampler::Quit(){
+#ifdef USE_MPI
+  MPI_Finalize();
+#endif
+  exit(0);
+};
+
 ptmcmc_sampler::ptmcmc_sampler(){
   //These pointers are managed by this class
   have_cc=false;
@@ -246,13 +267,17 @@ void ptmcmc_sampler::checkpoint(string path){
   ostringstream ss;
   ss<<path<<"/step_"<<istep<<"-cp/";
   string dir=ss.str();
-  cout<<"Writing checkpoint files to dir:"<<dir<<endl;
-  mkdir(dir.data(),ACCESSPERMS);
-  ss<<"ptmcmc.cp";
-  ofstream os;
-  openWrite(os,ss.str());
-  cc->checkpoint(dir);
-  writeInt(os,istep);
+  if(cc->outputAllowed()){
+    cout<<"Writing checkpoint files to dir:"<<dir<<endl;
+    mkdir(dir.data(),ACCESSPERMS);
+    ss<<"ptmcmc.cp";
+    ofstream os;
+    openWrite(os,ss.str());
+    cc->checkpoint(dir);
+    writeInt(os,istep);
+  } else {
+    cc->checkpoint(dir);
+  }
   //cout<<"show:"<<cc->show()<<endl;;
   //cout<<"status:"<<cc->status()<<endl;
 }
@@ -474,7 +499,8 @@ int ptmcmc_sampler::run(const string & base, int ic){
       
     if(istep==checkp_at_step or ( checkp_at_time>0 and (omp_get_wtime()-start_time)/3600 > checkp_at_time ) ){//checkpointing test
       checkpoint(".");
-      exit(0);
+      
+      Quit();
     }
     
     cc->step();

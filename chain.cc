@@ -27,20 +27,23 @@ void chain::checkpoint(string path){
   ostringstream ss;
   ss<<path<<"chain"<<id<<"-cp/";
   string dir=ss.str();
-  mkdir(dir.data(),ACCESSPERMS);
-  ss<<"chain.cp";
-  ofstream os;
-  openWrite(os,ss.str());
-  writeInt(os, id);
-  writeInt(os, Nsize);
-  writeInt(os, Ninit); //Maybe move this history stuff to a subclass
-  writeInt(os, Nearliest);
-  writeInt(os, Nfrozen);
-  writeInt(os, dim);
-  os.close();
-  //write RNG
-  rng->SetInstanceDirectory(dir.data());
-  rng->CopyInstanceSeedToDisk();
+  
+  if(outputAllowed()){
+    mkdir(dir.data(),ACCESSPERMS);
+    ss<<"chain.cp";
+    ofstream os;
+    openWrite(os,ss.str());
+    writeInt(os, id);
+    writeInt(os, Nsize);
+    writeInt(os, Ninit); //Maybe move this history stuff to a subclass
+    writeInt(os, Nearliest);
+    writeInt(os, Nfrozen);
+    writeInt(os, dim);
+    os.close();
+    //write RNG
+    rng->SetInstanceDirectory(dir.data());
+    rng->CopyInstanceSeedToDisk();
+  }
 };
 
 void chain::restart(string path){
@@ -1086,32 +1089,36 @@ parallel_tempering_chains::parallel_tempering_chains(int Ntemps,double Tmax,doub
 
 void parallel_tempering_chains::checkpoint(string path){
   chain::checkpoint(path);
-  ostringstream ss;
-  ss<<path<<"chain"<<id<<"-cp/";
-  ss<<"PTchain.cp";
-  ofstream os;
-  //MPI os access: Only Proc-0 should write common material. May be as simple as just not opening os on the secondary processors. 
-  openWrite(os,ss.str());
-  //MPI independent loop: only apply to local chains
-  for(int i=0;i<Ntemps;i++)chains[i].checkpoint(path);
-  writeIntVector(os, directions);
-  writeIntVector(os, ups);
-  writeIntVector(os, downs);
-  writeIntVector(os, instances);
-  writeIntVector(os, instance_starts);
-  writeIntVector(os, swap_accept_count);
-  writeIntVector(os, swap_count);
-  writeDoubleVector(os, temps);
-  writeDoubleVector(os, log_eratio_up);
-  writeDoubleVector(os, log_eratio_down);
-  writeDoubleVector(os, tryrate);
-  writeDoubleVector(os, swaprate);
-  writeDoubleVector(os, up_frac);
-  int n=total_evidence_records.size();
-  writeInt(os,n);
-  for(int i=0;i<n;i++)writeDoubleVector(os, total_evidence_records[i]);
-  writeInt(os, evidence_count);
-  writeDouble(os, best_evidence_stderr);
+  if(myproc==0){ //MPI only the head-proc writes the base-chain data.  
+    ostringstream ss;
+    ss<<path<<"chain"<<id<<"-cp/";
+    ss<<"PTchain.cp";
+    ofstream os;
+    openWrite(os,ss.str());
+    writeIntVector(os, directions);
+    writeIntVector(os, ups);
+    writeIntVector(os, downs);
+    writeIntVector(os, instances);
+    writeIntVector(os, instance_starts);
+    writeIntVector(os, swap_accept_count);
+    writeIntVector(os, swap_count);
+    writeDoubleVector(os, temps);
+    writeDoubleVector(os, log_eratio_up);
+    writeDoubleVector(os, log_eratio_down);
+    writeDoubleVector(os, tryrate);
+    writeDoubleVector(os, swaprate);
+    writeDoubleVector(os, up_frac);
+    int n=total_evidence_records.size();
+    writeInt(os,n);
+    for(int i=0;i<n;i++)writeDoubleVector(os, total_evidence_records[i]);
+    writeInt(os, evidence_count);
+    writeDouble(os, best_evidence_stderr);
+  }
+  //MPI Each proc writes its sub-chain's data in separate files
+  cout<<"proc "<<myproc<<": About to dump subchain checkpoint data."<<endl;
+  MPI_Barrier(MPI_COMM_WORLD);
+  for(int i:mychains)chains[i].checkpoint(path);
+  cout<<"proc "<<myproc<<": Dumped subchain checkpoint data."<<endl;
 };
 
 void parallel_tempering_chains::restart(string path){
