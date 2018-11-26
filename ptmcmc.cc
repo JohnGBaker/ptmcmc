@@ -516,19 +516,21 @@ int ptmcmc_sampler::run(const string & base, int ic){
     
     cc->step();
     bool stop=false;
-    if(0==istep%Nevery and reporting()){
-      cout<<"chain "<<ic<<" step "<<istep<<endl;
-      cout<<"   MaxPosterior="<<chain_llike->bestPost()<<endl;
-      if(parallel_tempering){
-	parallel_tempering_chains *ptc=dynamic_cast<parallel_tempering_chains*>(cc);
-	for(int ich=0;ich<dump_n;ich++)ptc->dumpChain(ich,out[ich],istep-Nevery+1,Nskip);
-	double bestErr=ptc->bestEvidenceErr();
-	if(bestErr<pt_stop_evid_err){
-	  stop=true;
-	  cout<<"ptmcmc_sampler::run: Stopping based on pt_stop_evid_err criterion."<<endl; 
-	}	
-      } else {
-	cc->dumpChain(out[0],istep-Nevery+1,Nskip);
+    if(0==istep%Nevery){
+      if(reporting()){
+	cout<<"chain "<<ic<<" step "<<istep<<endl;
+	cout<<"   MaxPosterior="<<chain_llike->bestPost()<<endl;
+	if(parallel_tempering){
+	  parallel_tempering_chains *ptc=dynamic_cast<parallel_tempering_chains*>(cc);
+	  for(int ich=0;ich<dump_n;ich++)ptc->dumpChain(ich,out[ich],istep-Nevery+1,Nskip);
+	  double bestErr=ptc->bestEvidenceErr();
+	  if(bestErr<pt_stop_evid_err){
+	    stop=true;
+	    cout<<"ptmcmc_sampler::run: Stopping based on pt_stop_evid_err criterion."<<endl; 
+	  }	
+	} else {
+	  cc->dumpChain(out[0],istep-Nevery+1,Nskip);
+	}
       }
       cout<<cc->status()<<endl;      
       

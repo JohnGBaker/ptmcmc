@@ -1766,6 +1766,7 @@ vector<state> parallel_tempering_chains::gather_states(){
 	sendbuf[iloc*statesize+j]=st.get_param(j);
     }
     for(int j=mychains.size()*statesize;j<stride;j++)sendbuf[j]=0;//pad with zeros, probl. unnec.
+    cout<<"MPIAllgather:gather_states.";
     MPI_Allgather(&sendbuf, stride, MPI_DOUBLE, &recvbuf, stride, MPI_DOUBLE,MPI_COMM_WORLD);
     for(int i=0;i<Ntemps;i++){
       vector<double> params(statesize);
@@ -1790,6 +1791,7 @@ vector<double> parallel_tempering_chains::gather_invtemps(){
     double recvbuf[recvcount];
     for(int iloc=0;iloc<mychains.size();iloc++)sendbuf[iloc]=chains[mychains[iloc]].invTemp();
     for(int iloc=mychains.size();iloc<interproc_stride;iloc++)sendbuf[iloc]=0;//pad with zeros, maybe unnec.
+    cout<<"MPIAllgather:gather_invtemps.";
     MPI_Allgather(&sendbuf, interproc_stride, MPI_DOUBLE, &recvbuf, interproc_stride, MPI_DOUBLE,MPI_COMM_WORLD);
     for(int i=0;i<Ntemps;i++)
       invtemps[i]=recvbuf[interproc_unpack_index[i]];
@@ -1809,6 +1811,7 @@ vector<double> parallel_tempering_chains::gather_lposts(){
     double recvbuf[recvcount];
     for(int iloc=0;iloc<mychains.size();iloc++)sendbuf[iloc]=chains[mychains[iloc]].current_lpost;
     for(int iloc=mychains.size();iloc<interproc_stride;iloc++)sendbuf[iloc]=0;//pad with zeros, maybe unnec.
+    cout<<"MPIAllgather:gather_lposts.";
     MPI_Allgather(&sendbuf, interproc_stride, MPI_DOUBLE, &recvbuf, interproc_stride, MPI_DOUBLE,MPI_COMM_WORLD);
     for(int i=0;i<Ntemps;i++)
       lposts[i]=recvbuf[interproc_unpack_index[i]];  
@@ -1828,6 +1831,7 @@ vector<double> parallel_tempering_chains::gather_llikes(){
     double recvbuf[recvcount];
     for(int iloc=0;iloc<mychains.size();iloc++)sendbuf[iloc]=chains[mychains[iloc]].getLogLike();
     for(int iloc=mychains.size();iloc<interproc_stride;iloc++)sendbuf[iloc]=0;//pad with zeros, maybe unnec.
+    cout<<"MPIAllgather:gather_llikes.";
     MPI_Allgather(&sendbuf, interproc_stride, MPI_DOUBLE, &recvbuf, interproc_stride, MPI_DOUBLE,MPI_COMM_WORLD);
     for(int i=0;i<Ntemps;i++)
       llikes[i]=recvbuf[interproc_unpack_index[i]];    
@@ -1937,6 +1941,7 @@ string parallel_tempering_chains::status(){
       strncpy(mystrings+ii*maxwid,ss.str().c_str(),maxwid-1);
       //if(ii<mychains.size())cout<<"proc "<<myproc<<" setting up temp "<<mychains[ii]<<":\n"<<(mystrings+ii*maxwid)<<endl;
     }
+    cout<<"MPIAllgather:status.";
     MPI_Allgather(mystrings, interproc_stride*maxwid, MPI_CHAR, allstrings, interproc_stride*maxwid, MPI_CHAR,MPI_COMM_WORLD);
     for(int i=0;i<Ntemps;i++){
       s<<(allstrings+i*maxwid);
