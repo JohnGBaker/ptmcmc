@@ -413,13 +413,14 @@ void chain::compute_effective_samples(vector<bool (*)(const state &,double & val
   effSampSize=ess_max;
 
   //dump info
-  cout<<"len="<<nwin_max<<"*"<<width<<": ";
-  for(auto ess : best_esses)cout<<" "<<ess;
-  cout<<endl;
-  cout<<"     means = ";
-  for(auto val : best_means)cout<<" "<<val;
-  cout<<endl;
-  
+  if(reporting){ 
+    cout<<"len="<<nwin_max<<"*"<<width<<": ";
+    for(auto ess : best_esses)cout<<" "<<ess;
+    cout<<endl;
+    cout<<"     means = ";
+    for(auto val : best_means)cout<<" "<<val;
+    cout<<endl;
+  }
   //For testing, we dump everything and quit
   static int icount=0;
   icount++;
@@ -468,7 +469,8 @@ pair<double,int> chain::report_effective_samples(vector< bool (*)(const state &,
   //  i++;
   //}
   compute_effective_samples(features, ess, nwin, width, nevery, burn, true,0,1.1);
-  cout<<"Over "<<features.size()<<" pars: ess="<<ess<<"  useful chain length is: "<<width*nwin<<" autocorrlen="<<width*nwin/ess<<endl;
+  if(reporting)
+    cout<<"Over "<<features.size()<<" pars: ess="<<ess<<"  useful chain length is: "<<width*nwin<<" autocorrlen="<<width*nwin/ess<<endl;
   //if(ic>icstop)exit(0);
 
   return make_pair(ess,width*nwin);
@@ -1185,6 +1187,7 @@ void parallel_tempering_chains::initialize( probability_function *log_likelihood
     }
   }
   MPI_Barrier(MPI_COMM_WORLD);  
+  if(myproc!=0)this->reporting=false;//turn off output except for head node
 #else
   use_mpi=false;
   myproc=0;

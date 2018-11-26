@@ -39,6 +39,7 @@ protected:
   int Nearliest;
   int Nfrozen;
   int dim;
+  bool reporting;
   shared_ptr<Random> rng; //Random number generator for this chain. Each chain has its own so that the results can be threading invariant
   //This function is defined for just for sorting below
   //static bool AgtB(const pair<double,double> & A,const pair<double,double>&B){return A.second>B.second;};
@@ -52,7 +53,7 @@ protected:
   
 public:
   virtual ~chain(){};
-  chain():
+  chain():reporting(true),
     rng(new MotherOfAll(ProbabilityDist::getPRNG()->Next()))
     //rng(ProbabilityDist::getPRNG())//This should recover identical results to pre_omp version...?
     //rng(globalRNG)
