@@ -1,5 +1,5 @@
-Using a likelihood written in Python
-====================================
+Using a likelihood written in a non-C language
+==============================================
 
 This directory contains an example showing how to use ptmcmc with a likelihood
 function written in a non-C language, such as Python. The method consists in
