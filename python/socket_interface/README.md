@@ -4,8 +4,10 @@ Using a likelihood written in a non-C language
 This directory contains an example showing how to use ptmcmc with a likelihood
 function written in a non-C language, such as Python. The method consists in
 having ptmcmc send the parameter vector over a Unix domain socket to a separate
-process. The separate process then computes the likelihood and returns it back
-to ptmcmc over the same socket.
+process, which can be written in any language. The separate process then
+computes the likelihood and returns it back to ptmcmc over the same socket. The
+separate process is also responsible of telling ptmcmc the definition of the
+parameters and their priors (assumed to be uniform in this example).
 
 Although this is a basic example, it can be extended to have many identical
 likelihood processes, perhaps running on different machines and accepting
