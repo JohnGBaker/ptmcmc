@@ -22,7 +22,7 @@ Start `likelihood_server.py`. Note that it requires Python 3.
 This opens the socket and listens for a connection.
 
 In a separate shell, run this:
-```python
+```bash
 OMP_NUM_THREADS=1 ./socket_sampler --socket=/tmp/likelihood.socket --pt=10 --nsteps=200000
 ```
 This process connects to the socket and uses ptmcmc to drive the sampling.
