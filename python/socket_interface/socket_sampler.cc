@@ -50,12 +50,60 @@ public:
         }
 
         // set up parameter space
-        // TODO could be configurable through the socket
-        int npar = 1;
-        stateSpace space(npar);
-        string names[] = {"x"};
+        int rc;
+        unsigned int n_params = 0;
+
+        rc = ::read(socket_fd, &n_params, 4);
+        if (rc < 4) {
+            perror("partial read");
+            exit(errno);
+        }
+
+        string names[n_params];
+        boundary bounds[n_params];
+        valarray<double> centers(n_params);
+        valarray<double> scales(n_params);
+
+        for (unsigned int i = 0; i < n_params; i++) {
+            char name_cstr[128] = "";
+            double min = 0, max = 0;
+
+            rc = ::read(socket_fd, name_cstr, 128);
+            if (rc < 128) {
+                perror("partial read");
+                exit(errno);
+            }
+            names[i] = string(name_cstr);
+
+            rc = ::read(socket_fd, &min, 8);
+            if (rc < 8) {
+                perror("partial read");
+                exit(errno);
+            }
+            rc = ::read(socket_fd, &max, 8);
+            if (rc < 8) {
+                perror("partial read");
+                exit(errno);
+            }
+            bounds[i] = boundary(boundary::limit, boundary::limit, min, max);
+
+            rc = ::read(socket_fd, &centers[i], 8);
+            if (rc < 8) {
+                perror("partial read");
+                exit(errno);
+            }
+            rc = ::read(socket_fd, &scales[i], 8);
+            if (rc < 8) {
+                perror("partial read");
+                exit(errno);
+            }
+        }
+
+        stateSpace space(n_params);
         space.set_names(names);
-        space.set_bound(0, boundary(boundary::limit, boundary::limit, -100, 100));
+        for (unsigned int i = 0; i < n_params; i++) {
+            space.set_bound(i, bounds[i]);
+        }
         cout << "Parameter space:\n" << space.show() << endl;
 
         nativeSpace = space;
@@ -63,11 +111,8 @@ public:
         best = state(&space,space.size());
 
         // configure the prior
-        // TODO could be configurable through the socket
-        const int uni = mixed_dist_product::uniform;
-        valarray<double> centers((initializer_list<double>){0});
-        valarray<double> scales((initializer_list<double>){20});
-        valarray<int> types((initializer_list<int>){uni});
+        // FIXME all parameters are assumed to have uniform priors
+        valarray<int> types(mixed_dist_product::uniform, n_params);
         setPrior(new mixed_dist_product(&nativeSpace, types, centers, scales));
     };
 
