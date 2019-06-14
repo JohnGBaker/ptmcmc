@@ -19,6 +19,7 @@
 //#include <sstream>
 //#include <cmath>
 //#include <iostream>
+
 extern bool verboseMOA;
 
 class proposal_distribution;
@@ -38,6 +39,7 @@ protected:
   int Nearliest;
   int Nfrozen;
   int dim;
+  bool reporting;
   shared_ptr<Random> rng; //Random number generator for this chain. Each chain has its own so that the results can be threading invariant
   //This function is defined for just for sorting below
   //static bool AgtB(const pair<double,double> & A,const pair<double,double>&B){return A.second>B.second;};
@@ -51,7 +53,7 @@ protected:
   
 public:
   virtual ~chain(){};
-  chain():
+  chain():reporting(true),
     rng(new MotherOfAll(ProbabilityDist::getPRNG()->Next()))
     //rng(ProbabilityDist::getPRNG())//This should recover identical results to pre_omp version...?
     //rng(globalRNG)
@@ -62,6 +64,7 @@ public:
     //Each chain has its own pseudo (newran) random number generator seeded with a seed drawn from the master PRNG
     //As long as the chains are created in a fixed order, this should allow threading independence of the result.
     Nfrozen=-1;
+    
   };
   virtual void checkpoint(string path)override;
   virtual void restart(string path)override;
@@ -102,6 +105,8 @@ public:
     cout<<"chain::step: No base-class step() operation defined!"<<endl;
     exit(1);
   };
+  //Uniform interface for reporting whether output is allowed for this chain
+  virtual bool outputAllowed()const{return true;};
   virtual void dumpChain(ostream &os,int Nburn=0,int ievery=1){
     cout<<"chain::step: No base-class dumpChain() operation defined!"<<endl;
     exit(1);
@@ -238,8 +243,11 @@ class parallel_tempering_chains: public chain{
   bool do_evolve_temps;
   double evolve_temp_rate,evolve_temp_lpost_cut;
   int maxswapsperstep;
-  //internal function
-  void pry_temps(int ipry, double rate);
+  //MPI
+  bool use_mpi;
+  int myproc,nproc,interproc_stride;
+  vector<int> mychains,interproc_unpack_index;
+  vector<bool> is_my_chain;
   
  public:
   virtual ~parallel_tempering_chains(){  };//assure correct deletion of any child
@@ -248,8 +256,12 @@ class parallel_tempering_chains: public chain{
   virtual void restart(string path)override;
   void initialize( probability_function *log_likelihood, const sampleable_probability_function *log_prior,int n=1,string initialization_file="");
   void set_proposal(proposal_distribution &proposal);
+  bool outputAllowed()const override;
   void step();
   ///reference to zero-temerature chain.
+  //MPI The following functions need to be rethought for MPI
+  //MPI if these are only needed as examples, then c0() could provide the proc-local chain[mychains[0]]
+  //MPI otherwise (for getStep?) it might make senst to track some info independently of the subchains
   MH_chain & c0(){return chains[0];};
   int getStep()override{return c0().getStep();};
   state getState(int elem=-1,bool raw_indexing=false)override{return c0().getState(elem,raw_indexing);};
@@ -285,5 +297,23 @@ class parallel_tempering_chains: public chain{
   void do_reboot(double rate,double threshhold,double thermal,int every,int grace=0,bool graduate=false,double aggression=0){max_reboot_rate=rate;reboot_thresh=threshhold;reboot_thermal_thresh=thermal;test_reboot_every=every;reboot_grace=grace;reboot_aggression=aggression;reboot_graduate=graduate;
     cout<<"Will reboot every "<<" aggression="<<reboot_aggression<<endl;
   };
+
+private:  
+  //internal functions
+  void pry_temps(int ipry, double rate);//defunct
+  void pry_temps(const vector<int> &ipry, const double rate, vector<double> &all_invtemps, const vector<double> &all_invlposts );
+  vector<state> gather_states();
+  vector<double> gather_invtemps();
+  vector<double> gather_llikes();
+  vector<double> gather_lposts();  
+protected:
+  //below is just for debugging
+  /*
+  virtual double get_uniform(){
+    double x=chain::get_uniform();
+#pragma omp critical
+    cout<<myproc<<":"<<id<<":"<<x<<endl;//" rng="<<rng<<endl;
+    return x;
+    };*/  
 }; 
 #endif    
