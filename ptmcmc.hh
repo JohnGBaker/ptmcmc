@@ -70,5 +70,10 @@ public:
   
 private:
   void processOptions();
+
+public:
+  static void Init(int &argc, char*argv[]);
+  static void Quit();
+  bool reporting();
 };
 

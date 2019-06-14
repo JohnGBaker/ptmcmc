@@ -340,8 +340,8 @@ public:
   int size()const{return data->size();};
   virtual void reset(){
     best_post=-INFINITY;
-    best=best.scalar_mult(0);
-  }
+    if(space)best=state(space,space->size());
+   }
   virtual state bestState(){return best;};
   virtual double bestPost(){return best_post;};
   //virtual bool setStateSpace(stateSpace &sp)=0;

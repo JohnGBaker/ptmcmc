@@ -6,18 +6,18 @@ ifeq ($(CFLAGS),)
 endif
 
 
-all: ${LIB}/libprobdist.a  ${INCLUDE}/ProbabilityDist.h
+all: ${LIB}/libprobdist.a  ${INCDIR}/ProbabilityDist.h
 	@echo LIB=${LIB}
-	@echo INCLUDE=${INCLUDE}
+	@echo INCDIR=${INCDIR}
 
 headers: ProbabilityDist.h
 
-${LIB}/libprobdist.a: ${PROBDIST_OFILES} ${NEWRAN_OFILES} ${INCLUDE}/ProbabilityDist.h
+${LIB}/libprobdist.a: ${PROBDIST_OFILES} ${NEWRAN_OFILES} ${INCDIR}/ProbabilityDist.h
 	ar rv ${LIB}/libprobdist.a ${PROBDIST_OFILES} ${NEWRAN_OFILES}
 
-${INCLUDE}/ProbabilityDist.h: ProbabilityDist.h include.h newran.h myexcept.h extreal.h simpstr.h
-	@echo "Installing headers in "${INCLUDE}
-	cp ProbabilityDist.h include.h newran.h myexcept.h extreal.h simpstr.h ${INCLUDE}/
+${INCDIR}/ProbabilityDist.h: ProbabilityDist.h include.h newran.h myexcept.h extreal.h simpstr.h
+	@echo "Installing headers in "${INCDIR}
+	cp ProbabilityDist.h include.h newran.h myexcept.h extreal.h simpstr.h ${INCDIR}/
 
 
 

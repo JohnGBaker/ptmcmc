@@ -4,6 +4,10 @@
 #include <fstream>
 #include <iostream>
 #include "ptmcmc.hh"
+#ifdef USE_MPI
+#include <mpi.h>
+#endif
+
 using namespace std;
 
 ///Set the proposal distribution. Calling routing responsible for deleting.
@@ -226,6 +230,34 @@ proposal_distribution* ptmcmc_sampler::new_proposal_distribution_guts(int Npar, 
   return prop;
 };
 
+void ptmcmc_sampler::Init(int &argc, char*argv[]){
+#ifdef USE_MPI
+  MPI_Init( &argc, &argv );
+  int myproc,nproc;
+  MPI_Comm_rank(MPI_COMM_WORLD, &myproc);
+  MPI_Comm_size(MPI_COMM_WORLD, &nproc);
+  if(myproc==0)cout<<"MPI running on "<<nproc<<" MPI processes.\n"<<endl;
+#endif
+};
+
+void ptmcmc_sampler::Quit(){
+#ifdef USE_MPI
+  MPI_Finalize();
+#endif
+  exit(0);
+};
+
+bool ptmcmc_sampler::reporting(){
+  bool report=true;
+#ifdef USE_MPI
+  int myproc,nproc;
+  MPI_Comm_rank(MPI_COMM_WORLD, &myproc);
+  MPI_Comm_size(MPI_COMM_WORLD, &nproc);
+  report= myproc==0;
+#endif
+  return report;
+};
+
 ptmcmc_sampler::ptmcmc_sampler(){
   //These pointers are managed by this class
   have_cc=false;
@@ -246,13 +278,17 @@ void ptmcmc_sampler::checkpoint(string path){
   ostringstream ss;
   ss<<path<<"/step_"<<istep<<"-cp/";
   string dir=ss.str();
-  cout<<"Writing checkpoint files to dir:"<<dir<<endl;
-  mkdir(dir.data(),ACCESSPERMS);
-  ss<<"ptmcmc.cp";
-  ofstream os;
-  openWrite(os,ss.str());
-  cc->checkpoint(dir);
-  writeInt(os,istep);
+  if(cc->outputAllowed()){
+    cout<<"Writing checkpoint files to dir:"<<dir<<endl;
+    mkdir(dir.data(),ACCESSPERMS);
+    ss<<"ptmcmc.cp";
+    ofstream os;
+    openWrite(os,ss.str());
+    cc->checkpoint(dir);
+    writeInt(os,istep);
+  } else {
+    cc->checkpoint(dir);
+  }
   //cout<<"show:"<<cc->show()<<endl;;
   //cout<<"status:"<<cc->status()<<endl;
 }
@@ -360,6 +396,7 @@ void ptmcmc_sampler::processOptions(){
   //parallel_tempering=optSet("pt");
   *optValue("pt")>>Nptc;
   if(Nptc>1)parallel_tempering=true;
+  else parallel_tempering=false;
   *optValue("pt_evolve_rate")>>pt_evolve_rate;
   *optValue("pt_evolve_lpost_cut")>>pt_evolve_lpost_cut;
   *optValue("pt_reboot_rate")>>pt_reboot_rate;
@@ -371,7 +408,9 @@ void ptmcmc_sampler::processOptions(){
   pt_reboot_grad=optSet("pt_reboot_grad");
   *optValue("pt_swap_rate")>>swap_rate;
   *optValue("pt_Tmax")>>Tmax;  
-  *optValue("pt_dump_n")>>dump_n;if(dump_n>Nptc||dump_n<0)dump_n=Nptc;  
+  *optValue("pt_dump_n")>>dump_n;
+  if(dump_n>Nptc||dump_n<0)dump_n=Nptc;
+  if(Nptc==0)dump_n=1;
   *optValue("pt_stop_evid_err")>>pt_stop_evid_err;  
   *optValue("chain_init_file")>>initialization_file;
   *optValue("chain_ess_stop")>>ess_stop;
@@ -391,6 +430,7 @@ void ptmcmc_sampler::setup(int Ninit,bayes_likelihood &llike, const sampleable_p
   chain_prior=&prior;
   chain_llike = &llike;
   have_setup=true;
+  have_cprop=true;
 }
 
 void ptmcmc_sampler::setup(bayes_likelihood &llike, const sampleable_probability_function &prior, int output_precision_){
@@ -457,11 +497,11 @@ int ptmcmc_sampler::run(const string & base, int ic){
     ostringstream ssi;
     if(parallel_tempering)ssi<<base<<"_t"<<ich<<".dat";
     else ssi<<base<<".dat";
-    out[ich].open(ssi.str().c_str(),mode);
+    if(cc->outputAllowed())out[ich].open(ssi.str().c_str(),mode);
     out[ich].precision(output_precision);
   }
   
-  cout<<"\nRunning chain "<<ic<<" for up to "<<chain_Nstep<<" steps."<<endl;
+  if(reporting())cout<<"\nRunning chain "<<ic<<" for up to "<<chain_Nstep<<" steps."<<endl;
   //FIXME: add this function in "likelihood" class
   chain_llike->reset();
   
@@ -470,24 +510,28 @@ int ptmcmc_sampler::run(const string & base, int ic){
       
     if(istep==checkp_at_step or ( checkp_at_time>0 and (omp_get_wtime()-start_time)/3600 > checkp_at_time ) ){//checkpointing test
       checkpoint(".");
-      exit(0);
+      
+      Quit();
     }
     
     cc->step();
     bool stop=false;
     if(0==istep%Nevery){
-      cout<<"chain "<<ic<<" step "<<istep<<endl;
-      cout<<"   MaxPosterior="<<chain_llike->bestPost()<<endl;
-      if(parallel_tempering){
-	parallel_tempering_chains *ptc=dynamic_cast<parallel_tempering_chains*>(cc);
-	for(int ich=0;ich<dump_n;ich++)ptc->dumpChain(ich,out[ich],istep-Nevery+1,Nskip);
-	double bestErr=ptc->bestEvidenceErr();
-	if(bestErr<pt_stop_evid_err){
-	  stop=true;
-	  cout<<"ptmcmc_sampler::run: Stopping based on pt_stop_evid_err criterion."<<endl; 
-	}	
+      if(reporting()){
+	cout<<"chain "<<ic<<" step "<<istep<<endl;
+	cout<<"   MaxPosterior="<<chain_llike->bestPost()<<endl;
+	if(parallel_tempering){
+	  parallel_tempering_chains *ptc=dynamic_cast<parallel_tempering_chains*>(cc);
+	  for(int ich=0;ich<dump_n;ich++)ptc->dumpChain(ich,out[ich],istep-Nevery+1,Nskip);
+	  double bestErr=ptc->bestEvidenceErr();
+	  if(bestErr<pt_stop_evid_err){
+	    stop=true;
+	    cout<<"ptmcmc_sampler::run: Stopping based on pt_stop_evid_err criterion."<<endl; 
+	  }	
+	} else {
+	  cc->dumpChain(out[0],istep-Nevery+1,Nskip);
+	}
       }
-      else cc->dumpChain(out[0],istep-Nevery+1,Nskip);
       cout<<cc->status()<<endl;      
       
       if(0==istep%(Nevery*4)){
