@@ -98,7 +98,7 @@ public:
     const int uni=mixed_dist_product::uniform, gauss=mixed_dist_product::gaussian, pol=mixed_dist_product::polar, cpol=mixed_dist_product::copolar, log=mixed_dist_product::log; 
     valarray<double> centers((initializer_list<double>){  1.667,  PI, PI/2,  PI,    0, PI/2});
     valarray<double>  scales((initializer_list<double>){  1.333,  PI, PI/2,  PI, PI/2, PI/2});
-    valarray<int>      types((initializer_list<int>)   {    uni, uni, pol, uni, cpol,  uni});
+    valarray<int>      types((valarray<int>)   {    uni, uni, pol, uni, cpol,  uni});
     if(narrowband){
       centers[3] = 1.75*PI;scales[3] = PI/4.0;
       //centers[4] = 0.4    ;scales[4] = 0.2;

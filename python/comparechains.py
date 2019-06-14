@@ -19,10 +19,12 @@ import argparse
 
 def get_par_names(fname):
     with open(fname) as f:
+        par0col=5
+        if("resampled.dat" in fname):par0col=2
         line=f.readline()
         line=f.readline()
         names=line.split()
-        names=names[5:]
+        names=names[par0col:]
     return names
 
 def read_samples(Npar,sample_file,code="bambi",burnfrac=0,keeplen=-1,iskip=1,maxsamps=30000):
@@ -31,11 +33,12 @@ def read_samples(Npar,sample_file,code="bambi",burnfrac=0,keeplen=-1,iskip=1,max
         data=np.loadtxt(sample_file,usecols=range(Npar))
     else:
         print ("Reading PTMCMC samples")
-        #data=np.loadtxt(chainfile,usecols=range(5,5+Npar))
-        #data=np.loadtxt(sample_file,usecols=[0]+list(range(5,5+Npar)))
-        data=np.loadtxt(sample_file,usecols=[0]+[5+x for x in selectedPars])
-        print("data[-1]=",data[-1],"data[-2]=",data[-2][0])
-        every=data[-1][0]-data[-2][0]
+        par0col=5
+        if("resampled.dat" in sample_file):par0col=2
+        data=np.loadtxt(sample_file,usecols=[0]+[par0col+x for x in selectedPars])
+        if(iskip>1):
+            print("data[-1]=",data[-1],"data[-2]=",data[-2][0])
+            every=data[-1][0]-data[-2][0]
         data=data[:,1:]
         
         #hack for sign of q
@@ -50,11 +53,14 @@ def read_samples(Npar,sample_file,code="bambi",burnfrac=0,keeplen=-1,iskip=1,max
                         if(d[ip]>2*math.pi):d[ip]-=2*math.pi
                         
         if(keeplen/iskip>maxsamps):iskip=int(keeplen/maxsamps)
-        iev=int(iskip/every)
-        if(iev>1):
-            data=data[::iev]
-            every*=iev
-        print ("every=",every," iev=",iev," iskip=",iskip)            
+        if(iskip>1):
+            iev=int(iskip/every)
+            if(iev>1):
+                data=data[::iev]
+                every*=iev
+                print ("every=",every," iev=",iev," iskip=",iskip)            
+        else:
+            every=1
         #print "shape=",data.shape
         keeplen=int(keeplen/every)
 
@@ -67,8 +73,9 @@ def read_samples(Npar,sample_file,code="bambi",burnfrac=0,keeplen=-1,iskip=1,max
 
     if(code!="bambi"):
         outfile=re.sub("_t0.dat","_post_samples.dat",sample_file)
-        print("Writing PTMCMC samples to '",outfile,"'")
-        np.savetxt(outfile,data)
+        if(outfile!=sample_file):
+            print("Writing PTMCMC samples to '",outfile,"'")
+            np.savetxt(outfile,data)
         
     return data
 
@@ -285,6 +292,10 @@ if(True):
     for chainfile in chainfiles:
         if("post_equal_weights.dat" in chainfile):
             code="bambi"
+            burnfrac=0
+            iskip=1
+        elif("_resampled.dat" in chainfile): #resampled ptmcmc data
+            code="ptmcmc"
             burnfrac=0
             iskip=1
         elif("_t0.dat" in chainfile):

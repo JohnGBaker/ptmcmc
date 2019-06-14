@@ -36,7 +36,7 @@ class chainData:
         parnames=self.get_par_names(self.chainfilepath)
         self.npar=len(parnames)
         print(self.npar,"params:",parnames)
-        self.names=["samp","post",]+parnames
+        self.names=["post","like",]+parnames
 
     def get_par_names(self, fname):
         with open(fname) as f:
@@ -402,7 +402,25 @@ def report_param_effective_samples(chain, imax=None,width=None, every=None):
     print("data[0] features:",[features[i](chain.getState(0)) for i in range(imax)])
     return report_effective_samples(chain,features,width,every)
 
-
+#Resample Posterior
+#This routine draws samples from the part of the data found relevant, and reports data with nup times the ess from the relevant portion of the data
+def resample_posterior(chain, ess, length, upsample_fac):
+    fname=chain.basename+"_resampled.dat"
+    print("Writing resampled data to '"+fname+"'")
+    nsamp=int(ess*upsample_fac)
+    ngood=int(length/chain.dSdN)
+    if(nsamp>ngood):nsamp=ngood
+    n0=int(len(chain.data)-ngood)
+    rows=n0+np.random.choice(int(ngood),nsamp)
+    with open(fname,"w") as f:
+        f.write("#ess="+str(ess)+" nsamp="+str(nsamp)+"\n")
+        f.write("#")
+        for name in chain.names:f.write(name+" ")
+        f.write("\n")
+        for i in rows:
+            rowvals=chain.data[i]
+            for val in rowvals:f.write(str(val)+" ")
+            f.write("\n")
 
 ################# MAIN ################
 
@@ -412,6 +430,7 @@ parser.add_argument('fname', metavar='chain_file', type=str,
 args = parser.parse_args()
 
 chain=chainData(args.fname)
-report_param_effective_samples(chain)
-
+ess,length=report_param_effective_samples(chain)
+upsample_fac=5
+resample_posterior(chain,ess,length,upsample_fac)
 

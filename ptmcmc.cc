@@ -247,6 +247,17 @@ void ptmcmc_sampler::Quit(){
   exit(0);
 };
 
+bool ptmcmc_sampler::reporting(){
+  bool report=true;
+#ifdef USE_MPI
+  int myproc,nproc;
+  MPI_Comm_rank(MPI_COMM_WORLD, &myproc);
+  MPI_Comm_size(MPI_COMM_WORLD, &nproc);
+  report= myproc==0;
+#endif
+  return report;
+};
+
 ptmcmc_sampler::ptmcmc_sampler(){
   //These pointers are managed by this class
   have_cc=false;
@@ -490,7 +501,7 @@ int ptmcmc_sampler::run(const string & base, int ic){
     out[ich].precision(output_precision);
   }
   
-  cout<<"\nRunning chain "<<ic<<" for up to "<<chain_Nstep<<" steps."<<endl;
+  if(reporting())cout<<"\nRunning chain "<<ic<<" for up to "<<chain_Nstep<<" steps."<<endl;
   //FIXME: add this function in "likelihood" class
   chain_llike->reset();
   
@@ -506,18 +517,20 @@ int ptmcmc_sampler::run(const string & base, int ic){
     cc->step();
     bool stop=false;
     if(0==istep%Nevery){
-      cout<<"chain "<<ic<<" step "<<istep<<endl;
-      cout<<"   MaxPosterior="<<chain_llike->bestPost()<<endl;
-      if(parallel_tempering){
-	parallel_tempering_chains *ptc=dynamic_cast<parallel_tempering_chains*>(cc);
-	for(int ich=0;ich<dump_n;ich++)ptc->dumpChain(ich,out[ich],istep-Nevery+1,Nskip);
-	double bestErr=ptc->bestEvidenceErr();
-	if(bestErr<pt_stop_evid_err){
-	  stop=true;
-	  cout<<"ptmcmc_sampler::run: Stopping based on pt_stop_evid_err criterion."<<endl; 
-	}	
-      } else {
-	cc->dumpChain(out[0],istep-Nevery+1,Nskip);
+      if(reporting()){
+	cout<<"chain "<<ic<<" step "<<istep<<endl;
+	cout<<"   MaxPosterior="<<chain_llike->bestPost()<<endl;
+	if(parallel_tempering){
+	  parallel_tempering_chains *ptc=dynamic_cast<parallel_tempering_chains*>(cc);
+	  for(int ich=0;ich<dump_n;ich++)ptc->dumpChain(ich,out[ich],istep-Nevery+1,Nskip);
+	  double bestErr=ptc->bestEvidenceErr();
+	  if(bestErr<pt_stop_evid_err){
+	    stop=true;
+	    cout<<"ptmcmc_sampler::run: Stopping based on pt_stop_evid_err criterion."<<endl; 
+	  }	
+	} else {
+	  cc->dumpChain(out[0],istep-Nevery+1,Nskip);
+	}
       }
       cout<<cc->status()<<endl;      
       

@@ -73,5 +73,6 @@ private:
 public:
   static void Init(int &argc, char*argv[]);
   static void Quit();
+  bool reporting();
 };
 
