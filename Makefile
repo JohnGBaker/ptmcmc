@@ -5,7 +5,7 @@ LIB ?= ${CURDIR}/lib
 INCLUDE ?= ${CURDIR}/include
 ifeq ($(CFLAGS),)
 	CFLAGS = -fopenmp -O2 -g
-	CXX = /opt/local/bin/g++-mp-4.7
+	CXX = g++
 endif
 
 
@@ -60,26 +60,28 @@ clean:
 docs:
 	doxygen dox.cfg
 
+BUILD_EXAMPLE=${CXX} $(CFLAGS) -std=c++11 -o $@ $< -lprobdist -lptmcmc -L${LIB} -I${INCLUDE} $(LDFLAGS)
+
 testMH: testMH.cpp ${LIB}/libprobdist.a ${LIB}/libptmcmc.a
-	${CXX} $(CFLAGS) -std=c++11 -o testMH $< -lprobdist -lptmcmc -L${LIB} -I${INCLUDE} $(LDFLAGS)
+	${BUILD_EXAMPLE}
 
 testPT: testPT.cpp ${LIB}/libprobdist.a ${LIB}/libptmcmc.a
-	${CXX} $(CFLAGS) -std=c++11 -o testPT $< -lprobdist -lptmcmc -L${LIB} -I${INCLUDE} $(LDFLAGS)
+	${BUILD_EXAMPLE}
 
 testGaussian: testGaussian.cc ${LIB}/libprobdist.a ${LIB}/libptmcmc.a
-	${CXX} $(CFLAGS) -g -std=c++11 -o testGaussian $< -lprobdist -lptmcmc -L${LIB} -I${INCLUDE} $(LDFLAGS)
+	${BUILD_EXAMPLE}
 
 example: example.cc ${LIB}/libprobdist.a ${LIB}/libptmcmc.a
-	${CXX} $(CFLAGS) -std=c++11 -o example -lprobdist -lptmcmc -L${LIB} -I${INCLUDE} $<
+	${BUILD_EXAMPLE}
 
 exampleLISA: exampleLISA.cc ${LIB}/libprobdist.a ${LIB}/libptmcmc.a
-	${CXX} $(CFLAGS) -std=c++11 -o exampleLISA -lprobdist -lptmcmc -L${LIB} -I${INCLUDE} $<
+	${BUILD_EXAMPLE}
 
 #linear_example: linear_example.cc ${LIB}/libprobdist.a ${LIB}/libptmcmc.a
 #	${CXX} $(CFLAGS) -std=c++11 -o linear_example -lprobdist -lptmcmc -L${LIB} -I${INCLUDE} $<
 
 poly_example: poly_example.cc ${LIB}/libprobdist.a ${LIB}/libptmcmc.a
-	${CXX} $(CFLAGS) -std=c++11 -o poly_example -lprobdist -lptmcmc -L${LIB} -I${INCLUDE} $<
+	${BUILD_EXAMPLE}
 
 .SUFFIXES: .c .cc .o
 
