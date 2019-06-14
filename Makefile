@@ -1,24 +1,10 @@
 #set CXX to g++
 MCMC_OFILES = states.o chain.o probability_function.o proposal_distribution.o  ptmcmc.o
-<<<<<<< HEAD
-EIGEN=${CURDIR}/eigen-eigen-67e894c6cd8f/Eigen
-LIB ?= ${CURDIR}/lib
-INCLUDE ?= ${CURDIR}/include
-ifeq ($(CFLAGS),)
-	CFLAGS = -fopenmp -O2 -g -fno-inline
-	CXX = /opt/local/bin/g++-mp-8
-=======
 EIGEN=$(CURDIR)/eigen-eigen-67e894c6cd8f/Eigen
 ifeq ($(CFLAGS),)
 	include Makefile.ac
-	#CXX=/opt/local/bin/g++-mp-7
-	#CFLAGS= -g -O2 -fopenmp
-<<<<<<< HEAD
-=======
 else
 	INCDIR = ${INCLUDE}
->>>>>>> c1828073b52d32441f6a0f04b77273e811721e26
->>>>>>> f40c91151985d6034225d7157faed709e925d6b2
 endif
 INCDIR ?= ${CURDIR}/include
 LIB ?= ${CURDIR}/lib
@@ -98,7 +84,6 @@ poly_example: poly_example.cc ${LIB}/libprobdist.a ${LIB}/libptmcmc.a
 .SUFFIXES: .c .cc .o
 
 .cc.o: 
-	
 	${CXX} -c ${CFLAGS} -std=c++11 -I${INCDIR} $<
 
 .c.o: 
