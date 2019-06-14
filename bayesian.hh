@@ -347,6 +347,7 @@ public:
   //virtual bool setStateSpace(stateSpace &sp)=0;
   virtual double getFisher(const state &s0, vector<vector<double> >&fisher_matrix){
     cout<<"getFisher not implemented for bayes_likelihood object ("<<typeid(*this).name()<<")"<<endl;
+    return 0;
   };
   //To avoid having to recompute the signal model, we pass in the signal variances.
   virtual vector<double> getVariances(const state &st,vector<double>&svar)const{

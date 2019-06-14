@@ -1,11 +1,11 @@
 #set CXX to g++
 MCMC_OFILES = states.o chain.o probability_function.o proposal_distribution.o  ptmcmc.o
-EIGEN=$(CURDIR)/eigen-eigen-67e894c6cd8f/Eigen
+EIGEN=${CURDIR}/eigen-eigen-67e894c6cd8f/Eigen
 LIB ?= ${CURDIR}/lib
 INCLUDE ?= ${CURDIR}/include
 ifeq ($(CFLAGS),)
-	CFLAGS = -fopenmp -O2 -g
-	CXX = /opt/local/bin/g++-mp-4.7
+	CFLAGS = -fopenmp -O2 -g -fno-inline
+	CXX = /opt/local/bin/g++-mp-8
 endif
 
 

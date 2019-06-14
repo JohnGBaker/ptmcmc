@@ -24,7 +24,7 @@ proposal_distribution* ptmcmc_sampler::new_proposal_distribution(int Npar, int &
   return new_proposal_distribution_guts(Npar, Ninit, prior, halfwidths, proposal_option, SpecNinit, tmixfac, reduce_gamma_by, de_eps, gauss_1d_frac,de_mixing);
 };
 
-proposal_distribution* ptmcmc_sampler::select_proposal(){
+void ptmcmc_sampler::select_proposal(){
     valarray<double> scales;
     chain_prior->getScales(scales);
     int Npar=chain_prior->get_space()->size();

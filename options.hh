@@ -170,6 +170,21 @@ public:
   Optioned(){have_options=false;};
   virtual void addOptions(Options &opts,const string &prefix_=""){opt=&opts,prefix=prefix_;have_options=true;};
   //set the options for processing.
+  void optGetValue(const string & name, int &val){
+    check_opt();
+    string s(opt->value(prefix+name));
+    istringstream(s.c_str())>>val;
+  };
+  void optGetValue(const string & name, double &val){
+    check_opt();
+    string s(opt->value(prefix+name));
+    istringstream(s.c_str())>>val;
+  };
+  void optGetValue(const string & name, string &val){
+    check_opt();
+    string s(opt->value(prefix+name));
+    istringstream(s.c_str())>>val;
+  };
   unique_ptr<istringstream> optValue(const string & name){
     check_opt();return unique_ptr<istringstream>(new istringstream(opt->value((prefix+name).c_str())));
   };

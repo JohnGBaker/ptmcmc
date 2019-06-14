@@ -227,8 +227,8 @@ int main(int argc, char*argv[]){
   //Bayesian sampling [assuming mcmc]:
   //Set the proposal distribution 
   int Ninit;
-  proposal_distribution *prop=ptmcmc_sampler::new_proposal_distribution(Npar,Ninit,opt,prior.get(),&scales);
-  cout<<"Proposal distribution is:\n"<<prop->show()<<endl;
+  //proposal_distribution *prop=ptmcmc_sampler::new_proposal_distribution(Npar,Ninit,opt,prior.get(),&scales);
+  //cout<<"Proposal distribution is:\n"<<prop->show()<<endl;
   //set up the mcmc sampler (assuming mcmc)
   //mcmc.setup(Ninit,*like,*prior,*prop,output_precision);
   mcmc.setup(*like,*prior,output_precision);
