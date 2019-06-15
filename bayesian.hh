@@ -323,7 +323,39 @@ public:
       exit(1);
     }
   };
-  //Overloaded from bayes_component
+  //This is a simplified interface for applications which only provide an indep. likelihood 
+  void basic_setup(stateSpace *sp, sampleable_probability_function *prior ){
+    haveSetup();
+    ///Set up the output stateSpace for this object
+    nativeSpace=*sp;
+    setPrior(prior);
+    best=state(&nativeSpace,nativeSpace.size());
+    //cout<<"bayes_likelihood::basic_setup:this="<<this<<endl;
+    //cout<<"bayes_likelihood::basic_setup: space="<<nativeSpace.show()<<endl;
+    //cout<<"bayes_likelihood::basic_setup: best="<<best.show()<<endl;
+
+    //Unless otherwise externally specified, assume nativeSpace as the parameter space
+    defWorkingStateSpace(nativeSpace);
+  };
+  ///This is a more simplified interface for applications which only provide an indep.
+  ///which assumes does not depend on access to probability_function.hh (or valarray) 
+  void basic_setup(stateSpace *sp,const vector<string> &types, const vector<double> &centers,const vector<double> &scales){			   
+    const valarray<double> centers_va(centers.data(), centers.size());
+    const valarray<double> scales_va(scales.data(), scales.size());
+    valarray<int> types_va(types.size());
+    const int uni=mixed_dist_product::uniform, gauss=mixed_dist_product::gaussian, pol=mixed_dist_product::polar, cpol=mixed_dist_product::copolar, log=mixed_dist_product::log;
+    for(int i=0;i<types.size();i++){
+      if(types[i]=="uni" or types[i]=="uniform")types_va[i]=uni;
+      else if(types[i]=="gauss" or types[i]=="gaussian")types_va[i]=gauss;
+      else if(types[i]=="pol" or types[i]=="polar")types_va[i]=pol;
+      else if(types[i]=="cpol" or types[i]=="copol")types_va[i]=cpol;
+      else if(types[i]=="log")types_va[i]=log;
+    }
+    nativeSpace=*sp;//have to set this first so prior can reference
+    basic_setup(sp, new mixed_dist_product(&nativeSpace,types_va,centers_va,scales_va));
+    
+  };
+  ///Default set up is based on provided data/signal objects
   virtual void setup(){
     haveSetup();
     ///Set up the output stateSpace for this object
@@ -339,9 +371,11 @@ public:
   };
   int size()const{return data->size();};
   virtual void reset(){
+    //cout<<"bayes_likelihood::reset:this="<<this<<endl;
+    //cout<<"bayes_likelihood::reset: best="<<best.show()<<endl;
     best_post=-INFINITY;
-    if(space)best=state(space,space->size());
-   }
+    if(space)best=best.scalar_mult(0);
+  }
   virtual state bestState(){return best;};
   virtual double bestPost(){return best_post;};
   //virtual bool setStateSpace(stateSpace &sp)=0;

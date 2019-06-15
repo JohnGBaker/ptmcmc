@@ -24,6 +24,7 @@ const double MTSUN_SI=4.9254923218988636432342917247829673e-6;
 const double PI=3.1415926535897932384626433832795029;
 const complex<double> I(0.0, 1.0);
 const bool narrowband=true;
+const bool use_basic_setup=true;
 
 // Routines for simplified likelihood 22 mode, frozen LISA, lowf, fixed masses (near 1e6) and fixed t0
 static double funcphiL(double m1, double m2, double tRef,double phiRef){
@@ -76,10 +77,10 @@ class simple_likelihood : public bayes_likelihood {
   int idx_phi,idx_d,idx_inc,idx_lambda,idx_beta,idx_psi;
 public:
   simple_likelihood():bayes_likelihood(nullptr,nullptr,nullptr){};
-  virtual void setup(){
-    haveSetup();
+  virtual void setup(){    
     ///Set up the output stateSpace for this object
-    //set nativeSpace
+
+    //setup  stateSpace
     int npar=6;
     stateSpace space(npar);
     string names[]={"d","phi","inc","lambda","beta","psi"};//double phiRef, double d, double inc, double lambd, double beta, double psi) 
@@ -88,23 +89,46 @@ public:
     if(not narrowband)space.set_bound(3,boundary(boundary::wrap,boundary::wrap,0,2*M_PI));//set 2-pi-wrapped space for lambda.
     //else space.set_bound(4,boundary(boundary::limit,boundary::limit,0.2,0.6));//set narrow limits for beta
     space.set_bound(5,boundary(boundary::wrap,boundary::wrap,0,M_PI));//set pi-wrapped space for pol.
-    cout<<"Parameter space:\n"<<space.show()<<endl;
-    
-    nativeSpace=space;
-    defWorkingStateSpace(nativeSpace);
-    best=state(&space,space.size());
-    //Set the prior...
+    if(use_basic_setup){
 
-    const int uni=mixed_dist_product::uniform, gauss=mixed_dist_product::gaussian, pol=mixed_dist_product::polar, cpol=mixed_dist_product::copolar, log=mixed_dist_product::log; 
-    valarray<double> centers((initializer_list<double>){  1.667,  PI, PI/2,  PI,    0, PI/2});
-    valarray<double>  scales((initializer_list<double>){  1.333,  PI, PI/2,  PI, PI/2, PI/2});
-    valarray<int>      types((valarray<int>)   {    uni, uni, pol, uni, cpol,  uni});
-    if(narrowband){
-      centers[3] = 1.75*PI;scales[3] = PI/4.0;
-      //centers[4] = 0.4    ;scales[4] = 0.2;
-      centers[4] = PI/4    ;scales[4] = PI/4;
+      vector<double> centers((initializer_list<double>){  1.667,  PI, PI/2,  PI,    0, PI/2});
+      vector<double>  scales((initializer_list<double>){  1.333,  PI, PI/2,  PI, PI/2, PI/2});
+      vector<string>      types((initializer_list<string>){  "uni","uni", "pol", "uni", "cpol", "uni"});
+      if(narrowband){
+	centers[3] = 1.75*PI;scales[3] = PI/4.0;
+	//centers[4] = 0.4    ;scales[4] = 0.2;
+	centers[4] = PI/4    ;scales[4] = PI/4;
+      }
+     //cout<<"simple_likelihood::setup: space="<<space.show()<<endl;
+
+      basic_setup(&space, types, centers, scales);
+    } else {
+      haveSetup();
+      //cout<<"Parameter space:\n"<<space.show()<<endl;
+      
+      nativeSpace=space;
+      defWorkingStateSpace(nativeSpace);
+      //cout<<"simple_likelihood: Setting best stateSpace="<<&nativeSpace<<endl;
+      best=state(&nativeSpace,space.size());
+      //Set the prior...
+      
+      const int uni=mixed_dist_product::uniform, gauss=mixed_dist_product::gaussian, pol=mixed_dist_product::polar, cpol=mixed_dist_product::copolar, log=mixed_dist_product::log; 
+      valarray<double> centers((initializer_list<double>){  1.667,  PI, PI/2,  PI,    0, PI/2});
+      valarray<double>  scales((initializer_list<double>){  1.333,  PI, PI/2,  PI, PI/2, PI/2});
+      valarray<int>      types((initializer_list<int>)   {    uni, uni, pol, uni, cpol,  uni});
+      if(narrowband){
+	centers[3] = 1.75*PI;scales[3] = PI/4.0;
+	//centers[4] = 0.4    ;scales[4] = 0.2;
+	centers[4] = PI/4    ;scales[4] = PI/4;
+      }
+      setPrior(new mixed_dist_product(&nativeSpace,types,centers,scales));
     }
-    setPrior(new mixed_dist_product(&nativeSpace,types,centers,scales));
+    //cout<<"simple_likelihood::setup:this="<<this<<endl;
+    //cout<<"simple_likelihood::setup:&space="<<getObjectStateSpace()<<endl;
+    //cout<<"simple_likelihood::setup:space="<<getObjectStateSpace()->show()<<endl;
+    //cout<<"best stateSpace is:"<<best.getSpace()<<endl;
+    //cout<<"simple_likelihood::setup:best="<<best.show()<<endl;
+
   };
   void defWorkingStateSpace(const stateSpace &sp){
     checkSetup();//Call this assert whenever we need options to have been processed.
@@ -150,8 +174,6 @@ shared_ptr<Random> globalRNG;//used for some debugging...
 //***************************************************************************************8
 //main test program
 int main(int argc, char*argv[]){
-
-  ptmcmc_sampler::Init( argc, argv );
 
   Options opt(true);
   //Create the sampler
@@ -229,8 +251,8 @@ int main(int argc, char*argv[]){
   //Bayesian sampling [assuming mcmc]:
   //Set the proposal distribution 
   int Ninit;
-  //proposal_distribution *prop=ptmcmc_sampler::new_proposal_distribution(Npar,Ninit,opt,prior.get(),&scales);
-  //cout<<"Proposal distribution is:\n"<<prop->show()<<endl;
+  proposal_distribution *prop=ptmcmc_sampler::new_proposal_distribution(Npar,Ninit,opt,prior.get(),&scales);
+  cout<<"Proposal distribution is:\n"<<prop->show()<<endl;
   //set up the mcmc sampler (assuming mcmc)
   //mcmc.setup(Ninit,*like,*prior,*prop,output_precision);
   mcmc.setup(*like,*prior,output_precision);
@@ -239,6 +261,12 @@ int main(int argc, char*argv[]){
   //Prepare for chain output
   ss<<outname;
   string base=ss.str();
+
+  //cout<<"exampleLISA:like is:"<<like<<endl;
+  //cout<<"exampleLISA:&space="<<like->getObjectStateSpace()<<endl;
+  //cout<<"exampleLISA:space is:"<<like->getObjectStateSpace()->show();
+  //cout<<"best stateSpace is:"<<like->bestState().getSpace()<<endl;
+  //cout<<"exampleLISA:best is:"<<like->bestState().show()<<endl;
 
   //Loop over Nchains
   for(int ic=0;ic<Nchain;ic++){
@@ -254,8 +282,5 @@ int main(int argc, char*argv[]){
   //delete data;
   //delete signal;
   delete like;
-
-  ptmcmc_sampler::Quit();
-  
 }
 
