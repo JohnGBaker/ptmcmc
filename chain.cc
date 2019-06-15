@@ -9,6 +9,7 @@
 #include <mpi.h>
 #else
 #define MPI_Allgather(a,b,c,d,e,f,g)
+#define MPI_Barrier(a)
 #define MPI_DOUBLE
 #define MPI_COMM_WORLD
 #endif
