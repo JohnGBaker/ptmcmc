@@ -369,7 +369,7 @@ public:
     //Unless otherwise externally specified, assume nativeSpace as the parameter space
     defWorkingStateSpace(nativeSpace);
   };
-  int size()const{return data->size();};
+  int size()const{if(data)return data->size();else return 0;};
   virtual void reset(){
     //cout<<"bayes_likelihood::reset:this="<<this<<endl;
     //cout<<"bayes_likelihood::reset: best="<<best.show()<<endl;

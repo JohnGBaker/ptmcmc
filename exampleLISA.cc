@@ -141,7 +141,7 @@ public:
     idx_psi=sp.requireIndex("psi");
     haveWorkingStateSpace();
   };
-  int size()const{return 0;};
+  //int size()const{return 0;};
   double evaluate_log(state &s){
     valarray<double>params=s.get_params();
     double d=params[idx_d];
