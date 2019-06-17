@@ -310,7 +310,7 @@ protected:
   double best_post;
   state best;  
 public:
-  bayes_likelihood(stateSpace *sp,bayes_data *data,bayes_signal *signal):probability_function(sp),data(data),signal(signal),like0(0){
+  bayes_likelihood(stateSpace *sp=nullptr,bayes_data *data=nullptr,bayes_signal *signal=nullptr):probability_function(sp),data(data),signal(signal),like0(0){
     if(sp)best=state(sp,sp->size());
     reset();
 };

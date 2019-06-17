@@ -76,7 +76,8 @@ double simpleCalculateLogLCAmpPhase(double d, double phiL, double inc, double la
 class simple_likelihood : public bayes_likelihood {
   int idx_phi,idx_d,idx_inc,idx_lambda,idx_beta,idx_psi;
 public:
-  simple_likelihood():bayes_likelihood(nullptr,nullptr,nullptr){};
+  //simple_likelihood():bayes_likelihood(nullptr,nullptr,nullptr){};
+  simple_likelihood():bayes_likelihood(){};
   virtual void setup(){    
     ///Set up the output stateSpace for this object
 
