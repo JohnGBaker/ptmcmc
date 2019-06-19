@@ -24,7 +24,18 @@ const double MTSUN_SI=4.9254923218988636432342917247829673e-6;
 const double PI=3.1415926535897932384626433832795029;
 const complex<double> I(0.0, 1.0);
 const bool narrowband=true;
-const bool use_basic_setup=true;
+
+//We implement 4 different example interfaces to bayes_likelihood:
+// 1. no_class
+// 2. !noclass&!use_inheritance_interface
+// 3. !noclass&use_inheritance_interface&use_basic_setup
+// 4. !noclass&use_inheritance_interface&!use_basic_setup
+// They are progressively more formal and intimately connected to bayes_likelihood.
+// Option 4. was the original before June 2019.
+
+const bool no_class=true;
+const bool use_inheritance_interface=false; //only relevant if no_class=false
+const bool use_basic_setup=true; //only relevant with use_inheritance_interface=true
 
 // Routines for simplified likelihood 22 mode, frozen LISA, lowf, fixed masses (near 1e6) and fixed t0
 static double funcphiL(double m1, double m2, double tRef,double phiRef){
@@ -70,9 +81,56 @@ double simpleCalculateLogLCAmpPhase(double d, double phiL, double inc, double la
   return simplelogL;
 }
 
-///Likelihood function objects
+///Likelihood function interface variants
 ///
-// Simplified LISA likelihood 22 mode, frozen LISA, lowf, fixed masses (near 1e6) and fixed t0
+
+// Least intimate interface for Simplified LISA likelihood not relying on any class
+// Since are is no data, we don't even need a reference object. A struct or vector or
+// other object could be set up if the likelihood needs some data.
+
+double simple_likelihood_evaluate_log_nc(void *object, const state &s){
+    valarray<double>params=s.get_params();
+    double d=params[0];
+    double phi=params[1];
+    double inc=params[2];
+    double lambd=params[3];
+    double beta=params[4];
+    double psi=params[5];
+    double result=simpleCalculateLogLCAmpPhase(d, phi, inc, lambd, beta, psi);
+    return result;
+};
+
+
+void simple_likelihood_setup_nc(bayes_likelihood *blike){
+  //blike->register_reference_object(*some_object);  //Use this if likelihood needs some data
+  blike->register_evaluate_log(simple_likelihood_evaluate_log_nc);
+  
+  //setup  stateSpace
+  int npar=6;
+  stateSpace space(npar);
+  string names[]={"d","phi","inc","lambda","beta","psi"};
+  space.set_names(names);
+  space.set_bound(1,boundary(boundary::wrap,boundary::wrap,0,2*M_PI));//set 2-pi-wrapped space for phi.  Turn on if not narrow banding
+  if(not narrowband)space.set_bound(3,boundary(boundary::wrap,boundary::wrap,0,2*M_PI));//set 2-pi-wrapped space for lambda.
+  //else space.set_bound(4,boundary(boundary::limit,boundary::limit,0.2,0.6));//set narrow limits for beta
+  space.set_bound(5,boundary(boundary::wrap,boundary::wrap,0,M_PI));//set pi-wrapped space for pol.
+  
+  vector<double> centers((initializer_list<double>){  1.667,  PI, PI/2,  PI,    0, PI/2});
+  vector<double>  scales((initializer_list<double>){  1.333,  PI, PI/2,  PI, PI/2, PI/2});
+  vector<string>      types((initializer_list<string>){  "uni","uni", "pol", "uni", "cpol", "uni"});
+  if(narrowband){
+    centers[3] = 1.75*PI;scales[3] = PI/4.0;
+    //centers[4] = 0.4    ;scales[4] = 0.2;
+    centers[4] = PI/4    ;scales[4] = PI/4;
+  }
+  //cout<<"simple_likelihood::setup: space="<<space.show()<<endl;
+  
+  blike->basic_setup(&space, types, centers, scales);
+};
+  
+///Alternative interface using the original class-inheritance based interface for defining
+///the likelihood.  There are two variants allowing bayes_likelihood to do differing degrees of the
+///work in defining the prior particularly.
 class simple_likelihood : public bayes_likelihood {
   int idx_phi,idx_d,idx_inc,idx_lambda,idx_beta,idx_psi;
 public:
@@ -170,6 +228,74 @@ public:
   };
 };
 
+// Next alternative interface for Simplified LISA likelihood not relying on class inheritance
+// In this case we still implement as a class for maximum similarity to the original inheritance
+// interface, but no class is needed, as demonstrated with the no_class _nc option
+// This form of interface can be applied in cython for interfacing with a likelihood written
+// in python.
+class simple_likelihood_ni {
+  int idx_phi,idx_d,idx_inc,idx_lambda,idx_beta,idx_psi;
+  bayes_likelihood *blike;
+public:
+  //simple_likelihood():bayes_likelihood(nullptr,nullptr,nullptr){};
+  simple_likelihood_ni(bayes_likelihood *blike):blike(blike){
+    blike->register_reference_object(this);
+    blike->register_evaluate_log(simple_likelihood_ni::evaluate_log);
+    blike->register_defWorkingStateSpace(simple_likelihood_ni::defWorkingStateSpace);
+  };
+  virtual void setup(){    
+    ///Set up the output stateSpace for this object
+
+    //setup  stateSpace
+    int npar=6;
+    stateSpace space(npar);
+    string names[]={"d","phi","inc","lambda","beta","psi"};//double phiRef, double d, double inc, double lambd, double beta, double psi) 
+    space.set_names(names);
+    space.set_bound(1,boundary(boundary::wrap,boundary::wrap,0,2*M_PI));//set 2-pi-wrapped space for phi.  Turn on if not narrow banding
+    if(not narrowband)space.set_bound(3,boundary(boundary::wrap,boundary::wrap,0,2*M_PI));//set 2-pi-wrapped space for lambda.
+    //else space.set_bound(4,boundary(boundary::limit,boundary::limit,0.2,0.6));//set narrow limits for beta
+    space.set_bound(5,boundary(boundary::wrap,boundary::wrap,0,M_PI));//set pi-wrapped space for pol.
+
+    vector<double> centers((initializer_list<double>){  1.667,  PI, PI/2,  PI,    0, PI/2});
+    vector<double>  scales((initializer_list<double>){  1.333,  PI, PI/2,  PI, PI/2, PI/2});
+    vector<string>      types((initializer_list<string>){  "uni","uni", "pol", "uni", "cpol", "uni"});
+    if(narrowband){
+      centers[3] = 1.75*PI;scales[3] = PI/4.0;
+      //centers[4] = 0.4    ;scales[4] = 0.2;
+      centers[4] = PI/4    ;scales[4] = PI/4;
+    }
+    //cout<<"simple_likelihood::setup: space="<<space.show()<<endl;
+    
+    blike->basic_setup(&space, types, centers, scales);
+  };
+  
+  static void defWorkingStateSpace(void *object, const stateSpace &sp){
+    //In this case we implement *object as a class object very similar to the inherited version
+    //but this is not essential *object could be any user object
+    //(or none, if no external data need be referenced).
+    simple_likelihood_ni *mythis = static_cast<simple_likelihood_ni*>(object);
+    mythis->idx_d=sp.requireIndex("d");
+    mythis->idx_phi=sp.requireIndex("phi");
+    mythis->idx_inc=sp.requireIndex("inc");
+    mythis->idx_lambda=sp.requireIndex("lambda");
+    mythis->idx_beta=sp.requireIndex("beta");
+    mythis->idx_psi=sp.requireIndex("psi");
+  };
+
+  static double evaluate_log(void *object, const state &s){
+    simple_likelihood_ni *mythis = static_cast<simple_likelihood_ni*>(object);
+    valarray<double>params=s.get_params();
+    double d=params[mythis->idx_d];
+    double phi=params[mythis->idx_phi];
+    double inc=params[mythis->idx_inc];
+    double lambd=params[mythis->idx_lambda];
+    double beta=params[mythis->idx_beta];
+    double psi=params[mythis->idx_psi];
+    double result=simpleCalculateLogLCAmpPhase(d, phi, inc, lambd, beta, psi);
+    return result;
+  };
+};
+
 shared_ptr<Random> globalRNG;//used for some debugging... 
 
 //***************************************************************************************8
@@ -183,7 +309,19 @@ int main(int argc, char*argv[]){
   //Create the model components and likelihood;
   //bayes_data *data=new GRBpop_z_only_data();
   //bayes_signal *signal=new GRBpop_one_break_z_signal();
-  bayes_likelihood *like=new simple_likelihood();
+  
+  bayes_likelihood *like;
+  simple_likelihood_ni *slike;
+  if(no_class){
+    like=new bayes_likelihood();
+    simple_likelihood_setup_nc(like);
+  } else {
+    if(use_inheritance_interface)like=new simple_likelihood();
+    else{
+      like=new bayes_likelihood();
+      slike=new simple_likelihood_ni(like);
+    }
+  }
   
   //prep command-line options
   s0->addOptions(opt);
@@ -210,8 +348,13 @@ int main(int argc, char*argv[]){
 
   //Setup likelihood
   //data->setup();  
-  //signal->setup();  
-  like->setup();
+  //signal->setup();
+  //Note: in this case the simple likelihood has no options and setup could be called at definition
+  //If options are passed in this way then setup must be called after the options are processed.
+  if(not no_class){
+    if(use_inheritance_interface)like->setup();
+    else slike->setup();
+  }
   
   double seed;
   int Nchain,output_precision;

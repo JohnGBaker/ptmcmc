@@ -43,7 +43,13 @@ public:
 
 /// State space class allows reference to overall limits and structure of the space.
 /// Can provide support for boundary conditions, maybe special flows that can be used in proposals...
-/// Should inner product be defined here?  probably...
+/// Plan to expand to transdimensional:
+///   -Allow compound state spaces with an undetermined number multiple copies of identical space
+///   -Potentially allow named subspaces
+///   -Allow compound state-spaces built of subspaces and/or including multi-copy subspaces
+///   -Develop a naming scheme for mapping through the hierarchy and contexting components
+///   -Possibly move prior information into subspace structure.
+
 class stateSpace {
   int dim;
   vector<boundary> bounds;

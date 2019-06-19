@@ -311,9 +311,16 @@ protected:
   state best;  
 public:
   bayes_likelihood(stateSpace *sp=nullptr,bayes_data *data=nullptr,bayes_signal *signal=nullptr):probability_function(sp),data(data),signal(signal),like0(0){
+
+    ///Null set up of minimal interface (see below)
+    user_object=nullptr;
+    evaluate_log_registered=defWorkingStateSpace_registered=false;
+    check_posterior=true;
+
     if(sp)best=state(sp,sp->size());
     reset();
 };
+
   //The latter is just a hack for testing should be removed.
   //bayes_likelihood(stateSpace *sp):probability_function(sp),like0(0){};
   ///Hard check that the signal and data are non-null
@@ -324,7 +331,7 @@ public:
     }
   };
   //This is a simplified interface for applications which only provide an indep. likelihood 
-  void basic_setup(stateSpace *sp, sampleable_probability_function *prior ){
+  void basic_setup(const stateSpace *sp, sampleable_probability_function *prior ){
     haveSetup();
     ///Set up the output stateSpace for this object
     nativeSpace=*sp;
@@ -339,7 +346,7 @@ public:
   };
   ///This is a more simplified interface for applications which only provide an indep.
   ///which assumes does not depend on access to probability_function.hh (or valarray) 
-  void basic_setup(stateSpace *sp,const vector<string> &types, const vector<double> &centers,const vector<double> &scales){			   
+  void basic_setup(const stateSpace *sp,const vector<string> &types, const vector<double> &centers,const vector<double> &scales){			   
     const valarray<double> centers_va(centers.data(), centers.size());
     const valarray<double> scales_va(scales.data(), scales.size());
     valarray<int> types_va(types.size());
@@ -396,6 +403,11 @@ public:
   ///from stateSpaceInterface
   virtual void defWorkingStateSpace(const stateSpace &sp){
     checkSetup();//Call this assert whenever we need options to have been processed.
+    if(evaluate_log_registered){//Provide for minimal interface
+      if(defWorkingStateSpace_registered)(*user_defWorkingStateSpace)(user_object,sp);
+      haveWorkingStateSpace();
+      return;
+    }
     haveWorkingStateSpace();
     checkPointers();
     data->defWorkingStateSpace(sp);
@@ -484,6 +496,58 @@ public:
     xfinestart=x0-(-xstart+xend)*finewidthfac/2.0;
     xfineend=x0+(-xstart+xend)*finewidthfac/2.0;
   };
+
+  ///This section provides data and functions for a minimal interface not requiring inheritance
+  ///To apply the base class, the user must at minimum provide an evaluate_log() function using
+  ///the register_evaluate_log() hook.  If that function requires some reference data, then the
+  ///user must also provide a pointer to reference object (with access to the data) using the
+  ///function register_reference_object().  The user has the option to register a
+  ///defWorkingStateSpace() function to preset the location of data within the state object.
+  ///There should be no need for this with the current interface since the user has complete
+  ///control over the state definition.  The example may be useful if this kind of interface is
+  ///expanded for more general use of bayes_component.
+private:
+  double (*user_evaluate_log)(void *object, const state &s);
+  void (*user_defWorkingStateSpace)(void *object, const stateSpace &d);
+  void * user_object;
+  bool evaluate_log_registered,defWorkingStateSpace_registered;
+public:
+  bool check_posterior;  //User can set to false to skip checks for unreasonable posterior values
+  void register_reference_object(void *object){user_object=object;};    
+  void register_evaluate_log(double (*function)(void *object, const state &s)){
+    user_evaluate_log=function;
+    evaluate_log_registered=true;
+  };
+  void register_defWorkingStateSpace(void (*function)(void *object, const stateSpace &sp)){
+    user_defWorkingStateSpace=function;
+    defWorkingStateSpace_registered=true;
+  };
+  virtual double evaluate_log(state &s)override{
+    if(evaluate_log_registered){
+      double result =(*user_evaluate_log)(user_object,s);
+      if(check_posterior){
+	double post=result+nativePrior->evaluate_log(s);//May need a mechanism to check that prior is set
+        #pragma omp critical 
+	{     
+	  if(post>best_post){
+	    best_post=post;
+	    best=state(s);
+	  }
+	  if(!isfinite(post)){
+	    cout<<"Logpost is NAN!"<<endl;
+	    cout<<"  params="<<s.get_string()<<endl;
+	    cout<<"  like="<<result<<"  post="<<post<<endl; 
+	    result=-INFINITY;
+	  }
+	}
+      }
+      return result;
+    } else panic("No evaluate_log function is registered");
+    return NAN;//should never be reached
+  };
+  ///End minimal interface section
+
+
 protected:
   //Some standard Likelihood models
   ///Chi-squared likelihood models independent gaussian random noise for each datum.
@@ -676,6 +740,17 @@ public:
     data->fill_data(values);
     set_like0_chi_squared();
   };
+};
+
+///A more general interface for bayes_likelihood note requiring specification by inheritance.
+///
+///In particular this allows interfacing with other languages such as python.
+///This version does not support bayes_data and bayes_signal, user provides only
+///their own likelihood function and, optionally, a defWorkingStateSpace function
+///to potentially speed parameter resolution.
+///Maybe this functionality should be moved into the main bayes_likelihood class as
+///defaults for evaluate_log and defWorkingStateSpace
+class user_bayes_likelihood : public bayes_likelihood {
 };
 
 ///Base class for defining a Bayesian sampler object
