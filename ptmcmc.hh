@@ -44,7 +44,8 @@ public:
   virtual void restart(string path)override;
   void addOptions(Options &opt,const string &prefix="");
   int run(const string & base, int ic=0);
-  void setup(bayes_likelihood &llike, const sampleable_probability_function &prior,int output_precision=15);
+  void setup(bayes_likelihood &llike, const sampleable_probability_function &prior, int output_precision=15);
+  void setup(bayes_likelihood &llike, int output_precision=15){setup(llike,*llike.getObjectPrior(),output_precision);};
   void setup(int Ninit,bayes_likelihood &llike, const sampleable_probability_function &prior, proposal_distribution &prop,int output_precision=15);//deprecated
   int initialize();
   int analyze(const string & base, int ic, int Nsigma, int Nbest, bayes_likelihood &like);

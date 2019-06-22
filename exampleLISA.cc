@@ -399,7 +399,8 @@ int main(int argc, char*argv[]){
   cout<<"Proposal distribution is:\n"<<prop->show()<<endl;
   //set up the mcmc sampler (assuming mcmc)
   //mcmc.setup(Ninit,*like,*prior,*prop,output_precision);
-  mcmc.setup(*like,*prior,output_precision);
+  //mcmc.setup(*like,*prior,output_precision);
+  mcmc.setup(*like,output_precision);
   mcmc.select_proposal();
 
   //Prepare for chain output
