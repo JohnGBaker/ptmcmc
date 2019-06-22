@@ -310,7 +310,7 @@ protected:
   double best_post;
   state best;  
 public:
-  bayes_likelihood(stateSpace *sp=nullptr,bayes_data *data=nullptr,bayes_signal *signal=nullptr):probability_function(sp),data(data),signal(signal),like0(0){
+  bayes_likelihood(stateSpace *sp=nullptr,bayes_data *data=nullptr,bayes_signal *signal=nullptr):probability_function(sp),like0(0),signal(signal){
 
     ///Null set up of minimal interface (see below)
     user_object=nullptr;
@@ -545,6 +545,9 @@ public:
     } else panic("No evaluate_log function is registered");
     return NAN;//should never be reached
   };
+  state draw_from_prior(Random &rng=*ProbabilityDist::getPRNG()){
+    return nativePrior->drawSample(rng);//hacky RNGRandom &rng
+  };
   ///End minimal interface section
 
 
@@ -569,7 +572,7 @@ protected:
     vector<double>S=getVariances(s,svar);
 #pragma omp critical  //probably don't need this critical if coded well...
     {
-      for(int i=0;i<tlabels.size();i++){
+      for(size_t i=0,iend=tlabels.size();i<iend;i++){
         double d=modelData[i]-data->getValue(i);
         //cout<<"i,d,S:"<<i<<","<<d<<","<<S[i]<<endl;
         sum+=d*d/S[i];
@@ -740,17 +743,6 @@ public:
     data->fill_data(values);
     set_like0_chi_squared();
   };
-};
-
-///A more general interface for bayes_likelihood note requiring specification by inheritance.
-///
-///In particular this allows interfacing with other languages such as python.
-///This version does not support bayes_data and bayes_signal, user provides only
-///their own likelihood function and, optionally, a defWorkingStateSpace function
-///to potentially speed parameter resolution.
-///Maybe this functionality should be moved into the main bayes_likelihood class as
-///defaults for evaluate_log and defWorkingStateSpace
-class user_bayes_likelihood : public bayes_likelihood {
 };
 
 ///Base class for defining a Bayesian sampler object
