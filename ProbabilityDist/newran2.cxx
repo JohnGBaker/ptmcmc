@@ -876,85 +876,99 @@ ExtReal RepeatedRandom::Variance() const { return rv->Variance() * (Real)n; }
 RepeatedRandom& Random::operator()(int n)
 {
    RepeatedRandom* r = new RepeatedRandom(*this, n);
-   if (!r) ErrorNoSpace(); return *r;
+   if (!r) ErrorNoSpace();
+   return *r;
 }
 
 NegatedRandom& operator-(Random& rv)
 {
    NegatedRandom* r = new NegatedRandom(rv);
-   if (!r) ErrorNoSpace(); return *r;
+   if (!r) ErrorNoSpace();
+   return *r;
 }
 
 ShiftedRandom& operator+(Random& rv, Real s)
 {
    ShiftedRandom* r = new ShiftedRandom(rv, s);
-   if (!r) ErrorNoSpace(); return *r;
+   if (!r) ErrorNoSpace();
+   return *r;
 }
 
 ShiftedRandom& operator-(Random& rv, Real s)
 {
    ShiftedRandom* r = new ShiftedRandom(rv, -s);
-   if (!r) ErrorNoSpace(); return *r;
+   if (!r) ErrorNoSpace();
+   return *r;
 }
 
 ScaledRandom& operator*(Random& rv, Real s)
 {
    ScaledRandom* r = new ScaledRandom(rv, s);
-   if (!r) ErrorNoSpace(); return *r;
+   if (!r) ErrorNoSpace();
+   return *r;
 }
 
 ShiftedRandom& operator+(Real s, Random& rv)
 {
    ShiftedRandom* r = new ShiftedRandom(rv, s);
-   if (!r) ErrorNoSpace(); return *r;
+   if (!r) ErrorNoSpace();
+   return *r;
 }
 
 ReverseShiftedRandom& operator-(Real s, Random& rv)
 {
    ReverseShiftedRandom* r = new ReverseShiftedRandom(rv, s);
-   if (!r) ErrorNoSpace(); return *r;
+   if (!r) ErrorNoSpace();
+   return *r;
 }
 
 ScaledRandom& operator*(Real s, Random& rv)
 {
    ScaledRandom* r = new ScaledRandom(rv, s);
-   if (!r) ErrorNoSpace(); return *r;
+   if (!r) ErrorNoSpace();
+   return *r;
 }
 
 ScaledRandom& operator/(Random& rv, Real s)
 {
    ScaledRandom* r = new ScaledRandom(rv, 1.0/s);
-   if (!r) ErrorNoSpace(); return *r;
+   if (!r) ErrorNoSpace();
+   return *r;
 }
 
 ReciprocalRandom& operator/(Real s, Random& rv)
 {
    ReciprocalRandom* r = new ReciprocalRandom(rv, s);
-   if (!r) ErrorNoSpace(); return *r;
+   if (!r) ErrorNoSpace();
+   return *r;
 }
 
 AddedRandom& operator+(Random& rv1, Random& rv2)
 {
    AddedRandom* r = new AddedRandom(rv1, rv2);
-   if (!r) ErrorNoSpace(); return *r;
+   if (!r) ErrorNoSpace();
+   return *r;
 }
 
 MultipliedRandom& operator*(Random& rv1, Random& rv2)
 {
    MultipliedRandom* r = new MultipliedRandom(rv1, rv2);
-   if (!r) ErrorNoSpace(); return *r;
+   if (!r) ErrorNoSpace();
+   return *r;
 }
 
 SubtractedRandom& operator-(Random& rv1, Random& rv2)
 {
    SubtractedRandom* r = new SubtractedRandom(rv1, rv2);
-   if (!r) ErrorNoSpace(); return *r;
+   if (!r) ErrorNoSpace();
+   return *r;
 }
 
 DividedRandom& operator/(Random& rv1, Random& rv2)
 {
    DividedRandom* r = new DividedRandom(rv1, rv2);
-   if (!r) ErrorNoSpace(); return *r;
+   if (!r) ErrorNoSpace();
+   return *r;
 }
 
 Real AddedRandom::Next()
@@ -1072,34 +1086,39 @@ AddedSelectedRandom& operator+(SelectedRandom& rv1,
    SelectedRandom& rv2)
 {
    AddedSelectedRandom* r = new AddedSelectedRandom(rv1, rv2);
-   if (!r) ErrorNoSpace(); return *r;
+   if (!r) ErrorNoSpace();
+   return *r;
 }
 
 AddedSelectedRandom& operator+(AddedSelectedRandom& rv1,
    SelectedRandom& rv2)
 {
    AddedSelectedRandom* r = new AddedSelectedRandom(rv1, rv2);
-   if (!r) ErrorNoSpace(); return *r;
+   if (!r) ErrorNoSpace();
+   return *r;
 }
 
 AddedSelectedRandom& operator+(SelectedRandom& rv1,
    AddedSelectedRandom& rv2)
 {
    AddedSelectedRandom* r = new AddedSelectedRandom(rv1, rv2);
-   if (!r) ErrorNoSpace(); return *r;
+   if (!r) ErrorNoSpace();
+   return *r;
 }
 
 AddedSelectedRandom& operator+(AddedSelectedRandom& rv1,
    AddedSelectedRandom& rv2)
 {
    AddedSelectedRandom* r = new AddedSelectedRandom(rv1, rv2);
-   if (!r) ErrorNoSpace(); return *r;
+   if (!r) ErrorNoSpace();
+   return *r;
 }
 
 SelectedRandom& Random::operator()(double p)
 {
    SelectedRandom* r = new SelectedRandom(*this, p);
-   if (!r) ErrorNoSpace(); return *r;
+   if (!r) ErrorNoSpace();
+   return *r;
 }
 
 

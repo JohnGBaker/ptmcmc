@@ -43,7 +43,8 @@ SimpleString::SimpleString(unsigned int i, char c) : n(i)
 {
    S = new char [n+1]; if (!S) Throw(Bad_alloc());
    char* s1 = S;
-   while (i--) *s1++ = c; *s1 = 0;
+   while (i--) *s1++ = c;
+   *s1 = 0;
 }
 
 /// Set SimpleString equal to a SimpleString.
