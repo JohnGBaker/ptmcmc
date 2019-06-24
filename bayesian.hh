@@ -91,7 +91,8 @@ public:
   string get_option_info(){return option_info;};
   bool type_matches(const bayes_component *other)const{
     //cout<<"bayes_component_selector::type_matches: Comparing type '"<<typestring<<"' with '"<<other->typestring<<"' -> "<<(other->typestring==typestring)<<endl;
-    if(typestring=="null")cout<<"bayes_component: Cannot match 'null' type."<<endl;return other->typestring==typestring;
+    if(typestring=="null")cout<<"bayes_component: Cannot match 'null' type."<<endl;
+    return other->typestring==typestring;
   };  
 };
 
@@ -171,7 +172,7 @@ public:
   virtual const vector<double> & getRef()const{return label0;};
   virtual void setRegister(vector<double> &c0){
       label0=c0;is_registered=true;
-      if(dim <1 or not c0.size()==dim){
+      if(dim <1 or not (c0.size()==dim)){
 	cout<<"bayes_frame::setRegister:["<<name<<"] Got vector of length="<<c0.size()<<" while expecting dim="<<dim<<" > 0."<<endl;
 	exit(1);
       }

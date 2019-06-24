@@ -1,0 +1,30 @@
+This directory is for a cython interface to make essential ptmcmc functionality available in pyton
+
+Some general notes, issues and design principles
+
+pxd files:
+    -Think of these as headder wrappers for c++ header files needed by cython (not python)
+    -There should be no python objects here just extern declarations of c++ classes
+    -Naming convention (eg for states.hh) states.pxd
+    -Only reference what is needed
+    -Member functions which are overrides from parent classes should not be declared in child
+    -No optional arguments, if multiple versions of functions are used in the cython
+     code then overloaded versions should be declared
+
+pyx files:
+    -Here we can both access the c++ classes, and write python code
+    -The usual idea is that the python object (written by cdef in cython) holds a reference
+     to an underlying c++ class instance
+    -Naming convention (eg for states.hh) states.pyx
+    -If inheritance is involved then the reference will probably need to be a pointer
+        -it should be allocated in __cinit__ (called before __init__ and repeatedly down
+	 through the clas hierarchy.
+	-parent class __cinit__ needs to check the type of self and skip allocation
+	-__dealloc__ needs to delete the pointer
+    -The python classes, and interface generally should make sense for python and need not
+     be identical to the underlying C++ code
+     	-Only make available what is needed, aim to keep interface as light as possible
+	-Use appropriate python data structures, eg numpy arrays instead of c++ vectors
+        -Alternative, or new functions might be more appropriate than the underlying versions
+    -Define classes and functions with cpdef to automatically make cython and python versions
+    -Be aware of differnences in c++/python bools

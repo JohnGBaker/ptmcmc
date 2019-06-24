@@ -1,6 +1,7 @@
 #set CXX to g++
 MCMC_OFILES = states.o chain.o probability_function.o proposal_distribution.o  ptmcmc.o
-EIGEN=$(CURDIR)/eigen-eigen-67e894c6cd8f/Eigen
+EIGEN=$(CURDIR)/eigen-eigen-323c052e1731/Eigen #version 3.3.7
+
 ifeq ($(CFLAGS),)
 	include Makefile.ac
 else
@@ -27,7 +28,7 @@ ${INCDIR}:
 	cd ${INCDIR}
 
 ${INCDIR}/Eigen: | ${INCDIR}
-	@echo "Making symbolic link to Eigen library in ${INCDIR"
+	@echo "Making symbolic link to Eigen library in ${INCDIR}"
 	@pwd
 	@cd ${INCDIR};if test -L Eigen ; then echo "exists" ; else ln -s ${EIGEN} Eigen ; fi
 
@@ -55,6 +56,7 @@ clean:
 	@echo "Cleaning ptMCMC"
 	rm -f *.o *.a 
 	rm -f ${LIB}/*.a
+	rm -f ${INCDIR}/Eigen
 	@cd ProbabilityDist;${MAKE} ${MFLAGS} clean;cd -
 
 docs:

@@ -8,6 +8,7 @@
 #include <mpi.h>
 #endif
 
+
 using namespace std;
 
 ///Set the proposal distribution. Calling routing responsible for deleting.

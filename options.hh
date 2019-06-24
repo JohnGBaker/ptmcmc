@@ -9,6 +9,7 @@
 #include <sstream>
 #include <map>
 #include <memory>
+#include  <vector>
 using namespace std;
 
 
@@ -99,7 +100,7 @@ public:
     //In this way we work either with a partial list of flags, with others to be processed later
     //or will a presumed full list with errors to be called out.
     while(i<argc){
-      if(argv[i][0]!='-'||(dash_dash&&(string(argv[i]).length()<=1||argv[i][1]!='-'))) i++;
+      if(argv[i][0]!='-'||(dash_dash&&(string(argv[i]).size()<=1||argv[i][1]!='-'))) i++;
       else {
 	unsigned int iword=dash_dash?2:1;
 	string flag( & argv[i][iword] );
@@ -125,6 +126,51 @@ public:
 	  for(int ic=i;ic<argc-1;ic++)argv[ic]=argv[ic+1];
 	  count++;
 	  argc--;
+	}
+      }
+    }
+    //for(int i=0;i<argc;i++)argv[i+1]=argv[i+1+count];
+    //cout<<"Counted "<<count<<" flags."<<endl;
+    //cout<<"And "<<argc<<" arguments."<<endl;
+    return fail;
+  };
+  ///This version supports more natural memory management
+  bool parse(vector<string>argv ,bool verbose=true){
+    bool fail=false;
+    int count=0;
+    int i=1;
+    //We record any arguments that we understand as flags and remove them from the argv array
+    //otherwise we leave them in place, report if verbose=true, and ultimately return "fail"
+    //In this way we work either with a partial list of flags, with others to be processed later
+    //or will a presumed full list with errors to be called out.
+    while(i<argv.size()){
+      if(argv[i][0]!='-'||(dash_dash&&((argv[i]).length()<=1||argv[i][1]!='-'))) i++;
+      else {
+	unsigned int iword=dash_dash?2:1;
+	string flag( & argv[i][iword] );
+	unsigned int pos=flag.find_first_of("=",iword);
+	string name=flag.substr(0,pos); 
+	//cout<<i<<" processsing flag '"<<name<<"'";
+	if(flags.count(name)==0){
+	  //cout<<"\t...not found"<<endl;
+	  if(verbose)cerr<<"Option '"<<name<<"' not recognized."<<endl;
+	  fail=true;
+	  i++;
+	} else {
+	  //cout<<"\t...found"<<endl;
+	  Option *opt=&flags[name];
+	  opt->is_set=true;
+	  if(pos!=(unsigned int)string::npos){
+	    //cout<<"pos="<<pos<<endl;
+	    opt->value=flag.substr(pos+1);
+	    //cout<<"value='"<<opt->value<<"'"<<endl;
+	  }
+	  else
+	    opt->value="true";
+	  argv.erase(argv.begin() + i);
+	  //for(int ic=i;ic<argc-1;ic++)argv[ic]=argv[ic+1];
+	  count++;
+	  //argc--;
 	}
       }
     }

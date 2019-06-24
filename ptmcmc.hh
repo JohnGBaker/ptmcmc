@@ -1,6 +1,8 @@
 ///Sampler realization for running ptMCMC chains.
 ///
 ///Written by John Baker at NASA-GSFC (2015)
+#ifndef PTMCMC_H
+#define PTMCMC_H
 
 #include "bayesian.hh"
 #include "chain.hh"
@@ -78,3 +80,4 @@ public:
   bool reporting();
 };
 
+#endif
