@@ -8,5 +8,6 @@ from libcpp cimport bool
 cdef extern from "../options.hh":
     cdef cppclass Options:
        Options()
-       bool parse(vector[string],bool verbose)
+       bool parse(vector[string]&,bool verbose)
        string print_usage()
+       string report()

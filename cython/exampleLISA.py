@@ -43,7 +43,7 @@ def funcpsiL(lambd, beta, psi):
   return np.atan2(np.cos(PI/3)*np.cos(beta)*np.sin(psi) - np.sin(PI/3)*(np.sin(lambd)*np.cos(psi) - np.cos(lambd)*np.sin(beta)*np.sin(psi)), np.cos(PI/3)*np.cos(beta)*np.cos(psi) + np.sin(PI/3)*(np.sin(lambd)*np.sin(psi) + np.cos(lambd)*np.sin(beta)*np.cos(psi)))
 
 def funcsa(d, phi, inc, lambd, beta, psi):
-  Daplus = I * (double)( 3./4 * (3 - np.cos(2*beta)) * np.cos(2*lambd - PI/3) )
+  Daplus = I * ( 3./4 * (3 - np.cos(2*beta)) * np.cos(2*lambd - PI/3) )
   Dacross = I * (3.0*np.sin(beta) * np.sin(2*lambd - PI/3))
   a22 = 0.5/d * np.sqrt(5/PI) * pow(np.cos(inc/2), 4) * np.exp(2.*I*(-phi-psi)) * 0.5*(Daplus + I*Dacross)
   a2m2 = 0.5/d * np.sqrt(5/PI) * pow(np.sin(inc/2), 4) * np.exp(2.*I*(-phi+psi)) * 0.5*(Daplus - I*Dacross)
@@ -77,8 +77,8 @@ class simple_likelihood(ptmcmc.likelihood):
         names=["d","phi","inc","lambda","beta","psi"];
         space.set_names(names);
         space.set_bound('phi',ptmcmc.boundary('wrap','wrap',0,2*PI));#set 2-pi-wrapped space for phi. 
-        if(not narrowband):space.set_bound('lambda',ptmcmc.boundary('wrap','wrap',0,2*PI))
-        else: space.set_bound('beta',ptmcmc.boundary('limit','limit',0.2,0.6))
+        #if(not narrowband):space.set_bound('lambda',ptmcmc.boundary('wrap','wrap',0,2*PI))
+        #else: space.set_bound('beta',ptmcmc.boundary('limit','limit',0.2,0.6))
         space.set_bound('psi',ptmcmc.boundary('wrap','wrap',0,PI))
 
         #Set up prior
@@ -94,15 +94,21 @@ class simple_likelihood(ptmcmc.likelihood):
 
     def evaluate_log(self,s):
         params=s.get_params()
-        d=params[s.requireIndex('d')]
-        phi=params[s.requireIndex('phi')]
-        inc=params[s.requireIndex('inc')]
-        lambd=params[s.requireIndex('lambd')]
-        beta=params[s.requireIndex('beta')]
-        psi=params[s.requireIndex('psi')]
+        d=params[0]
+        phi=params[1]
+        inc=params[2]
+        lambd=params[3]
+        beta=params[4]
+        psi=params[5]
         result=simpleCalculateLogLCAmpPhase(d, phi, inc, lambd, beta, psi);
+        #global count
+        #print(count)
+        #count+=1
+        #print("state:",s.get_string())
+        #print("  logL={0:.13g}".format(result))
         return result
 
+count=0
 
 
 
@@ -110,19 +116,14 @@ class simple_likelihood(ptmcmc.likelihood):
 #//main test program
 def main(argv):
 
-    #//Create the sampler
-    #ptmcmc_sampler mcmc;
-    #bayes_sampler *s0=&mcmc;
-    #//Create the likelihood
-    like=simple_likelihood()
-    
+
     #//prep command-line options
     #Options opt(true);
     opt=ptmcmc.Options()
     #s0->addOptions(opt);
     #//data->addOptions(opt);
     #//signal->addOptions(opt);
-    #like->addOptions(opt);
+    #like->addOptions(opt); #There are no options for this or it might be  more complicated
     
     #//Add some command more line options
     ##opt.add("nchains","Number of consequtive chain runs. Default 1","1")
@@ -130,6 +131,16 @@ def main(argv):
     ##opt.add("precision","Set output precision digits. (Default 13).","13")
     opt.add("outname","Base name for output files (Default 'mcmc_output').","mcmc_output")
     #int Nlead_args=1;
+
+
+    #//Create the sampler
+    #ptmcmc_sampler mcmc;
+    s0=ptmcmc.sampler(opt)
+    #//Create the likelihood
+    like=simple_likelihood()  
+
+
+    print('calling opt.parse')
     opt.parse(argv)
     #bool parseBAD=opt.parse(argc,argv);
     #if(parseBAD) {
@@ -193,6 +204,13 @@ def main(argv):
     #//mcmc.setup(Ninit,*like,*prior,*prop,output_precision);
     #mcmc.setup(*like,*prior,output_precision);
     #mcmc.select_proposal();
+    s0.setup(like)
+
+    #//Testing (will break testsuite)
+    #s=like.draw_from_prior();
+    #print("test state:",s.get_string())
+    #print("logL=",like.evaluate_log(s))
+  
     
     #//Prepare for chain output
     #ss<<outname;
@@ -200,11 +218,12 @@ def main(argv):
     
     #//Loop over Nchains
     #for(int ic=0;ic<Nchain;ic++){
-    #  bayes_sampler *s=s0->clone();
-    #  s->initialize();
-    #  s->run(base,ic);
+    s=s0.clone();
+    s.initialize();
+    print('initialization done')
+    s.run(outname,0);
     #  //s->analyze(base,ic,Nsigma,Nbest,*like);
-    #  delete s;
+    #del s;
     #}
     
     #//Dump summary info

@@ -135,10 +135,11 @@ public:
     return fail;
   };
   ///This version supports more natural memory management
-  bool parse(vector<string>argv ,bool verbose=true){
+  ///In this case we also do not assume that the program name is the first arg
+  bool parse(vector<string>&argv ,bool verbose=true){
     bool fail=false;
     int count=0;
-    int i=1;
+    int i=0;  ///In this case we assume that the program name is not given in the first arg
     //We record any arguments that we understand as flags and remove them from the argv array
     //otherwise we leave them in place, report if verbose=true, and ultimately return "fail"
     //In this way we work either with a partial list of flags, with others to be processed later
@@ -150,14 +151,14 @@ public:
 	string flag( & argv[i][iword] );
 	unsigned int pos=flag.find_first_of("=",iword);
 	string name=flag.substr(0,pos); 
-	//cout<<i<<" processsing flag '"<<name<<"'";
+	cout<<i<<" processsing flag '"<<name<<"'";
 	if(flags.count(name)==0){
-	  //cout<<"\t...not found"<<endl;
+	  cout<<"\t...not found"<<endl;
 	  if(verbose)cerr<<"Option '"<<name<<"' not recognized."<<endl;
 	  fail=true;
 	  i++;
 	} else {
-	  //cout<<"\t...found"<<endl;
+	  cout<<"\t...found"<<endl;
 	  Option *opt=&flags[name];
 	  opt->is_set=true;
 	  if(pos!=(unsigned int)string::npos){

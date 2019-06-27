@@ -64,6 +64,7 @@ public:
     cout<<"prior is:"<<chain_prior->show()<<endl;
     return s;
   };
+  ptmcmc_sampler * clone_ptmcmc_sampler(){return dynamic_cast<ptmcmc_sampler*>(clone());};
   ///must delete managed pointers
   ~ptmcmc_sampler(){
     if(have_cc)delete cc;

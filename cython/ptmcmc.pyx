@@ -11,10 +11,12 @@ from typing import List
 from libcpp.string cimport string
 from libcpp.vector cimport vector
 cimport numpy as np
+import numpy as np
 import random
 import argparse
 cimport ptmcmc
 cimport options
+import copy
 
 #cdef extern from '../ProbabilityDist/newran.h' :
 #    cdef cppclass Random:
@@ -152,7 +154,10 @@ cdef class state:
     cpdef str get_string(self):
         return (self.cstate.get_string()).decode('UTF-8')
     cpdef np.ndarray[np.npy_double, ndim=1, mode='c'] get_params(self):
-        return self.cstate.get_params_vector()
+        cdef vector[double] params=self.cstate.get_params_vector()
+        result=np.zeros(params.size())
+        for i in range(params.size()):result[i]=params[i]
+        return result
     cpdef stateSpace getSpace(self):
         s = stateSpace()
         s.point(self.cstate.getSpace())
@@ -218,51 +223,71 @@ cdef class Options:
     cdef list  descrips
     cdef list defaults
     cdef dict argsdict
+    cdef bool have_dict
     
-    def __init__(self):
+    def __cinit__(self):
         self.names   =[]
         self.descrips=[]
         self.defaults=[]
+        self.Opt =options.Options()
+        self.have_dict=False
+        
     def add(self,name,descrip,default):
         self.names.append(name)
         self.descrips.append(descrip)
         self.defaults.append(default)
     def parse(self,list argv):
         cdef vector[string] ccargv
+        argv=['ptmcmc']+argv
         ccargv.resize(len(argv))
+        if '--help' in argv:
+            parser=self.make_parser()
+            parser.print_help()
+            print(self.Opt.print_usage().decode('UTF-8'))
+            parser.exit()
         for i in range(len(argv)):ccargv[i]=(<str>argv[i]).encode('UTF-8')
         #pass to Options.parse with verbose=false
         self.Opt.parse(ccargv,verbose=False)
         argv=[]
         #process residual char** array back to list of str
-        for ccarg in ccargv:
+        for ccarg in ccargv[1:]:
             argv.append(ccarg.decode('UTF-8'))
+        print('argv=',argv)
+        parser=self.make_parser()
+        self.argsdict=vars(parser.parse_args(argv))
+    def make_parser(self):
         parser=argparse.ArgumentParser()
         for i in range(len(self.names)):
-            print('adding argument: ',self.names[i],"'"+self.descrips[i]+"'","["+self.defaults[i]+"]")
+            #print('adding argument: ',self.names[i],"'"+self.descrips[i]+"'","["+self.defaults[i]+"]")
             parser.add_argument('--'+self.names[i], help=self.descrips[i], default=self.defaults[i])
-        print('argv=',argv)
-        self.argsdict=vars(parser.parse_args(argv))
+        #print('making parser:\n',parser.print_help())
+        return parser
     def value(self, argname):
         return self.argsdict[argname]
 
 #######
 cdef class sampler:
     cdef ptmcmc_sampler *mcmcsampler
-    def __cinit__(self):
+    cdef Options opt
+    def __cinit__(self,Options opts=None):
         self.mcmcsampler=new ptmcmc_sampler()
+        if opts is not None:
+            self.opt=opts
+            self.mcmcsampler.addOptions(self.opt.Opt)
     def __dealloc__(self):
-        del self.ptsampler
+        del self.mcmcsampler
     cpdef void setup(self,likelihood like):
         self.mcmcsampler.setup(like.like[0])
-        self.mcmcmsampler.select_proposal()
-    cpdef void addOptions(self, Options opt):
-        self.mcmcsampler.addOptions(opt.Opt)
+        self.mcmcsampler.select_proposal()
     cpdef int run(self, str base, int ic=0):
         return self.mcmcsampler.run(base.encode('UTF-8'), ic)
     cpdef int initialize(self):
         self.mcmcsampler.initialize()
-    #bayes_sampler * clone()
+    cpdef sampler clone(self):
+        cdef sampler new_sampler=sampler()
+        new_sampler.opt=self.opt
+        new_sampler.mcmcsampler=self.mcmcsampler.clone_ptmcmc_sampler()
+        return new_sampler
     #state getState();
     #static void Quit();
     #bool reporting();

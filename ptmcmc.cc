@@ -32,6 +32,7 @@ proposal_distribution* ptmcmc_sampler::new_proposal_distribution(int Npar, int &
 void ptmcmc_sampler::select_proposal(){
     valarray<double> scales;
     chain_prior->getScales(scales);
+    cout<<"Selecting proposal for stateSpace:\n"<<chain_prior->get_space()->show()<<endl;
     int Npar=chain_prior->get_space()->size();
     int proposal_option,SpecNinit;
     double tmixfac,reduce_gamma_by,de_eps,gauss_1d_frac,gauss_draw_frac,cov_draw_frac;
@@ -449,9 +450,9 @@ void ptmcmc_sampler::setup(bayes_likelihood &llike, const sampleable_probability
 ///
 int ptmcmc_sampler::initialize(){
   //cout<<"INIT("<<this<<")"<<endl;
-
-  if(!have_setup){
-    cout<<"ptmcmc_sampler::initialize.  Must call setup() before initialization!"<<endl;
+  
+  if(!have_setup or !have_cprop){
+    cout<<"ptmcmc_sampler::initialize.  Must call setup() and set proposal before initialization!"<<endl;
     exit(1);
   }
 
@@ -469,7 +470,7 @@ int ptmcmc_sampler::initialize(){
     MH_chain *mhc= new MH_chain(chain_llike,chain_prior,-30,save_every);
     cc=mhc;
     have_cc=true;
-    cprop->set_chain(cc);
+    //cprop->set_chain(cc);
     if(initialization_file!="")mhc->initialize(Ninit,initialization_file);
     else mhc->initialize(Ninit);
   }

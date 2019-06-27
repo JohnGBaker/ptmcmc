@@ -777,6 +777,7 @@ void MH_chain::initialize(uint n){
     //while(s.invalid()&&icnt<2*icntmax){
     double slike;
     while(s.invalid() or (slike=llikelihood->evaluate_log(s))<-1e100){
+      cout<<"invalid state: like="<<slike<<" pars:"<<s.get_string()<<endl;
       icnt++;
       if(icnt>=icntmax)
 	cout<<"MH_chain::initialize: Having trouble drawing a valid state.  Latest state:"<<s.show()<<"...was invalid in space:"<<s.getSpace()->show()<<endl;
@@ -1213,7 +1214,7 @@ void parallel_tempering_chains::initialize( probability_function *log_likelihood
     //MPI temps[global_temp_index[i]]
     //MPI Ntemps in these loops should be NLocalChains or such
     ostringstream oss;oss<<"PTchain: initializing chain "<<i<<endl;
-    cout<<oss.str();
+    cout<<oss.str()<<endl;
     chains[i].invtemp=1/temps[i];
     if(initialization_file!="")chains[i].initialize(n,initialization_file);
     else chains[i].initialize(n);

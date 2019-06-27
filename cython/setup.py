@@ -20,5 +20,5 @@ extensions = [
 
 setup(
     name="ptmcmc",
-    ext_modules=cythonize(extensions),
+    ext_modules=cythonize(extensions, gdb_debug=True),
     )

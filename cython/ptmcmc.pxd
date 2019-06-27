@@ -19,7 +19,7 @@ cdef extern from "../ptmcmc.hh":
         void setup(bayesian.bayes_likelihood &llike)
         int initialize();
         #int analyze(const string & base, int ic, int Nsigma, int Nbest, bayes_likelihood &like);
-        ptmcmc_sampler * clone()
+        ptmcmc_sampler * clone_ptmcmc_sampler()
         states.state getState();
         #static void Quit();
         bool reporting();

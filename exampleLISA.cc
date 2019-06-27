@@ -33,7 +33,7 @@ const bool narrowband=true;
 // They are progressively more formal and intimately connected to bayes_likelihood.
 // Option 4. was the original before June 2019.
 
-const bool no_class=true;
+const bool no_class=false;
 const bool use_inheritance_interface=false; //only relevant if no_class=false
 const bool use_basic_setup=true; //only relevant with use_inheritance_interface=true
 
@@ -97,6 +97,12 @@ double simple_likelihood_evaluate_log_nc(void *object, const state &s){
     double beta=params[4];
     double psi=params[5];
     double result=simpleCalculateLogLCAmpPhase(d, phi, inc, lambd, beta, psi);
+    //static int count=0;
+    //cout<<count<<endl;
+    //count++;
+    //cout<<"state: "<<s.get_string()<<endl;
+    //cout<<"  logL="<<result<<endl;
+
     return result;
 };
 
@@ -111,7 +117,8 @@ void simple_likelihood_setup_nc(bayes_likelihood *blike){
   string names[]={"d","phi","inc","lambda","beta","psi"};
   space.set_names(names);
   space.set_bound(1,boundary(boundary::wrap,boundary::wrap,0,2*M_PI));//set 2-pi-wrapped space for phi.  Turn on if not narrow banding
-  if(not narrowband)space.set_bound(3,boundary(boundary::wrap,boundary::wrap,0,2*M_PI));//set 2-pi-wrapped space for lambda.
+  //if(not narrowband)
+  //space.set_bound(3,boundary(boundary::wrap,boundary::wrap,0,2*M_PI));//set 2-pi-wrapped space for lambda.
   //else space.set_bound(4,boundary(boundary::limit,boundary::limit,0.2,0.6));//set narrow limits for beta
   space.set_bound(5,boundary(boundary::wrap,boundary::wrap,0,M_PI));//set pi-wrapped space for pol.
   
@@ -292,6 +299,11 @@ public:
     double beta=params[mythis->idx_beta];
     double psi=params[mythis->idx_psi];
     double result=simpleCalculateLogLCAmpPhase(d, phi, inc, lambd, beta, psi);
+    //static int count=0;
+    //cout<<count<<endl;
+    //count++;
+    //cout<<"state: "<<s.get_string()<<endl;
+    //cout<<"  logL="<<result<<endl;
     return result;
   };
 };
@@ -403,6 +415,9 @@ int main(int argc, char*argv[]){
   mcmc.setup(*like,output_precision);
   mcmc.select_proposal();
 
+  //Testing (will break testsuite)
+  //state  s=like->draw_from_prior();
+  
   //Prepare for chain output
   ss<<outname;
   string base=ss.str();
