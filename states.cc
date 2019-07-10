@@ -74,7 +74,13 @@ string boundary::show()const{
 /// State space class allows reference to overall limits and structure of the space.
 /// Can provide support for boundary conditions, maybe special flows that can be used in proposals...
 /// Should inner product be defined here?  probably...
-
+/// Note: The 'limit' bound is currently problematical with state arithmetic.  If there is a 'limit' then
+/// the state space is not complete wrt scalar multiplication and state addition, as the result may
+/// exceed the limit. Resolutions could be to A) use 'limit' only if out-of-range values really don't even
+/// make sense as differentials, etc.  Or B) ignore result of enforce in these operations.  The latter
+/// is probably best, but will probably not be backward compatible. If such chages are to be made, then
+/// we might want to move innerproduct (at minimum) to stateSpace and make some improvements with the
+/// wrap dimensions (so that |A-B| = |B-A|, for eg).
 bool stateSpace::enforce(valarray<double> &params)const{
     if(params.size()!=dim){
       cout<<"stateSpace::enforce:  Dimension error.  Expected "<<dim<<" params, but given "<<params.size()<<" for stateSpace="<<show()<<"."<<endl;
@@ -156,8 +162,8 @@ state state::scalar_mult(double x)const{
   };
 
 ///For some applications it is necessary to have an inner product on the state space. Probably should move this out to stateSpace.
-double state::innerprod(state other)const{
-    if(!(valid&&other.valid))return NAN;
+double state::innerprod(state other,bool constrained)const{
+    if(constrained && !(valid&&other.valid))return NAN;
     double result=0;
     if(other.size()!=size()){
       cout<<"state::innerprod: sizes mismatch.\n";

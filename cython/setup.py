@@ -5,6 +5,7 @@ import numpy
 
 os.environ["CC"] = "g++-mp-8"
 os.environ["CXX"] = "g++-mp-8"
+os.environ['LD'] = 'g++-mp-8'
 #os.environ["CXXFLAGS"] = "-mmacosx-version-min=10.14"
 
 extensions = [

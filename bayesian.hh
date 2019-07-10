@@ -539,6 +539,7 @@ public:
 	    cout<<"  params="<<s.get_string()<<endl;
 	    cout<<"  like="<<result<<"  post="<<post<<endl; 
 	    result=-INFINITY;
+	    exit(1);
 	  }
 	}
       }

@@ -21,6 +21,9 @@
 import numpy as np
 import ptmcmc
 import random
+import pyximport; pyximport.install()
+import simple_likelihood_funcs
+import sys
 
 MTSUN_SI=4.9254923218988636432342917247829673e-6
 PI=3.1415926535897932384626433832795029
@@ -63,9 +66,13 @@ def simpleCalculateLogLCAmpPhase(d, phiL, inc, lambdL, betaL, psiL):
   factor = 216147.866077
   sainj = 0.33687296665053773 + I*0.087978055005482114
   seinj = -0.12737105239204741 + I*0.21820079314765678
+  #sa2 = simple_likelihood_funcs.funcsa(d, phiL, inc, lambdL, betaL, psiL)
   sa = funcsa(d, phiL, inc, lambdL, betaL, psiL)
+  #print('sa compare:',sa,sa2)
+  #sys.stdout.flush()
   se = funcse(d, phiL, inc, lambdL, betaL, psiL)
   simplelogL = -1./2 * factor * (pow(abs(sa - sainj), 2) + pow(abs(se - seinj), 2))
+  #simplelogL = -1./2 * factor * ( (sa - sainj).real**2+(sa-sainj).imag**2 + (se - seinj).real**2+ (se-seinj).imag**2)
   return simplelogL
 
 class simple_likelihood(ptmcmc.likelihood):
@@ -100,12 +107,14 @@ class simple_likelihood(ptmcmc.likelihood):
         lambd=params[3]
         beta=params[4]
         psi=params[5]
-        result=simpleCalculateLogLCAmpPhase(d, phi, inc, lambd, beta, psi);
-        #global count
-        #print(count)
-        #count+=1
-        #print("state:",s.get_string())
-        #print("  logL={0:.13g}".format(result))
+        #result=simpleCalculateLogLCAmpPhase(d, phi, inc, lambd, beta, psi);
+        result=simple_likelihood_funcs.simpleCalculateLogLCAmpPhase(d, phi, inc, lambd, beta, psi);
+        #if False:
+        #  global count
+        #  print(count)
+        #  count+=1
+        #  print("state:",s.get_string())
+        #  print("  logL={0:.13g}".format(result))
         return result
 
 count=0

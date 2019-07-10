@@ -17,10 +17,19 @@ import argparse
 cimport ptmcmc
 cimport options
 import copy
+cimport openmp
+#cimport cython.parallel
 
+from libc.stdio cimport printf
+
+  
 #cdef extern from '../ProbabilityDist/newran.h' :
 #    cdef cppclass Random:
 #        pass
+
+#cdef extern from 'python.h':
+#    cdef void PyEval_InitThreads()
+#    cdef int PyEval_ThreadsInitialized()nogil
 
 cdef extern from '../ProbabilityDist/ProbabilityDist.h' :
     cdef cppclass ProbabilityDist:
@@ -129,6 +138,14 @@ cdef class stateSpace:
     cpdef str show(self):
         return (self.spaceptr.show()).decode('UTF-8')
 
+"""
+cdef double nada(void * obj,const states.state &s)nogil:
+    printf(" th in:%i\n",PyEval_ThreadsInitialized())
+    cdef double result=0
+    with gil:
+        result=0
+    return result;
+"""
 cdef class state:
     """
     Define the parameter state.
@@ -175,15 +192,24 @@ cdef class likelihood:
     def __cinit__(self):
         self.like=new bayesian.bayes_likelihood()
         #check_posterior #User can set to false to skip checks for unreasonable posterior values
-        self.like.register_reference_object(<void*>self)    
+        self.like.register_reference_object(<void*>self)
+        #self.like.register_evaluate_log(nada)
         self.like.register_evaluate_log(<double (*)(void *object, const states.state &s)>self.call_evaluate_log)
             #register_defWorkingStateSpace(<void (*)(void *object, const stateSpace &sp)>self.call_defWorkingStateSpace)
     def __dealloc__(self):
         del self.like
-    cdef double call_evaluate_log(self, const states.state &s):
+    cdef double call_evaluate_log(self, const states.state &s) with gil:
+        cdef int tid=openmp.omp_get_thread_num()
+        #print('Acquired GIL: Thread',tid)
+        cdef double result
+        #print("calling evaluate_log on thread",tid)
         st=state()
         st.cstate=states.state(s)
-        return self.evaluate_log(st)
+        #result=0
+        result=self.evaluate_log(st)
+        #print("returning from evaluate_log on thread",tid)
+        #print('ReReleasing GIL: Thread',tid)
+        return result
     cpdef void basic_setup( self, stateSpace space, list types, list centers, list scales):
         cdef int n=space.size()
         cdef vector[string] typesvec
@@ -274,15 +300,27 @@ cdef class sampler:
         if opts is not None:
             self.opt=opts
             self.mcmcsampler.addOptions(self.opt.Opt)
+#            self.initialize()
+#    cdef initialize(self):
+#        PyEval_InitThreads() #This is essential to initilize the GIL
     def __dealloc__(self):
         del self.mcmcsampler
     cpdef void setup(self,likelihood like):
         self.mcmcsampler.setup(like.like[0])
         self.mcmcsampler.select_proposal()
     cpdef int run(self, str base, int ic=0):
-        return self.mcmcsampler.run(base.encode('UTF-8'), ic)
+        cdef int result
+        cdef string basestring=base.encode('UTF-8')
+        #PyEval_InitThreads() #This may be essential to initilize the GIL
+
+        #print('Releasing GIL: Thread',openmp.omp_get_thread_num())
+        with nogil: 
+           result=self.mcmcsampler.run(basestring, ic)
+        #print('Re-acquiring GIL: Thread',openmp.omp_get_thread_num())
+        return result
     cpdef int initialize(self):
-        self.mcmcsampler.initialize()
+        with nogil:
+            self.mcmcsampler.initialize()
     cpdef sampler clone(self):
         cdef sampler new_sampler=sampler()
         new_sampler.opt=self.opt

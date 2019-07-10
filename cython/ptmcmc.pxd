@@ -15,9 +15,9 @@ cdef extern from "../ptmcmc.hh":
         ptmcmc_sampler()
         void select_proposal()
         void addOptions(options.Options &opt)
-        int run(const string & base, int ic)
+        int run(const string & base, int ic) nogil
         void setup(bayesian.bayes_likelihood &llike)
-        int initialize();
+        int initialize()nogil;
         #int analyze(const string & base, int ic, int Nsigma, int Nbest, bayes_likelihood &like);
         ptmcmc_sampler * clone_ptmcmc_sampler()
         states.state getState();

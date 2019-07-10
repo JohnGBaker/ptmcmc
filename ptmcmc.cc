@@ -479,7 +479,8 @@ int ptmcmc_sampler::initialize(){
 };
 
 int ptmcmc_sampler::run(const string & base, int ic){
-
+  cout<<"ptmcmc_sampler:running with omp_num_threads="<<omp_get_num_threads()<<endl;
+  
   if(!have_cc&&chain_Nstep>0){
     cout<<"ptmcmc_sampler::run.  Must call initialize() before running!"<<endl;
     exit(1);
