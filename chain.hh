@@ -133,6 +133,7 @@ public:
   pair<double,int> report_effective_samples(vector< bool (*)(const state &,double & value) > & features,int width=40000, int nevery=100);
   ///Testing
   pair<double,int>  report_effective_samples(int imax=-1,int width=40000, int nevery=100);
+  virtual string report_prop(){return "";};
 };
 
 
@@ -200,6 +201,7 @@ public:
   void resetTemp(double new_invtemp);
   //virtual void forget(int imin)override;
   friend parallel_tempering_chains;
+  virtual string report_prop();
 };
 
 // A parallel tempering set of markov (or non-Markovian) chain
@@ -297,6 +299,7 @@ class parallel_tempering_chains: public chain{
   void do_reboot(double rate,double threshhold,double thermal,int every,int grace=0,bool graduate=false,double aggression=0){max_reboot_rate=rate;reboot_thresh=threshhold;reboot_thermal_thresh=thermal;test_reboot_every=every;reboot_grace=grace;reboot_aggression=aggression;reboot_graduate=graduate;
     cout<<"Will reboot every "<<" aggression="<<reboot_aggression<<endl;
   };
+  virtual string report_prop();
 
 private:  
   //internal functions

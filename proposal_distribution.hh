@@ -36,6 +36,9 @@ public:
   ///Return type of draw (where that is relevant, otherwise 0)
   virtual int type(){return last_type;}
   virtual bool support_mixing(){return false;}
+  virtual void accept(){};//external trigger to indicate that proposal was accepted (available for adaptive proposals)
+  virtual void reject(){};//external trigger to indicate that proposal was rejected (available for adaptive proposals)
+  virtual string report(){return "DefaultProp";};//For status reporting from adaptive proposals
 };
 
 
@@ -148,18 +151,29 @@ public:
 class proposal_distribution_set: public proposal_distribution{
   int Nsize;
   vector<proposal_distribution*>proposals;
+  vector<double>shares;
   vector<double>bin_max;
+  //Needed for distribution evolution
+  double adapt_rate;
+  double target_acceptance_rate;
+  vector<bool>last_accepted;
+  int adapt_count;
+  int adapt_every;
+  int last_dist;
 public:
   virtual ~proposal_distribution_set(){for(auto prop:proposals)if(prop)delete prop;};//delete proposals
   virtual proposal_distribution_set* clone()const;
-  proposal_distribution_set(vector<proposal_distribution*> &props,vector<double> &shares);
+  proposal_distribution_set(vector<proposal_distribution*> &props,vector<double> &shares,double adapt_rate=0,double target_acceptance_rate=0.2);
   ///For proposals which draw from a chain, we need to know which chain
   void set_chain(chain *c){for(int i=0;i<Nsize;i++)proposals[i]->set_chain(c);};
   ///Randomly select from proposals i in 0..n and draw.
   ///Sets type() value at i+10*proposals[i].type() 
   //state draw(state &s,Random &rng);
   state draw(state &s,chain *caller);
+  void accept();
+  void reject();
   string show();
+  string report();//For status reporting on adaptive
 };  
     
 ///DifferentialEvolution

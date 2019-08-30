@@ -44,6 +44,7 @@ void ptmcmc_sampler::select_proposal(){
     (*optValue("gauss_draw_frac"))>>gauss_draw_frac;
     (*optValue("cov_draw_frac"))>>cov_draw_frac;
     (*optValue("covariance_file"))>>covariance_file;
+    (*optValue("prop_adapt_rate"))>>prop_adapt_rate;
     //Do some sanity checking/fixing
     if(gauss_1d_frac<0)gauss_1d_frac=0;
     if(gauss_1d_frac>1)gauss_1d_frac=1;
@@ -64,7 +65,7 @@ void ptmcmc_sampler::select_proposal(){
     (*optValue("de_Tmix"))>>tmixfac;
     gauss_temp_scaled=optSet("gauss_temp_scaled");
     de_mixing=optSet("de_mixing");
-    cprop=new_proposal_distribution_guts(Npar, chain_Ninit, chain_prior, &scales, proposal_option, SpecNinit, tmixfac, reduce_gamma_by, de_eps, gauss_1d_frac,de_mixing,gauss_draw_frac,cov_draw_frac,gauss_temp_scaled,covariance_file);
+    cprop=new_proposal_distribution_guts(Npar, chain_Ninit, chain_prior, &scales, proposal_option, SpecNinit, tmixfac, reduce_gamma_by, de_eps, gauss_1d_frac,de_mixing,prop_adapt_rate,gauss_draw_frac,cov_draw_frac,gauss_temp_scaled,covariance_file);
     //cprop=new_proposal_distribution(Npar, chain_Ninit, opt, chain_prior, scales);
     cout<<"Proposal distribution is:\n"<<cprop->show()<<endl;
     have_cprop=true;
@@ -73,7 +74,7 @@ void ptmcmc_sampler::select_proposal(){
 proposal_distribution* ptmcmc_sampler::new_proposal_distribution_guts(int Npar, int &Ninit, const sampleable_probability_function * prior, const valarray<double>*halfwidths,
 								      int proposal_option,int SpecNinit,
 								      double tmixfac,double reduce_gamma_by,double de_eps,double gauss_1d_frac,
-								      bool de_mixing,
+								      bool de_mixing, double prop_adapt_rate,
 								      double gauss_draw_frac, double cov_draw_frac, bool gauss_temp_scaled,
 								      const string &covariance_file
 								      ){
@@ -114,7 +115,7 @@ proposal_distribution* ptmcmc_sampler::new_proposal_distribution_guts(int Npar, 
       shares[i]=fac;
       cout<<"  sigma="<<sigmas[0]/fac<<", weight="<<fac<<endl;
     }
-    prop=new proposal_distribution_set(gaussN,shares);
+    prop=new proposal_distribution_set(gaussN,shares,prop_adapt_rate);
     break;
   }
   case 3:{
@@ -194,8 +195,8 @@ proposal_distribution* ptmcmc_sampler::new_proposal_distribution_guts(int Npar, 
     Ninit=SpecNinit*Npar;
     //plus range of gaussians
     int Nprop_set=7;
-    cout<<"Selected set of Gaussian proposals option"<<endl;
-    cout<<"  gauss_draw_frac="<<gauss_draw_frac<<"\n  cov_draw_frac="<<cov_draw_frac<<endl;
+    //cout<<"Selected set of Gaussian proposals option"<<endl;
+    //cout<<"  gauss_draw_frac="<<gauss_draw_frac<<"\n  cov_draw_frac="<<cov_draw_frac<<endl;
     vector<proposal_distribution*> set(Nprop_set,nullptr);
     vector<double>shares(Nprop_set);
     int iprop=0;
@@ -218,11 +219,11 @@ proposal_distribution* ptmcmc_sampler::new_proposal_distribution_guts(int Npar, 
       fac*=stepfac;
       set[i]=new gaussian_prop(sigmas/100.0/fac,gauss_1d_frac,gauss_temp_scaled);
       shares[i]=fac/sum*gshare;
-      cout<<"  sigmas[0]="<<sigmas[0]/100.0/fac<<", weight="<<shares[i]<<endl;
+      //cout<<"  sigmas[0]="<<sigmas[0]/100.0/fac<<", weight="<<shares[i]<<endl;
     }
-    for(int i=0;i<Nprop_set;i++)cout<<" Option 7 prop: set["<<i<<"] = "<<set[i]->show()<<endl;
+    //for(int i=0;i<Nprop_set;i++)cout<<" Option 7 prop: set["<<i<<"] = "<<set[i]->show()<<endl;
       
-    prop=new proposal_distribution_set(set,shares);
+    prop=new proposal_distribution_set(set,shares,prop_adapt_rate);
     break;
   }
   default:
@@ -374,6 +375,7 @@ void ptmcmc_sampler::addOptions(Options &opt,const string &prefix){
   addOption("gauss_temp_scaled","With Gaussian proposal distribution variants, scale (co)variance with chain-temp. Default=not");
   addOption("cov_draw_frac","With Gaussian proposal dist variants and a covariance file set, specify a fraction of Gaussian draws with defined covariance. Default=0.50","0.50");
   addOption("covariance_file","Specify file with covariance data for relevant proposal distribution optoins.Default=none","");
+  addOption("prop_adapt_rate","Specify a scaling rate (eg 1e-3) for adaptation of sub-proposal fractions, Default=0","0");
   addOption("de_ni","Differential-Evolution number of initialization elements per dimension. Default=50.","50");
   addOption("de_eps","Differential-Evolution gaussian scale. Default=1e-4.","1e-4");
   addOption("de_reduce_gamma","Differential Evolution reduce gamma parameter by some factor from nominal value. Default=4.","4");
@@ -455,7 +457,7 @@ int ptmcmc_sampler::initialize(){
     cout<<"ptmcmc_sampler::initialize.  Must call setup() and set proposal before initialization!"<<endl;
     exit(1);
   }
-
+  cout<<"ptmcmc_sampler: Initializing with prior:\n"<<chain_prior->show()<<endl;
   int Ninit=chain_Ninit;
   if(restarting or Nstep<=0)Ninit=0;
   //Create the Chain 
@@ -537,7 +539,8 @@ int ptmcmc_sampler::run(const string & base, int ic){
       }
       cout<<cc->status()<<endl;      
       
-      if(0==istep%(Nevery*4)){
+      if(0==istep%(Nevery*4)){ 
+	if(prop_adapt_rate>0)cout<<"Proposal report:\n"<<cc->report_prop()<<endl;
 	cout<<"Effective sample size test"<<endl;
 	auto ess_len=cc->report_effective_samples(-1,save_every*1000,save_every);
 	if(ess_stop>0 and ess_len.first>ess_stop){

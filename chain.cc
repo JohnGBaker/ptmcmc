@@ -575,7 +575,6 @@ pair<double,int>  chain::report_effective_samples(int imax,int width, int every)
   return report_effective_samples(features,width,every);
 };
 
-
 // A markov (or non-Markovian) chain based on some variant of the Metropolis-Hastings algorithm
 // May add "burn-in" distinction later.
 MH_chain::MH_chain(probability_function * log_likelihood, const sampleable_probability_function *log_prior,double minPrior,int add_every_N):
@@ -913,10 +912,12 @@ void MH_chain::step(proposal_distribution &prop,void *data){
       Naccept++;
       //cout<<"        accepting"<<endl;//debug
       last_type=prop.type();
+      prop.accept();
       add_state(newstate,newlike,newlpost);
       //chainsteps.push_back(Nhist-Ninit);
     }
     else {
+      prop.reject();
       //cout<<"        rejecting"<<endl;//debug
       add_state(current_state,current_llike,current_lpost);
       //cout<<"Nhist="<<Nhist<<"        rejected"<<endl;
@@ -1050,6 +1051,13 @@ string MH_chain::status(){
     s<<"chain(id="<<id<<", N="<<Nsize<<", T="<<1.0/invtemp<<"):"<<current_lpost<<", "<<current_llike<<" : "<<this->getState().get_string();
     return s.str();
 };
+
+string MH_chain::report_prop(){
+  if(default_prop_set)
+    return default_prop->report();
+  else return "NoProp";
+};
+
 
 
 
@@ -1951,5 +1959,13 @@ string parallel_tempering_chains::status(){
   return s.str();
 };
  
+string parallel_tempering_chains::report_prop(){//Not yet MPI aware
+  ostringstream result("");
+  for(auto i: mychains)
+    result<<" T="<<temps[i]<<"; "<<props[i]->report()<<endl;//"; "<<chains[i].show();
+  return result.str();
+};
+
+
   
     

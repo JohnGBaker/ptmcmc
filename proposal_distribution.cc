@@ -22,22 +22,37 @@ proposal_distribution_set* proposal_distribution_set::clone()const{//need a deep
   return result;
 };
 
-proposal_distribution_set::proposal_distribution_set(vector<proposal_distribution*> &props,vector<double> &shares){
+//A little utility for normalizing the shares and presetting the bin limits.
+void reset_bins(vector<double> &shares, vector<double> &bin_max){
+  int Nsize=shares.size();
+  double sum=0;
+  for(int i=0;i<Nsize;i++)sum+=shares[i];//make sure the portions total one
+  for(int i=0;i<Nsize;i++){
+    shares[i]/=sum;
+    if(i==0)bin_max[0]=(shares[0]);
+    else bin_max[i]=(bin_max[i-1]+shares[i]);
+  }
+};
+
+proposal_distribution_set::proposal_distribution_set(vector<proposal_distribution*> &props,vector<double> &shares,double adapt_rate,double target_acceptance_rate):shares(shares),adapt_rate(adapt_rate),target_acceptance_rate(target_acceptance_rate){
   //First some checks
   if(props.size()!=shares.size()){
     cout<<"proposal_distribution_set(constructor): Array sizes mismatched.\n";
     exit(1);
   }
   Nsize=shares.size();
-  double sum=0;
-  for(int i=0;i<Nsize;i++)sum+=shares[i];//make sure the portions total one
-  for(int i=0;i<Nsize;i++){
-    proposals.push_back(props[i]);//no copy here.
-    if(i==0)bin_max.push_back(shares[0]/sum);
-    else bin_max.push_back((bin_max[i-1]+shares[i])/sum);
-  }
+  bin_max.resize(Nsize);
+  reset_bins(shares,bin_max);
+  for(int i=0;i<Nsize;i++)proposals.push_back(props[i]);//no copy here.
   last_type=0;
+  last_dist=0;
+  //Set up stuff for evolving bins
+  last_accepted.resize(Nsize,true);
+  adapt_count=0;
+  adapt_every=10*Nsize; //A somewhat arbitrary update frequency
+  
 };
+
 
   ///For proposals which draw from a chain, we need to know which chain
 //void set_chain(chain *c){for(int i=0;i<Nsize;i++)proposals[i]->set_chain(c);};
@@ -64,6 +79,7 @@ state proposal_distribution_set::draw(state &s,chain * caller){
 	log_hastings=proposals[i]->log_hastings_ratio();
 	//cout<<"Applying prop "<<proposals[i]->show();
 	last_type=i+10*proposals[i]->type();//We assume no need for >10 prop classes in the set
+	last_dist=i;
 	return out;
       }
     }
@@ -74,6 +90,42 @@ state proposal_distribution_set::draw(state &s,chain * caller){
       exit(1);
     }
   }
+};
+
+//For the adaptive option, we steer the mixing fraction to opt
+void proposal_distribution_set::accept(){
+  //Here is the idea:
+  //Target acceptance rate = target_acc_rate
+  //Then: if two accepts in a row reduce weight scaling rate by target_acc_rate^2
+  //and if two rejects in a row reduce weight scaling rate by (1-target_acc_rate)^2
+  if(adapt_rate==0)return;
+  if(last_accepted[last_dist])//successive accepts
+    shares[last_dist]*=1-adapt_rate*target_acceptance_rate*target_acceptance_rate;
+  last_accepted[last_dist]=true;
+  adapt_count++;
+  if(adapt_count>=adapt_every)reset_bins(shares,bin_max);
+};
+
+void proposal_distribution_set::reject(){
+  //Here is the idea:
+  //Target acceptance rate = target_acc_rate
+  //Then: if two accepts in a row reduce weight scaling rate by target_acc_rate^2
+  //and if two rejects in a row reduce weight scaling rate by (1-target_acc_rate)^2
+  if(adapt_rate==0)return;
+  if(!last_accepted[last_dist])//successive rejects
+    shares[last_dist]*=1-adapt_rate*(1-target_acceptance_rate)*(1-target_acceptance_rate);
+  last_accepted[last_dist]=false;
+  adapt_count++;
+  if(adapt_count>=adapt_every)reset_bins(shares,bin_max);
+};
+
+string proposal_distribution_set::report(){//For status reporting on adaptive
+  ostringstream ss;
+  ss<<"shares=["<<shares[0];
+  for(int i=1;i<Nsize;i++)ss<<","<<shares[i];
+  ss<<"]";
+  return ss.str();
+    
 };
 
 string proposal_distribution_set::show(){

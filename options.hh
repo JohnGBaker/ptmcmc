@@ -151,14 +151,14 @@ public:
 	string flag( & argv[i][iword] );
 	unsigned int pos=flag.find_first_of("=",iword);
 	string name=flag.substr(0,pos); 
-	cout<<i<<" processsing flag '"<<name<<"'";
+	//cout<<i<<" processsing flag '"<<name<<"'";
 	if(flags.count(name)==0){
-	  cout<<"\t...not found"<<endl;
+	  //cout<<"\t...not found"<<endl;
 	  if(verbose)cerr<<"Option '"<<name<<"' not recognized."<<endl;
 	  fail=true;
 	  i++;
 	} else {
-	  cout<<"\t...found"<<endl;
+	  //cout<<"\t...found"<<endl;
 	  Option *opt=&flags[name];
 	  opt->is_set=true;
 	  if(pos!=(unsigned int)string::npos){
