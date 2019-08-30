@@ -38,7 +38,7 @@ public:
   virtual bool support_mixing(){return false;}
   virtual void accept(){};//external trigger to indicate that proposal was accepted (available for adaptive proposals)
   virtual void reject(){};//external trigger to indicate that proposal was rejected (available for adaptive proposals)
-  virtual string report(){return "DefaultProp";};//For status reporting from adaptive proposals
+  virtual string report(){return "";};//For status reporting from adaptive proposals
 };
 
 

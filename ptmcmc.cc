@@ -193,37 +193,52 @@ proposal_distribution* ptmcmc_sampler::new_proposal_distribution_guts(int Npar, 
     if(de_mixing)de->support_mixing(true);
     de->mix_temperatures_more(tmixfac);
     Ninit=SpecNinit*Npar;
-    //plus range of gaussians
-    int Nprop_set=7;
-    //cout<<"Selected set of Gaussian proposals option"<<endl;
-    //cout<<"  gauss_draw_frac="<<gauss_draw_frac<<"\n  cov_draw_frac="<<cov_draw_frac<<endl;
-    vector<proposal_distribution*> set(Nprop_set,nullptr);
+    //plus range of gaussians...
+    int Ng=6;
+    int Nprop_set=1+Ng;
+    //If adaptive proposal mixing, then we only want to adapt on the gaussian portion, so we make the set hierachically
+    if(prop_adapt_rate>0){//hierarchical, so this is just the top level
+      Nprop_set=2;
+    }
+    vector<proposal_distribution*> set(Nprop_set,nullptr);;
     vector<double>shares(Nprop_set);
     int iprop=0;
     set[iprop]=de;
+    double gshare=gauss_draw_frac;
+    shares[0]=1-gshare-cov_draw_frac;
     iprop++;
+    //Next optionally add a specific covariance gaussian (top level if hierarchical)
     Eigen::MatrixXd covar;
     read_covariance(covariance_file,prior->get_space(),covar);
     if(cov_draw_frac>0){
-      set[iprop]=new gaussian_prop(covar,gauss_1d_frac,gauss_temp_scaled);
+      set[iprop]=new gaussian_prop(covar,gauss_1d_frac,gauss_temp_scaled);	
+      set.push_back(nullptr);
+      shares.push_back(0);
+      shares[iprop]=cov_draw_frac;
       iprop++;
       Nprop_set+=1;
-      set.push_back(nullptr);
     }
-    double gshare=gauss_draw_frac;
-    shares[0]=1-gshare-cov_draw_frac;
     //double sum=(pow(2,2*(Nprop_set-1)+1)-2)*2/3.0,stepfac=4.0;
-    double sum=(pow(2,Nprop_set)-2),stepfac=2.0;
+    vector<proposal_distribution*> gset(Ng,nullptr);
+    vector<double> gshares(Ng);
+    double sum=(pow(2,Ng+1)-2),stepfac=2.0;
     double fac=1;
-    for(int i=iprop;i<Nprop_set;i++){
-      fac*=stepfac;
-      set[i]=new gaussian_prop(sigmas/100.0/fac,gauss_1d_frac,gauss_temp_scaled);
-      shares[i]=fac/sum*gshare;
-      //cout<<"  sigmas[0]="<<sigmas[0]/100.0/fac<<", weight="<<shares[i]<<endl;
+    if(prop_adapt_rate>0){
+      for(int i=0;i<Ng;i++){
+	fac*=stepfac;
+	gset[i]=new gaussian_prop(sigmas/100.0/fac,gauss_1d_frac,gauss_temp_scaled);
+	gshares[i]=fac/sum;
+      }
+      set[iprop]=new proposal_distribution_set(gset,gshares,prop_adapt_rate);
+      shares[iprop]=gshare;
+    } else {
+      for(int i=iprop;i<Nprop_set;i++){
+	fac*=stepfac;
+	set[i]=new gaussian_prop(sigmas/100.0/fac,gauss_1d_frac,gauss_temp_scaled);
+	shares[i]=fac/sum*gshare;
+      }
     }
-    //for(int i=0;i<Nprop_set;i++)cout<<" Option 7 prop: set["<<i<<"] = "<<set[i]->show()<<endl;
-      
-    prop=new proposal_distribution_set(set,shares,prop_adapt_rate);
+    prop=new proposal_distribution_set(set,shares);
     break;
   }
   default:

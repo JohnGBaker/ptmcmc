@@ -98,7 +98,10 @@ void proposal_distribution_set::accept(){
   //Target acceptance rate = target_acc_rate
   //Then: if two accepts in a row reduce weight scaling rate by target_acc_rate^2
   //and if two rejects in a row reduce weight scaling rate by (1-target_acc_rate)^2
-  if(adapt_rate==0)return;
+  if(adapt_rate==0){//Don't adapt here, but possibly adapt a sub_distribution
+    proposals[last_dist]->accept();
+    return; 
+  };
   if(last_accepted[last_dist])//successive accepts
     shares[last_dist]*=1-adapt_rate*target_acceptance_rate*target_acceptance_rate;
   last_accepted[last_dist]=true;
@@ -111,7 +114,10 @@ void proposal_distribution_set::reject(){
   //Target acceptance rate = target_acc_rate
   //Then: if two accepts in a row reduce weight scaling rate by target_acc_rate^2
   //and if two rejects in a row reduce weight scaling rate by (1-target_acc_rate)^2
-  if(adapt_rate==0)return;
+  if(adapt_rate==0){//Don't adapt here, but possibly adapt a sub_distribution
+    proposals[last_dist]->reject();
+    return;
+  };
   if(!last_accepted[last_dist])//successive rejects
     shares[last_dist]*=1-adapt_rate*(1-target_acceptance_rate)*(1-target_acceptance_rate);
   last_accepted[last_dist]=false;
@@ -121,8 +127,12 @@ void proposal_distribution_set::reject(){
 
 string proposal_distribution_set::report(){//For status reporting on adaptive
   ostringstream ss;
-  ss<<"shares=["<<shares[0];
-  for(int i=1;i<Nsize;i++)ss<<","<<shares[i];
+  
+  ss<<"shares=["<<shares[0]<<proposals[0]->report();
+  for(int i=1;i<Nsize;i++){
+    ss<<","<<shares[i];
+    ss<<proposals[i]->report();
+  }
   ss<<"]";
   return ss.str();
     
