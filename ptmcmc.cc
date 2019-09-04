@@ -255,6 +255,8 @@ void ptmcmc_sampler::Init(int &argc, char*argv[]){
   MPI_Comm_rank(MPI_COMM_WORLD, &myproc);
   MPI_Comm_size(MPI_COMM_WORLD, &nproc);
   if(myproc==0)cout<<"MPI running on "<<nproc<<" MPI processes.\n"<<endl;
+#else
+  cout<<"Running without MPI (not compiled for MPI)."<<endl;
 #endif
 };
 

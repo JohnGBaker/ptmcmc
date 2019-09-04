@@ -1,3 +1,3 @@
 
-CFLAGS = -g -O2 -fopenmp -DPACKAGE_NAME=\"ptmcmc\" -DPACKAGE_TARNAME=\"ptmcmc\" -DPACKAGE_VERSION=\"1.0\" -DPACKAGE_STRING=\"ptmcmc\ 1.0\" -DPACKAGE_BUGREPORT=\"\" -DPACKAGE_URL=\"\" -DHAVE_CXX11=1
-CXX = /opt/local/bin/g++-mp-8
+CFLAGS = -g -O2 -fopenmp -DPACKAGE_NAME=\"ptmcmc\" -DPACKAGE_TARNAME=\"ptmcmc\" -DPACKAGE_VERSION=\"1.0\" -DPACKAGE_STRING=\"ptmcmc\ 1.0\" -DPACKAGE_BUGREPORT=\"\" -DPACKAGE_URL=\"\" -DUSE_MPI=1 -DHAVE_CXX11=1
+CXX = mpicxx

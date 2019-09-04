@@ -1,5 +1,5 @@
 basic:  exampleLISA cp-test
-mpi: exampleLISAmpi cp-mpi cp-mpi-triv
+mpi: exampleLISAmpi cp-mpi
 
 long: exampleLISA_long
 all: basic mpi long
