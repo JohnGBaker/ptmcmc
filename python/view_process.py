@@ -19,7 +19,7 @@ nparmax=12
 parser = argparse.ArgumentParser(description='Provide snapshot of chain state.')
 parser.add_argument('fname', metavar='chain_file', nargs='+', type=str, 
                     help='chain file path')
-
+parser.add_argument('-uselike',action='store_true',help='include the likelihood')
 args = parser.parse_args()
 print(args)
 
@@ -102,9 +102,13 @@ def read_data(names):
         #print ("Data have ",N," rows representing ",N*dSdN," steps.")
         #print ("data[1]=",data[1])
         maxPost=max(data[:,1])
-        data=np.delete(data,[2,3,4,len(data[0])-1],1)
-        #print ("data[1]=",data[1])
-        parnames=["samp","post",]+get_par_names(chainname)
+        parnames=["samp","post",]
+        if args.uselike:
+            data=np.delete(data,[3,4,len(data[0])-1],1)
+            parnames+=['like']
+        else:
+            data=np.delete(data,[2,3,4,len(data[0])-1],1)
+        parnames+=get_par_names(chainname)
         print (parnames)
         for name in parnames:
             if(not name in allparnames):
@@ -154,7 +158,9 @@ def update(val):
             else:
                 cc=np.array([colorval]*n)
                 xy = np.vstack((x, y)).T
-            if(n==0):continue
+            if(n==0):
+                ind+=1
+                continue
             lim=x.min()
             if(xmin>lim):xmin=lim
             lim=x.max()

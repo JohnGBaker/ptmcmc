@@ -313,7 +313,7 @@ shared_ptr<Random> globalRNG;//used for some debugging...
 //***************************************************************************************8
 //main test program
 int main(int argc, char*argv[]){
-
+  ptmcmc_sampler::Init(argc,argv);
   Options opt(true);
   //Create the sampler
   ptmcmc_sampler mcmc;

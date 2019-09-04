@@ -51,10 +51,10 @@ def get_xydata(data,i,j,dens,samps):
     Nd=len(d)
     #print("Reduced data len =",Nd)
     every=int(Nd/dens)
-    print(Nd,dens,every)
+    #print(Nd,dens,every)
     x=d[::every,i]
     y=d[::every,j]
-    print (len(x))
+    #print (len(x))
     return x,y
     
 ##################
@@ -64,7 +64,7 @@ def get_xydata(data,i,j,dens,samps):
 def update(val):
     cx=1+parnames.index(radioX.value_selected)
     cy=1+parnames.index(radioY.value_selected)
-    print("index->",cx,cy)
+    #print("index->",cx,cy)
     start = int(10**sstart.val)
     samps = int(10**sdens.val)
     x,y=get_xydata(data,cx,cy,samps,start)
@@ -74,6 +74,9 @@ def update(val):
     ymin=y.min(); ymax=y.max()
     ax.set_xlim(xmin-0.1*(xmax-xmin),xmax+0.1*(xmax-xmin))
     ax.set_ylim(ymin-0.1*(ymax-ymin),ymax+0.1*(ymax-ymin))
+    for tick in ax.get_xticklabels():
+        tick.set_rotation(20)
+
     fig.canvas.draw_idle()
 
 def reset(event):
@@ -99,7 +102,7 @@ parnames=["post",]+get_par_names(chainname)
 print (parnames)
 
 fig, ax = plt.subplots()
-plt.subplots_adjust(left=0.35, bottom=0.25)
+plt.subplots_adjust(left=0.35, bottom=0.30)
 cx0= 0
 cy0= 1
 s0 = 3
@@ -123,6 +126,7 @@ rYax = plt.axes([0.15, 0.5-height/2, 0.1, height])
 rYax.text(0.9, 0.95, "Y", transform=rYax.transAxes, fontsize=12,
           verticalalignment='top',horizontalalignment='right')
 resetax = plt.axes([0.8, 0.025, 0.1, 0.04])
+
 
 ilogS=(math.log10(N*dSdN))
 ilogSamps=int(math.log10(N))
