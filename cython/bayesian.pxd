@@ -75,5 +75,7 @@ cdef extern from '../bayesian.hh' :
          double evaluate_log(state &s)           
          state draw_from_prior()
          const stateSpace* getObjectStateSpace()const
+         void reset()
+         double bestPost()
 
 

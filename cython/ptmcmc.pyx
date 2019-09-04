@@ -210,6 +210,15 @@ cdef class likelihood:
         #print("returning from evaluate_log on thread",tid)
         #print('ReReleasing GIL: Thread',tid)
         return result
+    
+    cpdef double evaluate_post(self, state s):
+        #This is something of a hacky interface to get the posterior with a minimal interface
+        #first reset the likelihood "best" posterior
+        self.like.reset()
+        #then evaluate the likelihood (which will also update the best posterior)
+        self.like.evaluate_log(s.cstate)
+        return self.like.bestPost()
+        
     cpdef void basic_setup( self, stateSpace space, list types, list centers, list scales):
         cdef int n=space.size()
         cdef vector[string] typesvec
