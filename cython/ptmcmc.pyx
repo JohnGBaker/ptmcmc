@@ -40,10 +40,15 @@ cdef extern from '../ProbabilityDist/ProbabilityDist.h' :
 cpdef resetRNGseed(double seed):
     ProbabilityDist.setSeed(seed)
 
-
+cpdef Init():
+    ptmcmc_sampler_Init()
+        
+#Some initialization
 random.seed()
 resetRNGseed(random.random())
-        
+
+
+
 cdef class boundary:
     """
     Define boundary options for a parameter space dimension.
@@ -337,4 +342,5 @@ cdef class sampler:
         return new_sampler
     #state getState();
     #static void Quit();
-    #bool reporting();
+    cpdef bool reporting(self):
+        return self.mcmcsampler.reporting()

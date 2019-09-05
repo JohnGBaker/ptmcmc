@@ -23,3 +23,5 @@ cdef extern from "../ptmcmc.hh":
         states.state getState();
         #static void Quit();
         bool reporting();
+
+    void ptmcmc_sampler_Init "ptmcmc_sampler::Init" ()
