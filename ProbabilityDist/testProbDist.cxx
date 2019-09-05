@@ -24,6 +24,7 @@ int main(int argc, char*argv[]){
   UniformIntervalDist uni(0.1,43.2);
   UniformLogDist lg(0.31,3.1e2);
   UniformPolarDist pol;
+  UniformPolarDist polx(.22,.66);
   UniformCoPolarDist copol;
   UniformCoPolarDist copolx(.2,.6);
   GaussianDist gauss(32.3,6.8);
@@ -88,6 +89,20 @@ int main(int argc, char*argv[]){
     cout<<nn<<" step : int err="<<err<<endl;
   }
   file=new ofstream("polar.dat");
+  testProbabilityDist(*dist,n,*file);		   
+
+  dist=&polx;
+  cout<<dist->show()<<endl;
+  for(int i=0;i<7;i++){
+    ostringstream ss;
+    n=(2<<i)*Nbin;
+    double err=testProbabilityDist(*dist,n,ss);		   
+    cout<<n<<" bins : sigma="<<err<<endl;
+    nn=(2<<i)*Nbin;
+    err=testProbabilityDistIntegral(*dist,nn);		   
+    cout<<nn<<" step : int err="<<err<<endl;
+  }
+  file=new ofstream("polarx.dat");
   testProbabilityDist(*dist,n,*file);		   
 
   dist=&copol;

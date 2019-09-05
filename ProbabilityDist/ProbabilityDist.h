@@ -172,25 +172,46 @@ public:
 //Uniform polar projection distribution
 class UniformPolarDist: public ProbabilityDist {
   double xmin,xmax;
+  double norm,cdfoff;
 public:
-  UniformPolarDist():xmin(0),xmax(M_PI){};
+  UniformPolarDist(double xmin=0,double xmax=M_PI):xmin(xmin),xmax(xmax){
+    if(xmin<0)xmin=0;
+    if(xmax>M_PI)xmax=M_PI;
+    norm=-cos(xmax)+cos(xmin);
+    cdfoff=-cos(xmin)/norm;
+  };
+  //UniformPolarDist():xmin(0),xmax(M_PI){};
   virtual ProbabilityDist* clone(){return new UniformPolarDist(*this);};
   //~UniformPolarDist();
   void getLimits(double &x_min, double &x_max)const{x_min=xmin;x_max=xmax;};
   double cdf(double x)const{
     if(x<xmin)return 0;
     if(x>xmax)return 1;
-    return (1-cos(x))/2;
+    return -cos(x)/norm-cdfoff;
   };
+  //double cdf(double x)const{
+  // if(x<xmin)return 0;
+  // if(x>xmax)return 1;
+  // return (1-cos(x))/2;
+  //};
   double pdf(double x)const{
     if(x<xmin)return 0;
     if(x>xmax)return 0;
-    return sin(x)/2;
+    return sin(x)/norm;
   }
+  //double pdf(double x)const{
+  // if(x<xmin)return 0;
+  // if(x>xmax)return 0;
+  // return sin(x)/2;
+  //}
   double invcdf(double p)const{
     if(p<0||p>1)return numeric_limits<double>::signaling_NaN();
-    return acos(1-2*p);
+    return acos(-norm*(p+cdfoff));
   };
+  //double invcdf(double p)const{
+  // if(p<0||p>1)return numeric_limits<double>::signaling_NaN();
+  // return acos(1-2*p);
+  //};
   string show()const{
     ostringstream ss;
     ss<<"UniformPolar( ("<<xmin<<","<<xmax<<") )";
