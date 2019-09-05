@@ -107,6 +107,7 @@ void proposal_distribution_set::accept(){
   last_accepted[last_dist]=true;
   adapt_count++;
   if(adapt_count>=adapt_every)reset_bins(shares,bin_max);
+  proposals[last_dist]->accept();
 };
 
 void proposal_distribution_set::reject(){
@@ -123,6 +124,7 @@ void proposal_distribution_set::reject(){
   last_accepted[last_dist]=false;
   adapt_count++;
   if(adapt_count>=adapt_every)reset_bins(shares,bin_max);
+  proposals[last_dist]->reject();
 };
 
 string proposal_distribution_set::report(){//For status reporting on adaptive
