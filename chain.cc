@@ -1064,7 +1064,7 @@ string MH_chain::report_prop(){
 // A parallel tempering set of markov (or non-Markovian) chain
 // May add "burn-in" distinction later.
 
-parallel_tempering_chains::parallel_tempering_chains(int Ntemps,double Tmax,double swap_rate,int add_every_N):Ntemps(Ntemps),swap_rate(swap_rate),add_every_N(add_every_N){
+parallel_tempering_chains::parallel_tempering_chains(int Ntemps,double Tmax,double swap_rate,int add_every_N,bool do_evid_in,bool verbose_evid):Ntemps(Ntemps),swap_rate(swap_rate),add_every_N(add_every_N),do_evid(do_evid_in),verbose_evid(verbose_evid){
     props.resize(Ntemps);
     directions.resize(Ntemps,0);
     instances.resize(Ntemps,-1);
@@ -1097,6 +1097,21 @@ parallel_tempering_chains::parallel_tempering_chains(int Ntemps,double Tmax,doub
     evidence_count=0;
     evidence_records_dim=0;
     best_evidence_stderr=1e100;
+    use_mpi=false;
+    nproc=1;
+    myproc=0;
+#ifdef USE_MPI
+    use_mpi=true;
+    MPI_Comm_rank(MPI_COMM_WORLD, &myproc);
+    MPI_Comm_size(MPI_COMM_WORLD, &nproc);
+    if(myproc==0)cout<<"constructing ptc: nproc="<<nproc<<endl;
+    if(do_evid and nproc>1){
+      do_evid=false;
+      if(myproc==0)cout<<"parallel_tempering_chains(constructor): Warning evidence computation not implemented for MPI."<<endl;
+    }
+    if(nproc==0)use_mpi=false;
+#endif
+    istatsbin=-1;
 };
 
 void parallel_tempering_chains::checkpoint(string path){
@@ -1177,9 +1192,9 @@ void parallel_tempering_chains::initialize( probability_function *log_likelihood
   is_my_chain.clear();//probably don't need this
   interproc_unpack_index.clear();//probably don't need this
 #ifdef USE_MPI
-  use_mpi=true;
-  MPI_Comm_rank(MPI_COMM_WORLD, &myproc);
-  MPI_Comm_size(MPI_COMM_WORLD, &nproc);
+  //use_mpi=true;
+  //MPI_Comm_rank(MPI_COMM_WORLD, &myproc);
+  //MPI_Comm_size(MPI_COMM_WORLD, &nproc);
   is_my_chain.resize(Ntemps,false);
   //We distribute the replicas to processes in cycles.  There is probably no advantage to near-temperature locality and if there is a difference
   //in typical likehood comp times it is likely temperature dependent.
@@ -1199,9 +1214,9 @@ void parallel_tempering_chains::initialize( probability_function *log_likelihood
   MPI_Barrier(MPI_COMM_WORLD);  
   if(myproc!=0)this->reporting=false;//turn off output except for head node
 #else
-  use_mpi=false;
-  myproc=0;
-  nproc=1;
+  //use_mpi=false;
+  //myproc=0;
+  //nproc=1;
   is_my_chain.resize(Ntemps,true);
   mychains.resize(Ntemps);
   for(int i=0;i<Ntemps;i++)mychains[i]=i;
@@ -1242,7 +1257,11 @@ void parallel_tempering_chains::initialize( probability_function *log_likelihood
     else directions[i]=0;
     ups[i]=0;
     downs[i]=0;
-    };
+  };
+  //Note istatsbin sets pace for various analysis beyond just evidence
+  istatsbin=10000*(add_every_N/10+1);//make this user adjustable?
+  if(myproc==0)cout<<"Stats bin size = "<<istatsbin<<endl;
+  
   //MPI Calls to c0 should be avoided if possible. Where any instance of the chain will suffice, can be chains[0], the first local chain.
   //MPI FIXME?
   Nsize=c0().size(); 
@@ -1276,12 +1295,10 @@ void parallel_tempering_chains::step(){
   double x;
 
   //diagnostics and steering: set up
-  const int ievidbin=10000*(add_every_N/10+1);//make this user adjustable?
   static int icount=0;
   static vector< int > swapcounts;
   static vector< int > trycounts;
   if(icount==0){
-    if(myproc==0)cout<<"Evidence bin size = "<<ievidbin<<endl;
     trycounts.clear();
     trycounts.resize(Ntemps,0);
     swapcounts.clear();
@@ -1455,99 +1472,104 @@ void parallel_tempering_chains::step(){
   //diagnostics and steering:
   icount++;
 
-  if(icount>=ievidbin){
-    //invtemps=gather_invtemps();//Maybe don't need to redo this if careful
-    //MPI: log_evidence_ratio will need several bits of chain info to be globally collected here
-    double evidence=0;
+  if(icount>=istatsbin){ 
     for(int i=0;i<Ntemps-1;i++){
       tryrate[i]=trycounts[i]/(double)icount;
       swaprate[i]=swapcounts[i]/(double)icount;
-      //Compute upside log_evidence ratio
-      if(nproc==1){
-	log_eratio_up[i]=   log_evidence_ratio(i  ,i+1,ievidbin,add_every_N);
-	log_eratio_down[i]=-log_evidence_ratio(i+1,i  ,ievidbin,add_every_N);
-	evidence+=(log_eratio_up[i]+log_eratio_down[i])/2.0;
-      } else evidence+=1; //MPI not yet implemented with MPI
     }
-    //MPI: For this we need the temps of all chains That can be precommunicated now, or globally maintained.
-    //preMPI double dE=(log_eratio_up[Ntemps-2]+log_eratio_down[Ntemps-2])/2.0/(chains[Ntemps-2].invTemp()/chains[Ntemps-1].invTemp()-1);    // Note, if beta 1 is small, r~1 anyway then the result will be about ~ beta1
-    double dE=(log_eratio_up[Ntemps-2]+log_eratio_down[Ntemps-2])/2.0/(invtemps[Ntemps-2]/invtemps[Ntemps-1]-1);    // Note, if beta 1 is small, r~1 anyway then the result will be about ~ beta1
-    evidence+=dE;
-    //evidence*=1.0/(1-chains[Ntemps-1].invTemp());
-    //evidence+=evidence*chains[Ntemps-1].invTemp();
-    if(myproc==0)cout<<"Total log-evidence: "<<evidence<<endl;
-    //MPI: Nsize
-    //cout<<" Nsize="<<Nsize<<endl;
-    //Save records of evidence:
-    evidence_count++;
-    int Ndim=log2(evidence_count);
-    if(Ndim>evidence_records_dim){//Add a column for a new larger scale of evidence averages
-      total_evidence_records.push_back(vector<double>());
-      evidence_records_dim++;
-    }
-    if(evidence_records_dim>0){//Note that we begin saving once we reach the *second* epoch at each scale.
-      total_evidence_records[0].push_back(evidence);
-      if(myproc==0)cout<<"total_evidence_records[0]["<<evidence_count-2<<"]="<<evidence<<endl;	
-    }
-    for(int i=1;i<evidence_records_dim;i++){
-      //We store evidence records averaged on various periods
-      //the period here is 2^i, so we store a new sample when
-      //then next lower bit in the count rolls over...
-      if(evidence_count % (1<<i) == 0 ){
-	if(myproc==0)cout<<"i="<<i<<" ec="<<evidence_count<<" 1<<(i)="<<(1<<i)<<" mod="<<(evidence_count % (1<<i))<<endl;
-	//we average the last two entries at the next shorter period
-	int iend=total_evidence_records[i-1].size()-1;
-	double new_avg=(total_evidence_records[i-1][iend-1]+total_evidence_records[i-1][iend])/2.0;
-	total_evidence_records[i].push_back(new_avg);
-	//cout<<"averaging ev["<<i-1<<"]["<<iend-1<<"] and ev["<<i-1<<"]["<<iend<<"] to get ev["<<i<<"]["<<total_evidence_records[i].size()-1<<"]"<<endl;
-	//cout<<"ie averaging "<<total_evidence_records[i-1][iend-1]<<" and "<<total_evidence_records[i-1][iend]<<" to get "<<total_evidence_records[i].back()<<endl;
+    if(do_evid){
+      //invtemps=gather_invtemps();//Maybe don't need to redo this if careful
+      //MPI: log_evidence_ratio will need several bits of chain info to be globally collected here
+      double evidence=0;
+      for(int i=0;i<Ntemps-1;i++){
+	//Compute upside log_evidence ratio
+	if(nproc==1){
+	  log_eratio_up[i]=   log_evidence_ratio(i  ,i+1,istatsbin,add_every_N);
+	  log_eratio_down[i]=-log_evidence_ratio(i+1,i  ,istatsbin,add_every_N);
+	  evidence+=(log_eratio_up[i]+log_eratio_down[i])/2.0;
+	} else evidence+=1; //MPI not yet implemented with MPI
       }
-    }
-    //report evidence records:
-    cout<<"total_log_evs:"<<endl;
-    if(Ndim>0){
-      const int ndisplaymax=20;
-      int ntot=total_evidence_records[0].size();      
-      int ndisplay=ntot;
-      if(ndisplay>ndisplaymax)ndisplay=ndisplaymax;
-      for(int i=ntot-ndisplay;i<ntot;i++){
-	/*
-	for(int j=0;j<(int)log2(i+2);j++){
-	  int ind=(i+2)/(1<<j)-2;
-	  cout<<total_evidence_records[j][ind]<<"\t";
+      //MPI: For this we need the temps of all chains That can be precommunicated now, or globally maintained.
+      //preMPI double dE=(log_eratio_up[Ntemps-2]+log_eratio_down[Ntemps-2])/2.0/(chains[Ntemps-2].invTemp()/chains[Ntemps-1].invTemp()-1);    // Note, if beta 1 is small, r~1 anyway then the result will be about ~ beta1
+      double dE=(log_eratio_up[Ntemps-2]+log_eratio_down[Ntemps-2])/2.0/(invtemps[Ntemps-2]/invtemps[Ntemps-1]-1);    // Note, if beta 1 is small, r~1 anyway then the result will be about ~ beta1
+      evidence+=dE;
+      //evidence*=1.0/(1-chains[Ntemps-1].invTemp());
+      //evidence+=evidence*chains[Ntemps-1].invTemp();
+      cout<<"Total log-evidence: "<<evidence<<endl;
+      //MPI: Nsize
+      //cout<<" Nsize="<<Nsize<<endl;
+      //Save records of evidence:
+      evidence_count++;
+      int Ndim=log2(evidence_count);
+      if(Ndim>evidence_records_dim){//Add a column for a new larger scale of evidence averages
+	total_evidence_records.push_back(vector<double>());
+	evidence_records_dim++;
+      }
+      if(evidence_records_dim>0){//Note that we begin saving once we reach the *second* epoch at each scale.
+	total_evidence_records[0].push_back(evidence);
+	cout<<"total_evidence_records[0]["<<evidence_count-2<<"]="<<evidence<<endl;	
+      }
+      for(int i=1;i<evidence_records_dim;i++){
+	//We store evidence records averaged on various periods
+	//the period here is 2^i, so we store a new sample when
+	//then next lower bit in the count rolls over...
+	if(evidence_count % (1<<i) == 0 ){
+	  cout<<"i="<<i<<" ec="<<evidence_count<<" 1<<(i)="<<(1<<i)<<" mod="<<(evidence_count % (1<<i))<<endl;
+	  //we average the last two entries at the next shorter period
+	  int iend=total_evidence_records[i-1].size()-1;
+	  double new_avg=(total_evidence_records[i-1][iend-1]+total_evidence_records[i-1][iend])/2.0;
+	  total_evidence_records[i].push_back(new_avg);
+	  //cout<<"averaging ev["<<i-1<<"]["<<iend-1<<"] and ev["<<i-1<<"]["<<iend<<"] to get ev["<<i<<"]["<<total_evidence_records[i].size()-1<<"]"<<endl;
+	  //cout<<"ie averaging "<<total_evidence_records[i-1][iend-1]<<" and "<<total_evidence_records[i-1][iend]<<" to get "<<total_evidence_records[i].back()<<endl;
 	}
-	for(int j=(int)log2(i+2);j<total_evidence_records.size();j++)cout<<NAN<<"\t";
-	cout<<endl;
-	*/
-	for(int j=0;j<total_evidence_records.size();j++){
-	  //int ind=(i+2)/(1<<j)-2; //i-> ntot-1-(ntot-1-i)*(1<<j)
-	  int ind=(ntot+1)/(1<<j)+(i-ntot)-1;
-	  if(ind>=0)
+      }
+      //report evidence records:
+      if(Ndim>0){
+	cout<<"total_log_evs:"<<endl;
+	int ndisplaymax=-1;
+	if(verbose_evid)ndisplaymax=20;
+	int ntot=total_evidence_records[0].size();      
+	int ndisplay=ntot;
+	if(ndisplay>ndisplaymax)ndisplay=ndisplaymax;
+	for(int i=ntot-ndisplay;i<ntot;i++){
+	  /*
+	    for(int j=0;j<(int)log2(i+2);j++){
+	    int ind=(i+2)/(1<<j)-2;
 	    cout<<total_evidence_records[j][ind]<<"\t";
-	  else
-	    cout<<"      ---      "<<"\t";
+	    }
+	    for(int j=(int)log2(i+2);j<total_evidence_records.size();j++)cout<<NAN<<"\t";
+	    cout<<endl;
+	  */
+	  for(int j=0;j<total_evidence_records.size();j++){
+	    //int ind=(i+2)/(1<<j)-2; //i-> ntot-1-(ntot-1-i)*(1<<j)
+	    int ind=(ntot+1)/(1<<j)+(i-ntot)-1;
+	    if(ind>=0)
+	      cout<<total_evidence_records[j][ind]<<"\t";
+	    else
+	      cout<<"      ---      "<<"\t";
+	  }
+	  cout<<endl;
 	}
-	cout<<endl;
       }
-    }
-    //report recent evidence stdevs:
-    cout<<"recent ev analysis:"<<endl;
-    Ndim=total_evidence_records.size();
-    for(int j=0;j<Ndim-1;j++){
-      int Nvar=2*(Ndim-j)+1;
-      int N=total_evidence_records[j].size();
-      if(N>=Nvar){//compute and report variance
-	double sum1=0,sum2=0;
-	for(int i=N-Nvar;i<N;i++){
-	  double ev=total_evidence_records[j][i];
-	  sum1+=ev;
-	  sum2+=ev*ev;
+      //report recent evidence stdevs:
+      cout<<"recent ev analysis:"<<endl;
+      Ndim=total_evidence_records.size();
+      for(int j=0;j<Ndim-1;j++){
+	int Nvar=2*(Ndim-j)+1;
+	int N=total_evidence_records[j].size();
+	if(N>=Nvar){//compute and report variance
+	  double sum1=0,sum2=0;
+	  for(int i=N-Nvar;i<N;i++){
+	    double ev=total_evidence_records[j][i];
+	    sum1+=ev;
+	    sum2+=ev*ev;
+	  }
+	  double mean=sum1/Nvar;
+	  double variance=(sum2-sum1*mean)/(Nvar-1);
+	  double stderr=sqrt(variance/Nvar);
+	  cout<<j<<": N="<<Nvar<<" <ev>="<<sum1/Nvar<<" sigma="<<sqrt(variance)<<" StdErr="<<stderr<<endl;
+	  if(stderr<best_evidence_stderr)best_evidence_stderr=stderr;
 	}
-	double mean=sum1/Nvar;
-	double variance=(sum2-sum1*mean)/(Nvar-1);
-	double stderr=sqrt(variance/Nvar);
-	cout<<j<<": N="<<Nvar<<" <ev>="<<sum1/Nvar<<" sigma="<<sqrt(variance)<<" StdErr="<<stderr<<endl;
-	if(stderr<best_evidence_stderr)best_evidence_stderr=stderr;
       }
     }
     //Compute up/down fracs (and reset count)
@@ -1931,9 +1953,14 @@ string parallel_tempering_chains::status(){
   s<<"chain(id="<<id<<", Ntemps="<<Ntemps<<"):\n";
   if(not use_mpi){
     for(int i=0;i<Ntemps;i++){
-      s<<"instance \033[1;31m"<<instances[i]<<"\033[0m["<<Nsize-instance_starts[instances[i]]<<"]("<<(directions[i]>0?"+":"-")<<" , "<<up_frac[i]<<"):                     "<<chains[i].status()<<"\n";
+      int istart=0;if(max_reboot_rate>0)istart=Nsize-instance_starts[instances[i]];
+      s<<"instance \033[1;31m"<<instances[i]<<"\033[0m["<<istart<<"]";
+      //<<"("<<(directions[i]>0?"+":"-")<<" , "<<up_frac[i]<<")"
+      if(i<Ntemps-1)s<<"("<<swaprate[i]<<" of "<<tryrate[i]<<"):";
+      else s<<"                  ";
+      s<<":                     "<<chains[i].status()<<"\n";
       //cout<<swaprate.size()<<" "<<tryrate.size()<<" "<< log_eratio_down.size()<<" "<< log_eratio_up.size()<<endl;
-      if(i<Ntemps-1)s<<"-><-("<<swaprate[i]<<" of "<<tryrate[i]<<"): log eratio:("<<log_eratio_down[i]<<","<<log_eratio_up[i]<<")"<<endl;
+      if(do_evid and verbose_evid and i<Ntemps-1)s<<" log eratio:("<<log_eratio_down[i]<<","<<log_eratio_up[i]<<")"<<endl;    
     }
   } else {
     int maxwid=2000;
@@ -1942,20 +1969,25 @@ string parallel_tempering_chains::status(){
     for(int ii=0;ii<interproc_stride;ii++){
       ostringstream ss;
       if(ii<mychains.size()){
-	int i=mychains[ii];
-	ss<<"instance \033[1;31m"<<instances[i]<<"\033[0m["<<Nsize-instance_starts[instances[i]]<<"]("<<(directions[i]>0?"+":"-")<<" , "<<up_frac[i]<<"):                     "<<chains[i].status()<<"\n";
-	if(i<Ntemps-1)ss<<"-><-("<<swaprate[i]<<" of "<<tryrate[i]<<"): log eratio:("<<log_eratio_down[i]<<","<<log_eratio_up[i]<<")"<<endl;
+        int i=mychains[ii];
+	int istart=0;if(max_reboot_rate>0)istart=Nsize-instance_starts[instances[i]];
+	ss<<"instance \033[1;31m"<<instances[i]<<"\033[0m["<<istart<<"]";
+	//<<"("<<(directions[i]>0?"+":"-")<<" , "<<up_frac[i]<<")"
+	if(i<Ntemps-1)ss<<"("<<swaprate[i]<<" of "<<tryrate[i]<<"):";
+	else ss<<"                  ";
+	ss<<":                     "<<chains[i].status()<<"\n";
+        if(do_evid and verbose_evid and i<Ntemps-1)ss<<" log eratio:("<<log_eratio_down[i]<<","<<log_eratio_up[i]<<")"<<endl;
       }
       strncpy(mystrings+ii*maxwid,ss.str().c_str(),maxwid-1);
       //if(ii<mychains.size())cout<<"proc "<<myproc<<" setting up temp "<<mychains[ii]<<":\n"<<(mystrings+ii*maxwid)<<endl;
-    }
+    } 
     MPI_Allgather(mystrings, interproc_stride*maxwid, MPI_CHAR, allstrings, interproc_stride*maxwid, MPI_CHAR,MPI_COMM_WORLD);
     for(int i=0;i<Ntemps;i++){
-      s<<(allstrings+i*maxwid);
+      s<<(allstrings+interproc_unpack_index[i]*maxwid);
       //cout<<"proc "<<myproc<<" appending temp "<<i<<":\n"<<(allstrings+i*maxwid)<<endl;
     }
   }
-  s<<"Best evidence stderr="<<best_evidence_stderr<<endl; 
+  if(do_evid)s<<"Best evidence stderr="<<best_evidence_stderr<<endl; 
   return s.str();
 };
  
