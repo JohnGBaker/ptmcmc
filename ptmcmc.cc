@@ -494,7 +494,7 @@ int ptmcmc_sampler::initialize(){
   if(restarting or Nstep<=0)Ninit=0;
   //Create the Chain 
   if(parallel_tempering){
-    parallel_tempering_chains *ptc= new parallel_tempering_chains(Nptc,Tmax,swap_rate,save_every);
+    parallel_tempering_chains *ptc= new parallel_tempering_chains(Nptc,Tmax,swap_rate,save_every,pt_stop_evid_err>0,pt_stop_evid_err>0);
     cc=ptc;
     have_cc=true;
     if(pt_evolve_rate>0)ptc->evolve_temps(pt_evolve_rate,pt_evolve_lpost_cut);
@@ -569,11 +569,21 @@ int ptmcmc_sampler::run(const string & base, int ic){
 	  cc->dumpChain(out[0],istep-Nevery+1,Nskip);
 	}
       }
-      cout<<cc->status()<<endl;      
+      string ccstatus=cc->status();
+      if(reporting())cout<<ccstatus<<endl;      
       
-      if(0==istep%(Nevery*4)){ 
-	if(prop_adapt_rate>0)cout<<"Proposal report:\n"<<cc->report_prop()<<endl;
-	cout<<"Effective sample size test"<<endl;
+      if(0==istep%(Nevery*4)){
+	if(prop_adapt_rate>0){
+	  //Proposal report?
+	  int nproc=1;
+	  #ifdef USE_MPI
+	  MPI_Comm_size(MPI_COMM_WORLD, &nproc);
+          #endif
+	  if(nproc>1){
+	    if(istep==0 and reporting())cout<<"No proposal reports with multiple MPI procs."<<endl;
+	  } else cout<<"Proposal report:\n"<<cc->report_prop()<<endl;	  
+	}
+	if(reporting())cout<<"Effective sample size test"<<endl;
 	auto ess_len=cc->report_effective_samples(-1,save_every*1000,save_every);
 	if(ess_stop>0 and ess_len.first>ess_stop){
 	  stop=true;
@@ -585,7 +595,7 @@ int ptmcmc_sampler::run(const string & base, int ic){
   }
   for(int ich=0;ich<dump_n;ich++)out[ich]<<"\n"<<endl;
   
-  if(parallel_tempering){
+  if(false and parallel_tempering){ //disabled to reduce output (and deprecated)
     //FIXME  Want to replace this with a generic chain->report() type function...
     ostringstream ss("");ss<<base<<"_PTstats.dat";
     ofstream outp(ss.str().c_str(),mode);

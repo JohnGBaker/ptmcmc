@@ -235,6 +235,7 @@ class parallel_tempering_chains: public chain{
   vector<int> instances;
   vector<int> instance_starts;
   vector<proposal_distribution*> props;//probably leaking now from props member, maybe should change to unique_ptr<proposal_distribution>
+  int istatsbin;
   vector<int> swap_accept_count;
   vector<int> swap_count;
   vector<double> temps;
@@ -242,6 +243,7 @@ class parallel_tempering_chains: public chain{
   vector<vector<double> >total_evidence_records;
   int evidence_count,evidence_records_dim;//evidence_records_dim is redundant with evidence_records_size TODO.
   double best_evidence_stderr;
+  bool verbose_evid,do_evid;
   bool do_evolve_temps;
   double evolve_temp_rate,evolve_temp_lpost_cut;
   int maxswapsperstep;
@@ -253,7 +255,7 @@ class parallel_tempering_chains: public chain{
   
  public:
   virtual ~parallel_tempering_chains(){  };//assure correct deletion of any child
-  parallel_tempering_chains(int Ntemps,double Tmax,double swap_rate=0.01,int add_every_N=1);
+  parallel_tempering_chains(int Ntemps,double Tmax,double swap_rate=0.01,int add_every_N=1,bool do_evid=false, bool verbose_evid=true);
   virtual void checkpoint(string path)override;
   virtual void restart(string path)override;
   void initialize( probability_function *log_likelihood, const sampleable_probability_function *log_prior,int n=1,string initialization_file="");
