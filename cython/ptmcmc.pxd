@@ -20,8 +20,9 @@ cdef extern from "../ptmcmc.hh":
         int initialize()nogil;
         #int analyze(const string & base, int ic, int Nsigma, int Nbest, bayes_likelihood &like);
         ptmcmc_sampler * clone_ptmcmc_sampler()
-        states.state getState();
-        #static void Quit();
+        states.state getState();	
         bool reporting();
 
     void ptmcmc_sampler_Init "ptmcmc_sampler::Init" ()
+    void ptmcmc_sampler_Quit "ptmcmc_sampler::Quit" (bool soft);
+    

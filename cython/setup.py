@@ -3,14 +3,25 @@ from Cython.Build import cythonize
 import os
 import numpy
 
-#compiler="g++-mp-8"
-compiler='/opt/local/bin/mpicxx-mpich-gcc8'
-usempi=True
+locale='discover'
 
-os.environ["CC"] = compiler
-os.environ["CXX"] = compiler
-os.environ['LD'] = compiler
-#os.environ["CXXFLAGS"] = "-mmacosx-version-min=10.14"
+#defaults
+compiler=None
+usempi=False
+
+if locale=="laptop":
+    #compiler="g++-mp-8"
+    compiler='/opt/local/bin/mpicxx-mpich-gcc8'
+    usempi=True
+elif locale=="discover":
+    compiler="mpicxx"
+    usempi=True
+
+if compiler is not None:
+    os.environ["CC"] = compiler
+    os.environ["CXX"] = compiler
+    os.environ['LD'] = compiler
+    os.environ["CXXFLAGS"] = "-mmacosx-version-min=10.14"
 
 comp_args=["-fopenmp","--std=c++11"]
 if usempi:comp_args.append("-DUSE_MPI")

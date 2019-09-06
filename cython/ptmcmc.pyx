@@ -43,6 +43,9 @@ cpdef resetRNGseed(double seed):
 cpdef Init():
     ptmcmc_sampler_Init()
         
+cpdef Quit():
+    ptmcmc_sampler_Quit(False)
+        
 #Some initialization
 random.seed()
 resetRNGseed(random.random())
