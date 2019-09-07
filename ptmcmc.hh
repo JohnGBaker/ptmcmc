@@ -67,7 +67,7 @@ public:
   };
   ptmcmc_sampler * clone_ptmcmc_sampler(){return dynamic_cast<ptmcmc_sampler*>(clone());};
   ///must delete managed pointers
-  ~ptmcmc_sampler(){
+  virtual ~ptmcmc_sampler(){
     if(have_cc)delete cc;
     if(have_cprop)delete cprop;
   };

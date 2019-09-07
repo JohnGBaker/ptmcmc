@@ -544,10 +544,28 @@ int ptmcmc_sampler::run(const string & base, int ic){
   
   for(istep=0;istep<=chain_Nstep;istep++){//istep is member variable to facilitate checkpointing
     if(restarting)restart(restart_dir);
-      
-    if(istep==checkp_at_step or ( checkp_at_time>0 and (omp_get_wtime()-start_time)/3600 > checkp_at_time ) ){//checkpointing test
+
+    //checkpointing test
+    bool checkpoint_now=(istep==checkp_at_step);
+    if (checkp_at_time>0 and (!checkpoint_now) and istep%100==0){
+      //occasionally check time condition
+      checkpoint_now=( (omp_get_wtime()-start_time)/3600 > checkp_at_time );
+#ifdef USE_MPI
+      int nproc;
+      MPI_Comm_size(MPI_COMM_WORLD, &nproc);
+      if(nproc>1){
+	//We have a time-dependent test.
+	//It is possible that clocks aren't exactly synchronized or that
+	//some procs reach this point at different times so we have to
+	//make sure that all procs try to checkpoint at the same step.
+	bool checkpoint_now_this_proc=checkpoint_now;
+	MPI_Allreduce(&checkpoint_now_this_proc,&checkpoint_now,1,MPI::BOOL,MPI::LOR,MPI_COMM_WORLD);
+      }
+#endif   
+    }   
+    if(checkpoint_now){
+      if(reporting())cout<<"Checkpointing triggered."<<endl;
       checkpoint(".");
-      
       Quit();
     }
     

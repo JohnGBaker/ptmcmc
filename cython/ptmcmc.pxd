@@ -24,5 +24,5 @@ cdef extern from "../ptmcmc.hh":
         bool reporting();
 
     void ptmcmc_sampler_Init "ptmcmc_sampler::Init" ()
-    void ptmcmc_sampler_Quit "ptmcmc_sampler::Quit" (bool soft);
+    void ptmcmc_sampler_Quit "ptmcmc_sampler::Quit" ();
     

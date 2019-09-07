@@ -44,7 +44,7 @@ cpdef Init():
     ptmcmc_sampler_Init()
         
 cpdef Quit():
-    ptmcmc_sampler_Quit(False)
+    ptmcmc_sampler_Quit()
         
 #Some initialization
 random.seed()
