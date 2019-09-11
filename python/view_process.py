@@ -200,9 +200,14 @@ s0 = 3
 d0 = 2
 
 x,y=get_xydata(data,0,c0,10**d0,10**s0)
-cmap = matplotlib.cm.get_cmap('tab10')
+try:
+    cmapname='tab10'
+    cmap = matplotlib.cm.get_cmap(cmapname)
+except ValueError:
+    cmapname='Vega10'
+    cmap = matplotlib.cm.get_cmap(cmapname)
 cmap_norm=10
-scat = plt.scatter(x, y, s=1, c=x, cmap="tab10",norm=colors.Normalize(0,cmap_norm))
+scat = plt.scatter(x, y, s=1, c=x, cmap=cmapname,norm=colors.Normalize(0,cmap_norm))
 #scat = plt.scatter([], [], s=1,cmap="tab10")
 
 axcolor = 'lightgoldenrodyellow'
