@@ -79,7 +79,7 @@ class gaussian_prop: public proposal_distribution{
   double oneDfrac;
   bool scaleWithTemp;
 public:
-  gaussian_prop(valarray<double> sigmas,double oneDfrac=0.0, bool scaleWithTemp=false):sigmas(sigmas),oneDfrac(oneDfrac),scaleWithTemp(scaleWithTemp){
+  gaussian_prop(const valarray<double> &sigmas,double oneDfrac=0.0, bool scaleWithTemp=false):sigmas(sigmas),oneDfrac(oneDfrac),scaleWithTemp(scaleWithTemp){
     identity_trans=true;
     valarray<double> zeros(0.0,sigmas.size());
     dist = new gaussian_dist_product(nullptr,zeros, sigmas);
@@ -88,6 +88,9 @@ public:
       exit(1);
     }
   };
+  gaussian_prop(vector<double> &sigmas,double oneDfrac=0.0, bool scaleWithTemp=false):
+    gaussian_prop(valarray<double>(sigmas.data(),sigmas.size()),oneDfrac,scaleWithTemp){};
+
   gaussian_prop(Eigen::MatrixXd &covar,double oneDfrac=0.0, bool scaleWithTemp=false):sigmas(sigmas),oneDfrac(oneDfrac),scaleWithTemp(scaleWithTemp){
     identity_trans=false;
     if(covar.rows() != covar.cols()){
