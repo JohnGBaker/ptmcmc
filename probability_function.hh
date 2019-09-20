@@ -74,6 +74,11 @@ public:
   virtual state invcdf(const state &s)const{cout<<"probability_function::invcdf: No invcdf is defined for this probability function: "<<show()<<endl;exit(1);};
   virtual string show(int i=-1)const{return "UnspecifiedSampleableProb()";};
   virtual void getScales(valarray<double> &outarray)const{};
+  void getScales(vector<double> &outvector)const{
+    valarray<double> outarray;
+    getScales(outarray);
+    outvector.assign(begin(outarray), end(outarray));
+  };
 };
 
 
@@ -90,7 +95,10 @@ class gaussian_dist_product: public sampleable_probability_function{
   vector<ProbabilityDist*> dists;
 public:
   gaussian_dist_product(const stateSpace *space,unsigned int N=1);
-  gaussian_dist_product(const stateSpace *space, valarray<double>&x0s,valarray<double>&sigmas);
+  gaussian_dist_product(const stateSpace *space, const valarray<double>&x0s,const valarray<double>&sigmas);
+  gaussian_dist_product(const stateSpace *space, const vector<double>&x0s,const vector<double>&sigmas):
+    gaussian_dist_product(space,valarray<double>(x0s.data(), x0s.size()),valarray<double>(sigmas.data(), sigmas.size()))
+  {};
   virtual ~gaussian_dist_product();
   state drawSample(Random &rng)const;
   double evaluate(state &s)const;
@@ -110,6 +118,9 @@ class uniform_dist_product: public sampleable_probability_function{
 public:
   uniform_dist_product(const stateSpace *space , int N=1);
   uniform_dist_product(const stateSpace *space,const valarray<double>&min_corner,const valarray<double>&max_corner);
+  uniform_dist_product(const stateSpace *space, const vector<double>&min_corner,const vector<double>&max_corner):
+    uniform_dist_product(space,valarray<double>(min_corner.data(), min_corner.size()),valarray<double>(max_corner.data(), max_corner.size()))
+  {};
   virtual ~uniform_dist_product();
   state drawSample(Random &rng)const;
   double evaluate(state &s)const;
@@ -142,6 +153,10 @@ public:
   static const int log=5;
   mixed_dist_product(const stateSpace *space,unsigned int N=1);
   mixed_dist_product(const stateSpace *space,const valarray<int> &types,const valarray<double>&centers,const valarray<double>&halfwidths,bool verbose=false);
+  mixed_dist_product(const stateSpace *space, const vector<int> &types,const vector<double>&centers,const vector<double>&halfwidths,bool verbose=false): 
+    mixed_dist_product(space,valarray<int>(types.data(),types.size()),valarray<double>(centers.data(), centers.size()),valarray<double>(halfwidths.data(), halfwidths.size()),verbose)
+  {};
+
   virtual ~mixed_dist_product();
   state drawSample(Random &rng)const;
   double evaluate(state &s)const;

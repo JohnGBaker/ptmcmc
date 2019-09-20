@@ -14,7 +14,7 @@ gaussian_dist_product::gaussian_dist_product(const stateSpace *space,unsigned in
   for(size_t i=0;i<dim;i++)dists[i]=new GaussianDist(x0s[i],sigmas[i]);
 };
 
-gaussian_dist_product::gaussian_dist_product(const stateSpace *space, valarray<double>&x0s,valarray<double>&sigmas):x0s(x0s),sigmas(sigmas),sampleable_probability_function(space){
+gaussian_dist_product::gaussian_dist_product(const stateSpace *space, const valarray<double>&x0s,const valarray<double>&sigmas):x0s(x0s),sigmas(sigmas),sampleable_probability_function(space){
   dim=x0s.size();
   if(dim!=sigmas.size()){
     cout<<"gaussian_dist_product(constructor): Array sizes mismatch.\n";
