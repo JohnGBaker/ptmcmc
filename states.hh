@@ -272,7 +272,7 @@ public:
   virtual stateSpace transform(const stateSpace &sp)=0;
   virtual stateSpace inverse_transform(const stateSpace &sp){cout<<"stateSpaceTransform:No inverse transform available"<<endl;exit(1);};
   ///jacobian determinant function
-  virtual double jacobian(const state &s){cout<<"stateSpaceTransform:No Jacobian available"<<endl;exit(1);};
+  virtual double jacobian(const state &s)const {cout<<"stateSpaceTransform:No Jacobian available"<<endl;exit(1);};
   virtual state transformState(const state &s)const=0;
   virtual void defWorkingStateSpace(const stateSpace &sp)=0;
 };
@@ -402,11 +402,12 @@ class stateSpaceTransformND : public stateSpaceTransform {
 ///where the function is its own inverse, so the transformed space is identical to the domain and the inverse
 ///state transform is the same as the forward state transform.  We provide a test to verify this property.
 class stateSpaceInvolution : public stateSpaceTransform {
+  string label;
 protected:
   const stateSpace *domainSpace; //Note the Transform can be applied as long as this can be identified as a subspace.
   bool have_working_space;
 public:
-  stateSpaceInvolution(const stateSpace &sp){
+  stateSpaceInvolution(const stateSpace &sp,string label):label(label){
     have_working_space=false;
     transformState_registered=false;
     jacobian_registered=false;
@@ -414,6 +415,7 @@ public:
     user_object=nullptr;
     domainSpace=&sp;
   };
+  virtual string get_label()const {return label;};
   virtual stateSpace transform(const stateSpace &sp)override{return stateSpace(sp);};//Should we enforce that domain is subspace of sp?
   virtual stateSpace inverse_transform(const stateSpace &sp)override{return stateSpace(sp);};
   virtual state transformState(const state &s)const override{    
@@ -429,7 +431,7 @@ public:
       exit(-1);
     }
   };
-  virtual double jacobian(const state &s)override{
+  virtual double jacobian(const state &s)const override{
     if(transformState_registered){
       if(jacobian_registered){
 	if(have_working_space)
@@ -452,12 +454,21 @@ public:
       return;
     }
   };
-  virtual double test_involution(const state &s){
+  virtual double test_involution(const state &s, double verbose_lev=0){
     //should return 0 if the function is indeed its own inverse and jacobian(x)*jacobian(f(x))==1; 
-    state result=transformState(s);
-    state diff = s.add(result.scalar_mult(-1));
-    double jacdiff=jacobian(s)*jacobian(result)-1;
-    return diff.innerprod(diff)+jacdiff*jacdiff;
+    state image=transformState(s);
+    state image2=transformState(image);
+    state diff = s.add(image2.scalar_mult(-1));
+    double jacdiff=jacobian(s)*jacobian(image)-1;
+    double result=diff.innerprod(diff)+jacdiff*jacdiff;
+    if(result*verbose_lev>1){
+      cout<<"test_involution: s="<<s.get_string()<<endl;
+      cout<<"                s'="<<image.get_string()<<endl;
+      cout<<"               s''="<<image2.get_string()<<endl;
+      cout<<"   J="<<jacobian(s)<<endl;
+      cout<<"  J'="<<jacobian(image)<<endl;
+    }
+    return result;
   };
 
   ///This section provides data and functions for a minimal interface not requiring inheritance

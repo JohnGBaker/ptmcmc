@@ -41,6 +41,18 @@ public:
   virtual string report(){return "";};//For status reporting from adaptive proposals
 };
 
+//Apply an stateSpaceInvolution map as a proposal:
+class involution_proposal: public proposal_distribution{
+  const stateSpaceInvolution involution;
+public:
+  involution_proposal(const stateSpaceInvolution &involution):involution(involution){};
+  state draw(state &s,chain *caller){
+    log_hastings=log(involution.jacobian(s));
+    return involution.transformState(s);
+  };
+  involution_proposal* clone()const{return new involution_proposal(*this);};
+  string show(){return "Involution["+involution.get_label()+"]()";};
+};
 
 //Draw from a distribution
 
