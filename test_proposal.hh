@@ -11,7 +11,7 @@
 #include <iostream>
 #include <Eigen/Dense>
 #include "Mrpt.h"
-#include <algorthm>
+#include <algorithm>
 
 using namespace std;
 
@@ -30,55 +30,59 @@ using namespace std;
 ///distribution.
 class test_proposal {
   shared_ptr<Random> rng;
-  proposal_distribution &proposal;
-  sampleable_probability_function &target;
+  proposal_distribution *proposal=nullptr;
+  sampleable_probability_function *target_dist=nullptr;
+  chain ch;
 public:
   //test_proposal(proposal_distribution &proposal, shared_ptr<Random> rng){cout<<"The idea is to provide a ready-made test distribution, perhaps a gaussian mixture, perhaps augmented by gaussians located at proposal-step images of the initial gaussian centers.  This is not yet implemented."<<endl;exit(-1);};
   test_proposal(proposal_distribution &proposal, sampleable_probability_function &target):
     rng(new MotherOfAll(ProbabilityDist::getPRNG()->Next())),
-    proposal(proposal),
-    target(target)
+    proposal(&proposal),
+    target_dist(&target)
   {
     //Note: if proposal needs a chain, we may need to make one up with samples from the target dist.
   };
-      
+  
   test_proposal(){};//Trivial constructor for development and testing...
   vector<state> sample_target_dist(int nsamp){
     //make a set of samples from the target distribution
     vector<state> samples(nsamp);
-    for( auto &sample : samples)sample=target.drawSample();
+    for( auto &sample : samples)sample=target_dist->drawSample(*rng);
     return samples;
   };
-  vector<state> transform_samples(vector<state> &samples, int & Naccept){
+  vector<state> transform_samples(vector<state> &samples, int & Naccept,double hastings_err=0){
     //Apply the proposal via Metropolis-Hastings step, to each sample and return result.
     //Number of acceptances goes in Naccept
+    //set hastings_err!=0 to force a nontrivial test (even with a good proposal)
     Naccept=0;
     size_t N=samples.size();
     vector<state> transformed(N);
     
     for(size_t i;i<N;i++){
-      const state &oldstate=samples[i];
-      double oldlpdf=target->evaluate_log(oldstate);
-      state newstate=prop.draw(current_state,nullptr); //If prop needs a chain then this won't work yet.
-      double newlpdf=target->evaluate_log(newstate);
+      //cout<<i<<endl;
+      state &oldstate=samples[i];
+      double oldlpdf=target_dist->evaluate_log(oldstate);
+      state newstate=proposal->draw(oldstate,&ch); //If prop needs a nontrivial chain then this won't work yet.
+      double newlpdf=target_dist->evaluate_log(newstate);
       
       //Now the test: 
-      double log_hastings_ratio=prop.log_hastings_ratio();
-      log_hastings_ratio+=newlpdf-oldlpdf;
+      double log_hastings_ratio=proposal->log_hastings_ratio();
+      log_hastings_ratio+=newlpdf-oldlpdf+hastings_err;
       bool accept=true;
       if(newstate.invalid())accept=false;
       if(accept and log_hastings_ratio<0){
-	double x=get_uniform(); //pick a number
+	double x=rng->Next(); //pick a number
 	accept=(log(x)<log_hastings_ratio);
       }
       
       if(accept){
 	Naccept++;
-	prop.accept(); //As with MCMC, this allows some proposals to 'adapt'
+	proposal->accept(); //As with MCMC, this allows some proposals to 'adapt'
+	transformed[i]=newstate;
       }
       else {
-	prop.reject();
-	add_state(current_state,current_llike,current_lpost);
+	proposal->reject();
+	transformed[i]=oldstate;
       }
     }
     return transformed;
@@ -98,48 +102,97 @@ public:
   ///  4. A challenge is knowing what level of difference is significant, and what level is measurable.
   ///     One approach to this is to compare KL measurements of redraws of the original sample with
   ///     those of the transformed set.
-  double test(int Nsamp=10000, double ncyc=5, int ntry=10){
+  double test(int Nsamp=10000, double ncyc=5, int ntry=10,double hastings_err=0){
     //Draw reference samples
     vector<state> target_samples=sample_target_dist(Nsamp);
 
     //Transform by application of the proposal
     int Naccept_cum=0;
-    int Ngoal=ncnc*Nsamp;
+    int Ngoal=ncyc*Nsamp;
     vector<state> transformed=target_samples;
+    cout<<"Applying transform:"<<endl;
+    int icyc=1;
     while(Naccept_cum<Ngoal){
       int Naccept=0;
-      vector<state> transformed=transform_samples(transformed, Naccept);
+      vector<state> old=transformed;
+      transformed=transform_samples(transformed, Naccept,hastings_err);
       Naccept_cum+=Naccept;
-      cout<<"Accept rate: "<<100.0*Naccept/Nsamp<<"\% Naccepted, Ngoal:"<< Naccept_cum<<", "<<Ngoal<<"  Percent done ="<<100.0*Naccept_cum/Ngoal<<endl;
+      if(icyc%int(ncyc/5+1)==0)
+	cout<<100.0*Naccept/Nsamp<<"\% accepted,  "<<100.0*Naccept_cum/Ngoal<<" percent done."<<endl;
+      icyc++;
     }
-
+    vector<double> mean,var;
+    var=get_sample_var(target_samples,mean);
+    cout<<"target mean:      ";for(auto x:mean)cout<<x<<" ";cout<<endl;
+    cout<<"target var:       ";for(auto x:var)cout<<x<<" ";cout<<endl;
+    var=get_sample_var(transformed,mean);
+    cout<<"transformed mean: ";for(auto x:mean)cout<<x<<" ";cout<<endl;
+    cout<<"transformed var:  ";for(auto x:var)cout<<x<<" ";cout<<endl;
+    
     //Compute KL divergence
     //First decide whether to use approx NN:
-    double dim=samplesP[0].size();
+    double dim=target_samples[0].size();
     bool use_approxNN=(Nsamp*pow(dim,0.7)>4500); //estimate of when approx is faster
+    cout<<"Computing KL divergences:"<<endl;
     double KLtransformed=KL_divergence(transformed,target_samples,use_approxNN);
+    double KLtransformedX=KL_divergence(target_samples,transformed,use_approxNN);
+    double fKLtransformed=fake_KL_divergence(transformed,target_samples);
+    double fKLtransformedX=fake_KL_divergence(target_samples,transformed);
 
     //For comparison estimate statistics of redraws of samples (expected value is 0)
     double sum=0;
-    vector<double> KLdiffs(Ntry);
-    for(int i=0;i<Ntry;i++){
+    vector<double> KLdiffs(ntry),fKLdiffs(ntry);
+    for(int i=0;i<ntry;i++){
       //draw alternative samples;
-      vecgort<state> alt_samples=sample_target_dist(Nsamp);
-      KLdiffs[i]=KLtransformed(transformed,target_samples,use_approxNN);
-      cout<<KLdiff<<",";
+      vector<state> alt_samples=sample_target_dist(Nsamp);
+      KLdiffs[i]=KL_divergence(alt_samples,target_samples,use_approxNN);
+      fKLdiffs[i]=fake_KL_divergence(alt_samples,target_samples);
+      cout<<"("<<KLdiffs[i]<<","<<fKLdiffs[i]<<")"<<(i<ntry-1?",":"");
+      //cout<<KLdiffs[i]<<(i<ntry-1?",":"");
     }
     cout<<endl;
+    //draw alternative samples;
+    vector<state> alt_samples=sample_target_dist(Nsamp);
+    double altKLtransformed=KL_divergence(transformed,alt_samples,use_approxNN);
+    double altKLtransformedX=KL_divergence(alt_samples,transformed,use_approxNN);
+    double altfKLtransformed=fake_KL_divergence(transformed,alt_samples);
+    double altfKLtransformedX=fake_KL_divergence(alt_samples,transformed);
+    for(auto &diff:KLdiffs)diff=fabs(diff);
+    for(auto &diff:fKLdiffs)diff=fabs(diff);
     sort(KLdiffs.begin(),KLdiffs.end());
-    int Ncut=sqrt(Ntry);
-    if(Ntry>1){
-      double KLcut=(KLdiffs[Ncut]+KLdiffs[Ncut+1])/2.0;
-      double cut_frac=1-Ncut*1.0/Ntry;
-      cout<<"Estimate that only "<<cut_frac*100<<"\% of KLdiff measurements are likely to exceed "<<KLcut<<" for matching distributions."<<endl;
+    sort(fKLdiffs.begin(),fKLdiffs.end());
+    int Ncut=sqrt(ntry);
+    double KLcut=0;
+    double cut_frac=Ncut*1.0/ntry;
+    if(ntry>1){
+      KLcut=(KLdiffs[ntry-Ncut]+KLdiffs[ntry-Ncut-1])/2.0;
+      //cout<<"KLdiffs";for(auto diff:KLdiffs)cout<<diff<<" ";cout<<endl;
+      cout<<"\nEstimate that only "<<cut_frac*100<<"\% of KLdiff measurements are likely to exceed "<<KLcut<<" for matching distributions."<<endl;
     }
-    cout<<"Transformed KLdiv="<<KLtransformed<<endl;
+    cout<<"Transformed KLdiv="<<KLtransformed<<" <-> "<<KLtransformedX<<endl;
+
+    cout<<"Alt-transformed KLdiv="<<altKLtransformed<<" <-> "<<altKLtransformedX<<endl;
+    if(altKLtransformed-KLtransformed>fabs(KLcut))cout<<"When 'Transformed' is signficantly less than 'alt-Transformed' it may indicate that the effect of the proposal (after ncyc="<<ncyc<<" applications) is too small to measure at this level."<<endl;
+    if(altKLtransformed<KLcut)cout<<"PASS"<<endl;
+    else cout<<"FAIL\nKL value is "<<altKLtransformed/KLcut<<" times the stated threshold."<<endl;
+    if(ntry>1){
+      //cout<<"fKLdiffs";for(auto diff:fKLdiffs)cout<<diff<<" ";cout<<endl;
+      KLcut=(fKLdiffs[ntry-Ncut]+fKLdiffs[ntry-Ncut-1])/2.0;
+      cout<<"\nEstimate that only "<<cut_frac*100<<"\% of fKLdiff measurements are likely to exceed "<<KLcut<<" for matching distributions."<<endl;
+    }
+    cout<<"Transformed fKLdiv="<<fKLtransformed<<" <-> "<<fKLtransformedX<<endl;
+
+    cout<<"Alt-transformed fKLdiv="<<altfKLtransformed<<" <-> "<<altfKLtransformedX<<endl;
+    if(altfKLtransformed-fKLtransformed>fabs(KLcut))cout<<"When 'Transformed' is signficantly less than 'alt-Transformed' it mayindicates that the effect of the proposal (after ncyc="<<ncyc<<" applications) is too small to measure at this level."<<endl;
+    if(altfKLtransformed<KLcut)cout<<"PASS"<<endl;
+    else cout<<"FAIL\nKL value is "<<altfKLtransformed/KLcut<<" times the stated threshold."<<endl;
+    double result=altKLtransformed;
+    if(result<0)result=0;
+    result+=altfKLtransformed;
+    return result;
   };
 	
-  double KL_divergence(vector<state> &samplesP,vector<state> &samplesQ,bool approx_nn=true){
+    double KL_divergence(vector<state> &samplesP,vector<state> &samplesQ,bool approx_nn=true){
     ///Interesting to apply to both target samples and transformed samples
     /// Implements eqn 2 of Perez-Cruz 2008 "Kullback-Leibler Divergence Estimation of Continuous Distributions"
     /// with k=1. We infer that the sign is wrong on the sum term there.
@@ -189,6 +242,17 @@ public:
 	cout<<"  "<<i0<<": "<<nnd2_raw<<" -> "<<nnd2<<endl;
       }
     }
+    //Here we put a floor on the smallest value of all NN distances
+    //based on the kfloorth smallest distance within the P set
+    int kfloor=5;
+    if(kfloor>0){
+      auto dists=r1sqs;
+      sort(dists.begin(),dists.end());
+      double floor=dists[kfloor+1];
+      for(auto&d2:r1sqs)if(d2<floor)d2=floor;//this is pretty inefficient!
+      for(auto&d2:s1sqs)if(d2<floor)d2=floor;//this is pretty inefficient!
+    }
+
     for(int i=0;i<N;i++){
       //double r1sq=one_nnd2(samplesP[i],samplesQ);
       result+=-log(r1sqs[i]/s1sqs[i]);
@@ -244,6 +308,42 @@ public:
     return nnd2;
   };
   
+  double fake_KL_divergence(vector<state> &samplesP,vector<state> &samplesQ){
+    //This applies a simplified alternative to the KL divergence (which is difficult to compute accurately from samples).
+    //The calculation is based on the means and variances of the two samples and would agree with the KL diverences
+    //for large samples of Gaussian distributions.
+    Eigen::MatrixXd covP,covQ,invCovQ,covPinvCovQ;
+    Eigen::VectorXd meanP,meanQ,dmu;
+    covP=get_sample_cov(samplesP,meanP);
+    covQ=get_sample_cov(samplesQ,meanQ);
+    int dim=covP.rows();
+    int nQ=samplesP.size();
+    double unbiasing_factor=(nQ-dim-2.0)/(nQ-1.0);//The final factor is to make unbiased for finite nQ
+    invCovQ=covQ.inverse()*unbiasing_factor;
+    covPinvCovQ=covP*invCovQ;
+    dmu=meanP-meanQ;
+    double result=0;
+    //cout<<"\n\ncovPdiag:\n"<<covP.diagonal()<<endl;
+    //cout<<"\n\ncovQdiag:\n"<<covQ.diagonal()<<endl;
+    //Eigen::MatrixXd covP2=covP*covP;
+    //cout<<"\n\ncovP^2:\n"<<covP*covP<<endl;
+    //cout<<"\n\ncovP^2:\n"<<covP2<<endl;
+    //cout<<"|covP|^2:"<<(covP*covP).trace()<<endl;
+    //cout<<"covPdiag: "<<covP.diagonal().transpose()<<endl;
+    //cout<<"|covQ|^2:"<<(covQ*covQ).trace()<<endl;
+    //cout<<"covQdiag: "<<covQ.diagonal().transpose()<<endl;
+    //cout<<"invCovQdiag: "<<invCovQ.diagonal().transpose()<<endl;
+    result += -dim + covPinvCovQ.trace();
+    //cout<<"result A:"<<result<<endl;
+    result += -log((covPinvCovQ/unbiasing_factor).determinant());  //If nP != nQ then we need another digamma-based term to make unbiased
+    //cout<<"result AB:"<<result<<endl;
+    result += dmu.transpose()*invCovQ*dmu - (dim + covPinvCovQ.trace())/nQ;
+    //cout<<"result ABC:"<<result<<endl;
+    
+    return 0.5*result;
+    //return 0.5*(covPinvCovQ.trace()-dim -log(covPinvCovQ.determinant()) +dmu.transpose()*invCovQ*dmu);    
+  };
+  
   Eigen::MatrixXf get_X(vector<state> &samples){
     size_t N=samples.size();;
     vector<double> statevec=samples[0].get_params_vector();
@@ -264,16 +364,16 @@ public:
     mrpt.grow_autotune(recall, k);
     return mrpt;
   };
-
+  
   int one_knn(state &s,Mrpt &mrpt,int k=8,int ik=0){//Computation of nearest neighbor distance to point, brute force.
     //ik is index of which kth nearest neighbor to take (not nec same as how many are found)
     //note that when state is s among those used to define mrpt, then we often want to exclude that one, hence ik=1
     vector<double> statevec=s.get_params_vector();
     int dim=statevec.size();
     Eigen::VectorXf v(dim);
-
+    
     for(size_t j=0;j<dim;j++) v(j)=statevec[j];
-
+    
     int nni=-1,index[k];
     for(int i=0;i<=ik;i++)index[i]=-1;
     bool exact=false;
@@ -291,7 +391,7 @@ public:
     return nni;
   };
   
-  vector<double>all_nnd2_mrpt(vector<state> &teststates,vector<state>&samples,bool same_set=false,int k=8,double target_recall=0.9){
+  vector<double>all_nnd2_mrpt(vector<state> &teststates,vector<state>&samples,bool same_set=false,int k=8,double target_recall=0.9,bool nonzero=true){
     //Computation of all nearest neighbor distances, using mrpt header-library.
     //This version doesn't know the parameter space topology in identifying nearest neighbors,
     //but does use the state.dist2 function for reporting the nearest distance.
@@ -305,13 +405,19 @@ public:
     if(k<=ik)k=ik+1;
     //cout<<k<<">"<<ik<<endl;
     for(size_t i=0;i<N;i++){
+      double d2=0;
       size_t i0=one_knn(teststates[i],mrpt,k,ik);
       //cout<<"i,i0:"<<i<<" "<<i0<<endl;
       nnd2[i]=teststates[i].dist2(samples[i0]);
     }
+    if(false and nonzero){//replace zeros with the next smallest value
+      double eps=1e100;
+      for(auto d2 :nnd2)if(d2<eps and d2>0)eps=d2;
+      for(auto &d2 :nnd2)if(d2<eps)d2=eps;
+    }
     return nnd2;
   };
-    vector<double>all_nnd2_mrpt_v2_orig(vector<state> &samples){
+  vector<double>all_nnd2_mrpt_v2_orig(vector<state> &samples){
     //Computation of all nearest neighbor distances, using mrpt header-library.
     //This version doesn't know the parameter space topology in identifying nearest neighbors,
     //but does use the state.dist2 function for reporting the nearest distance.
@@ -326,6 +432,60 @@ public:
     }
     return nnd2;
   };
+  vector<double> get_sample_mean(const vector<state>&samples){
+    size_t N=samples.size();
+    size_t dim=samples[0].size();
+    vector<double>sum(dim,0);
+    for(auto s:samples)for(int j=0;j<dim;j++)sum[j]+=s.get_param(j);
+    for(auto &x :sum)x/=N;
+    return sum;
+  };
+  vector<double> get_sample_var(const vector<state>&samples){
+    vector<double>mean;
+    return get_sample_var(samples,mean);
+  }
+  vector<double> get_sample_var(const vector<state>&samples,vector<double>&out_mean){
+    size_t N=samples.size();
+    size_t dim=samples[0].size();
+    out_mean=get_sample_mean(samples);
+    vector<double>sum(dim,0);
+    for(auto s:samples)for(int j=0;j<dim;j++){
+	double diff=s.get_param(j)-out_mean[j];
+	sum[j]+=diff*diff;
+      }
+    for(auto &x :sum)x/=(N-1.0);
+    return sum;
+  };
+  Eigen::MatrixXd get_sample_cov(const vector<state>&samples){
+    Eigen::VectorXd mean;
+    return get_sample_cov(samples,mean);
+  }
+  Eigen::MatrixXd get_sample_cov(const vector<state>&samples, Eigen::VectorXd &out_mean){
+    size_t N=samples.size();
+    size_t dim=samples[0].size();
+    Eigen::MatrixXd cov(dim,dim);
+    cov = Eigen::MatrixXd::Zero(dim,dim);
+    vector<double> mean=get_sample_mean(samples);
+    out_mean=Eigen::VectorXd::Zero(dim);
+    for(size_t i=0;i<dim;i++)out_mean(i)=mean[i];
+    vector<double>sum(dim,0);
+    for(auto s:samples)for(int j=0;j<dim;j++){
+	double jdiff=s.get_param(j)-mean[j];
+	cov(j,j)+=jdiff*jdiff;
+	for(int i=j+1;i<dim;i++){
+	  double idiff=s.get_param(i)-mean[i];
+	  double val=idiff*jdiff;
+	  cov(i,j)+=val;
+	  cov(j,i)+=val; //Eigen is finicky so cov(j,i)=cov(i,j) doesn't work right!
+	  if(cov(i,j)*cov(i,j)>1e50){
+	    cout<<i<<","<<j<<":"<<idiff<<"*"<<jdiff<<"="<<val<<"->"<<cov(i,j)<<endl;
+	}
+	}
+      }
+    cov/=(N-1.0);
+    return cov;
+  };
+    
 };
 
 
