@@ -1,9 +1,6 @@
 # distutils: language = c++
 # cython: language_level = 3
-#This is just an initial test, probably don't want a separate pyx file for this
 
-#from states cimport boundary as boundary_cppclass 
-#cimport states
 cimport bayesian
 cdef dict boundary_types={'open':0,'limit':1,'reflect':2,'wrap':3}
 from libcpp cimport bool
@@ -60,7 +57,6 @@ cdef class boundary:
     """
 
     #start with ref to c++ instance, need a pointer if supporting inheritance?
-    cdef states.boundary bound
     def __cinit__(self, str lowertype='open', str uppertype='open', float xmin=float('-inf'), float xmax=float('inf')):
         self.bound=states.boundary(
             boundary_types[lowertype],
@@ -80,10 +76,6 @@ cdef class stateSpace:
     Define the parameter state space.    
     """
 
-    #start with ref to c++ instance, need a pointer if supporting inheritance?
-    cdef states.stateSpace space  #should this be changed to a pointer?
-    cdef const states.stateSpace *spaceptr
-    cdef bool constpointer;
     def __cinit__(self, **kwargs): #by default we construct and own the stateSpace object
         """
         Versions of constructor:
@@ -160,7 +152,6 @@ cdef class state:
     """
     
     #start with ref to c++ instance, need a pointer if supporting inheritance?
-    cdef states.state cstate
     def __cinit__(self, stateSpace space=None, list values=None):
         """
         Versions of constructor:
