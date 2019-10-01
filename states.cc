@@ -9,7 +9,7 @@
 bool boundary::enforce(double &x)const{
   //cout<<"boundary::enforce: testing value "<<x<<" in range "<<show()<<endl;//debug
     //check wrapping first
-    if(lowertype==wrap^uppertype==wrap){//can't have just one wrap 
+  if((lowertype==wrap) ^ (uppertype==wrap)){//can't have just one wrap 
       cout<<"boundary::enforce: Inconsistent wrap."<<endl;
       return false;
     } else if (lowertype==wrap) {
@@ -107,6 +107,23 @@ string stateSpace::show()const{
     return s.str();
 };
 
+bool stateSpace::contains(const stateSpace &other){
+  bool result=true;
+  for(auto name: other.names)result=result and get_index(name)>=0;
+  return result;
+};
+
+bool stateSpace::addSymmetry(stateSpaceInvolution &involution){
+  if(contains(*involution.domainSpace)){
+    potentialSyms.push_back(&involution);
+    return true;
+  } else {
+    cout<<"StateSpace::addSymmetry: Warning involution's domain is not a subspace of this space."<<endl;
+    return false;
+  }
+};
+
+
       
 void state::enforce(){
   if(!space)valid=false;
@@ -152,6 +169,37 @@ state state::add(const state &other)const{
     result.enforce();
     return result;
   };
+
+///Compute the squared distance between two states.  Should account for wrapped dimensions.
+double state::dist2(const state &other)const{
+  double result=0;
+  //stateSpaces for the two states must match for a reasonable result, but we don't fully check this!
+  if(other.size()!=size()){
+    cout<<"state::diff: Sizes mismatch. ("<<size()<<"!="<<other.size()<<")\n";
+    exit(1);
+  }
+  for(size_t i=0;i<size();i++){
+    double xa=params[i],xb=other.params[i];
+    double diff = fabs(xb-xa);
+    boundary b=space->get_bound(i);
+    if(b.isWrapped()){
+      //We wind both points half the wrap distance and enforce the wrap to get the alternative distance
+      double xmin,xmax,altdiff,halfwrap;
+      b.getDomainLimits(xmin,xmax);
+      halfwrap=(xmax-xmin)/2;
+      xa-=halfwrap;
+      xb-=halfwrap;
+      b.enforce(xa);
+      b.enforce(xb);
+      altdiff=fabs(xb-xa);
+      if(altdiff<diff)diff=altdiff;
+    }
+    result+=diff*diff;
+  }
+  return result;
+}
+      
+      
 
 state state::scalar_mult(double x)const{
     //we only require that the result is valid

@@ -20,6 +20,7 @@ using namespace std;
 
 typedef unsigned int uint;
 
+class stateSpaceInvolution;
 
 //********* BASE CLASSES *************
 /// A class for specifying 1-D boundary info. Used for stateSpace definition.
@@ -39,6 +40,7 @@ public:
   ///Show structural info
   string show()const;
   void getDomainLimits(double &xmin_, double &xmax_)const{xmin_=xmin;xmax_=xmax;};
+  bool isWrapped()const{return lowertype==wrap && uppertype==wrap;};
 };
 
 /// State space class allows reference to overall limits and structure of the space.
@@ -121,7 +123,9 @@ public:
       exit(1);
     }
     return idx;
-  };     
+  };
+  ///Test whether another space is a subspace of this one.
+  bool contains(const stateSpace &other);
   bool enforce(valarray<double> &params)const;
   ///Show structural info
   string show()const;
@@ -136,7 +140,7 @@ public:
     names[i]=newname;
     bounds[i]=newbound;
   };
-  //join this space to another space
+  ///join this space to another space
   void attach(const stateSpace &other){
     if((!have_names&&dim!=0)||(!other.have_names&&other.dim!=0)){
       cout<<"stateSpace::attach: Warning attaching stateSpace without parameter names."<<endl;
@@ -157,6 +161,17 @@ public:
       }
       dim+=1;
     }
+    for(auto sym : other.potentialSyms)potentialSyms.push_back(sym);
+  };
+  ///Support for optional additional list of PotentialSymmetries
+  ///These are understood to be useful involutions on the space which may interesting in certain applications, like proposals
+  ///It is not assumed that the map provides an actual isomorphism of the space.
+private:
+  vector<stateSpaceInvolution *> potentialSyms;
+public:
+  bool addSymmetry(stateSpaceInvolution &involution);
+  const vector<stateSpaceInvolution *>get_potentialSyms(){
+    return potentialSyms;
   };
 };
       
@@ -211,6 +226,8 @@ public:
   virtual state scalar_mult(double x)const;
   ///For some applications it is necessary to have an inner product on the state space. Probably should move this out to stateSpace.
   virtual double innerprod(state other,bool constrained=false)const;
+  ///Compute the squared distance between two states.  Should account for wrapped dimensions.
+  virtual double dist2(const state &other)const;
   virtual string get_string(int prec=-1)const;
   virtual void get_params_array(valarray<double> &outarray)const{
     //outarray.resize(params.size());
@@ -254,7 +271,8 @@ public:
   stateSpaceTransform(){have_working_space=false;};
   virtual stateSpace transform(const stateSpace &sp)=0;
   virtual stateSpace inverse_transform(const stateSpace &sp){cout<<"stateSpaceTransform:No inverse transform available"<<endl;exit(1);};
-  virtual double jacobian(const stateSpace &sp){cout<<"stateSpaceTransform:No Jacobian available"<<endl;exit(1);};
+  ///jacobian determinant function
+  virtual double jacobian(const state &s){cout<<"stateSpaceTransform:No Jacobian available"<<endl;exit(1);};
   virtual state transformState(const state &s)const=0;
   virtual void defWorkingStateSpace(const stateSpace &sp)=0;
 };
@@ -379,6 +397,101 @@ class stateSpaceTransformND : public stateSpaceTransform {
     have_working_space=true;
   };
 };
+
+///Involutions are a special class of state space transforms representing symmetries.  They are automorphisms
+///where the function is its own inverse, so the transformed space is identical to the domain and the inverse
+///state transform is the same as the forward state transform.  We provide a test to verify this property.
+class stateSpaceInvolution : public stateSpaceTransform {
+protected:
+  const stateSpace *domainSpace; //Note the Transform can be applied as long as this can be identified as a subspace.
+  bool have_working_space;
+public:
+  stateSpaceInvolution(const stateSpace &sp){
+    have_working_space=false;
+    transformState_registered=false;
+    jacobian_registered=false;
+    defWorkingStateSpace_registered=false;
+    user_object=nullptr;
+    domainSpace=&sp;
+  };
+  virtual stateSpace transform(const stateSpace &sp)override{return stateSpace(sp);};//Should we enforce that domain is subspace of sp?
+  virtual stateSpace inverse_transform(const stateSpace &sp)override{return stateSpace(sp);};
+  virtual state transformState(const state &s)const override{    
+    if(transformState_registered){
+      if(have_working_space){
+	return (*user_transformState)(user_object,s);
+      } else {
+	cout<<"stateSpaceInvolution:: No working state space."<<endl;
+	exit(-1);
+      }
+    } else {
+      cout<<"stateSpaceInvolution:: No transform registered."<<endl;
+      exit(-1);
+    }
+  };
+  virtual double jacobian(const state &s)override{
+    if(transformState_registered){
+      if(jacobian_registered){
+	if(have_working_space)
+	  return (*user_jacobian)(user_object,s);
+	else {
+	  cout<<"stateSpaceInvolution:: No working state space."<<endl;
+	  exit(-1);
+	}
+      }
+      else return 1; //trivial by default
+    } else {
+      cout<<"stateSpaceInvolution:: No transform registered."<<endl;
+      exit(-1);
+    }
+  };
+  virtual void defWorkingStateSpace(const stateSpace &sp){
+    if(transformState_registered){
+      if(defWorkingStateSpace_registered)(*user_defWorkingStateSpace)(user_object,sp);
+      have_working_space=true;
+      return;
+    }
+  };
+  virtual double test_involution(const state &s){
+    //should return 0 if the function is indeed its own inverse and jacobian(x)*jacobian(f(x))==1; 
+    state result=transformState(s);
+    state diff = s.add(result.scalar_mult(-1));
+    double jacdiff=jacobian(s)*jacobian(result)-1;
+    return diff.innerprod(diff)+jacdiff*jacdiff;
+  };
+
+  ///This section provides data and functions for a minimal interface not requiring inheritance
+  ///To apply the base class, the user must at minimum provide a transformState() function and a
+  ///jacobian function (if the jacobian is non-trival) using the register_transformState() and
+  ///register_jacobian hooks.  If that function requires some reference data, then the
+  ///user must also provide a pointer to reference object (with access to the data) using the
+  ///function register_reference_object().  The user has the option to register a
+  ///defWorkingStateSpace() function to preset the location of data within the state object.
+private:
+  state (*user_transformState)(void *object, const state &s);
+  double (*user_jacobian)(void *object, const state &s);
+  void (*user_defWorkingStateSpace)(void *object, const stateSpace &d);
+  void * user_object;
+  bool transformState_registered,jacobian_registered,defWorkingStateSpace_registered;
+  friend class stateSpace;
+public:
+  void register_reference_object(void *object){user_object=object;};    
+  void register_transformState(state (*function)(void *object, const state &s)){
+    user_transformState=function;
+    transformState_registered=true;
+    have_working_space=true;//Assume the working space is known unless defWorkingStateSpace is registered
+  };
+  void register_jacobian(double (*function)(void *object, const state &s)){
+    user_jacobian=function;
+    jacobian_registered=true;
+  };
+  void register_defWorkingStateSpace(void (*function)(void *object, const stateSpace &sp)){
+    user_defWorkingStateSpace=function;
+    defWorkingStateSpace_registered=true;
+    have_working_space=false;
+  };
+};
+
 
 #endif
 
