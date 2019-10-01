@@ -77,6 +77,9 @@ example: example.cc ${LIB}/libprobdist.a ${LIB}/libptmcmc.a
 exampleLISA: exampleLISA.cc ${LIB}/libprobdist.a ${LIB}/libptmcmc.a
 	${CXX}  $< $(CFLAGS) -std=c++11 -o exampleLISA -lprobdist -lptmcmc -L${LIB} -I${INCDIR}
 
+testKL: testKL.cc ${LIB}/libprobdist.a ${LIB}/libptmcmc.a test_proposal.hh
+	${CXX}  $< $(CFLAGS) -std=c++11 -o testKL -lprobdist -lptmcmc -L${LIB} -I${INCDIR}
+
 #linear_example: linear_example.cc ${LIB}/libprobdist.a ${LIB}/libptmcmc.a
 #	${CXX} $(CFLAGS) -std=c++11 -o linear_example -lprobdist -lptmcmc -L${LIB} -I${INCDIR} $<
 

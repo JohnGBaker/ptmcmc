@@ -28,6 +28,23 @@ using namespace std;
 ///A sampleable_probability_function can be provided as the target distribution.
 ///Eventually plan for the option of auto-generating of an appropriate target
 ///distribution.
+///
+///  Functioning version of proposal testing. This is class which defines a
+/// test of a proposal_distribution. The test applies the proposal multiple
+/// times and then compares the resulting distribution against the original
+/// sample distirbution and also against an independently redrawn sample.
+/// The first test is based on the KLdivergence among the sample distributions.
+/// Since KLdiv is asymmetric, this is tried both ways.  To quantify the result
+/// the same test is applied to multiple re-draws of the original sample 
+/// distribution.  The test is considered to pass if the transformed sample
+/// KLdiv value does not exceed some percentile of the re-draw comparison
+/// values, stated explicitly in the output.  Since the KLdiv test is evidently
+/// prone to a fair amount of noise a second "fake" KL test is performed which
+/// is computed from only the mean and variance of each distribution.  This
+/// test statistic reduces to the KL test for sufficiently large Gaussian
+/// distributions, but it is much faster and less noisy, thus more sensitive
+/// to variance and mean differences, though it would be insensitive to 
+/// differences which don't show up in the mean and variance.
 class test_proposal {
   shared_ptr<Random> rng;
   proposal_distribution *proposal=nullptr;
