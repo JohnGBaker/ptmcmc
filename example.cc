@@ -79,6 +79,7 @@ class gaussian_likelihood : public bayes_likelihood {
   double lnnormfac;
   double twosigmasq;
 public:
+  double Ztheor;
   gaussian_likelihood():bayes_likelihood(nullptr,nullptr,nullptr){};
   virtual void setup(){
     haveSetup();
@@ -101,7 +102,8 @@ public:
     double sigma=0.5;
     twosigmasq=2*sigma*sigma;
     lnnormfac=-1.5*std::log(M_PI*twosigmasq);//1.5=3/2;3 for 3D
-    cout<<"Theoretically expected ln(evidence)="<<-std::log(8*halfwidths[0]*halfwidths[1]*halfwidths[2])<<endl;
+    Ztheor=-std::log(8*halfwidths[0]*halfwidths[1]*halfwidths[2]);
+    cout<<"Theoretically expected ln(evidence)="<<Ztheor<<endl;
   };
   void defWorkingStateSpace(const stateSpace &sp){
     checkSetup();//Call this assert whenever we need options to have been processed.
@@ -149,6 +151,7 @@ class gaussian_shell_2D_likelihood : public bayes_likelihood {
   double lnnormfac;
   double twosigmasq;
 public:
+  double Ztheor;
   gaussian_shell_2D_likelihood():bayes_likelihood(nullptr,nullptr,nullptr){};
   virtual void setup(){
     haveSetup();
@@ -176,7 +179,8 @@ public:
     double like_integral=exp(-lnnormfac-r0*r0/twosigmasq) + 2*M_PI*(1+erf(r0/sqrt(twosigmasq)));
     like_integral*=2.0;
     double prior_vol=4*halfwidths[0]*halfwidths[1];
-    cout<<"Theoretically expected ln(evidence)="<<std::log(like_integral)-std::log(prior_vol)<<endl;
+    Ztheor=std::log(like_integral)-std::log(prior_vol);
+    cout<<"Theoretically expected ln(evidence)="<<Ztheor<<endl;
   };
   void defWorkingStateSpace(const stateSpace &sp){
     checkSetup();//Call this assert whenever we need options to have been processed.
@@ -226,6 +230,7 @@ class gaussian_shell_ND_likelihood : public bayes_likelihood {
   double twosigmasq;
   bool one,logx;
 public:
+  double Ztheor;
   gaussian_shell_ND_likelihood(int dim=2):dim(dim),one(false),logx(false),bayes_likelihood(nullptr,nullptr,nullptr){};
   void addOptions(Options &opt,const string &prefix=""){
     Optioned::addOptions(opt,prefix);
@@ -294,7 +299,8 @@ public:
     double nsphere_area=Acoeff*pow(r0,sph_dim);
     double like_integral=nsphere_area;//Good approx for r0/sigma>>1 since r-integral is normalized;
     if(not one)like_integral*=2;
-    cout<<"Theoretically expected ln(evidence)="<<std::log(like_integral)-std::log(prior_vol)<<endl;
+    Ztheor=std::log(like_integral)-std::log(prior_vol)
+    cout<<"Theoretically expected ln(evidence)="<<Ztheor<<endl;
   };
   void defWorkingStateSpace(const stateSpace &sp){
     checkSetup();//Call this assert whenever we need options to have been processed.
@@ -345,7 +351,8 @@ shared_ptr<Random> globalRNG;//used for some debugging...
 //***************************************************************************************8
 //main test program
 int main(int argc, char*argv[]){
-
+  ptmcmc_sampler::Init();
+    
   Options opt(true);
   //Create the sampler
   ptmcmc_sampler mcmc;
