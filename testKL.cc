@@ -39,9 +39,10 @@ int main(){
 			      if(abs(arg)>=M_PI/2)ss=1/2.0;
 			      else if(abs(arg)>=M_PI/4)ss=2.0;
 			      else ss=1;
+			      //ss+=1;//Adding this hack leads to measureable error in the proposal 
 			      return ss;
 			      });
-
+  
   stateSpaceInvolution random_rotation(space,"randrot",1);// 1 means need 1 random number
   random_rotation.register_transformState
     (
@@ -52,8 +53,8 @@ int main(){
        double y=s.get_param(1);
        double r=sqrt(x*x+y*y);
        double phi=atan2(y,x);
-       //double dphi=M_PI*((*random_val)[0])/2.0+0.03;//This breaks symmetry enough to be detected in the proposal test
        double dphi=M_PI*((*random_val)[0]);
+       //dphi=dphi/2+0.03;//Including this hack breaks symmetry enough to be detected in the proposal test
        //cout<<"rotating by "<<dphi<<endl;
        phi+=dphi;
        x=r*cos(phi);
@@ -62,7 +63,9 @@ int main(){
        result.set_param(1,y);
        return result;
      });
-  
+
+  space.addSymmetry(scrunch);
+  space.addSymmetry(random_rotation);
 
   //set target dist
   double seed=clock()/(double)CLOCKS_PER_SEC;
@@ -96,7 +99,9 @@ int main(){
   //gaussian_prop prop(propsigmas);
   //draw_from_dist prop(propsigmas);
   //involution_proposal prop(scrunch);
-  involution_proposal prop(random_rotation);
+  //involution_proposal prop(random_rotation);
+  proposal_distribution_set prop=involution_proposal_set(space);
+  cout<<"Proposal is:\n"<<prop.show()<<endl;
   
   //Setup and perform test
   test_proposal testprop(prop,dist);

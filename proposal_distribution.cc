@@ -22,6 +22,14 @@ proposal_distribution_set* proposal_distribution_set::clone()const{//need a deep
   return result;
 };
 
+proposal_distribution_set involution_proposal_set(const stateSpace &space,double adapt_rate,double target_acceptance_rate){
+  vector<proposal_distribution*> props;
+  vector<stateSpaceInvolution *> involutions=space.get_potentialSyms();
+  vector<double> shares(involutions.size(),1.0);
+  for(auto involution : involutions)props.push_back(new involution_proposal(*involution));
+  return proposal_distribution_set(props,shares,adapt_rate,target_acceptance_rate);
+};
+
 //A little utility for normalizing the shares and presetting the bin limits.
 void reset_bins(vector<double> &shares, vector<double> &bin_max){
   int Nsize=shares.size();
@@ -34,7 +42,7 @@ void reset_bins(vector<double> &shares, vector<double> &bin_max){
   }
 };
 
-proposal_distribution_set::proposal_distribution_set(vector<proposal_distribution*> &props,vector<double> &shares,double adapt_rate,double target_acceptance_rate):shares(shares),adapt_rate(adapt_rate),target_acceptance_rate(target_acceptance_rate){
+proposal_distribution_set::proposal_distribution_set(vector<proposal_distribution*> &props,vector<double> &shares,double adapt_rate,double target_acceptance_rate,bool take_pointers):shares(shares),adapt_rate(adapt_rate),target_acceptance_rate(target_acceptance_rate),own_pointers(take_pointers){
   //First some checks
   if(props.size()!=shares.size()){
     cout<<"proposal_distribution_set(constructor): Array sizes mismatched.\n";

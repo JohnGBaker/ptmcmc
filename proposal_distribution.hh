@@ -176,10 +176,11 @@ class proposal_distribution_set: public proposal_distribution{
   int adapt_count;
   int adapt_every;
   int last_dist;
+  bool own_pointers;
 public:
-  virtual ~proposal_distribution_set(){for(auto prop:proposals)if(prop)delete prop;};//delete proposals
+  virtual ~proposal_distribution_set(){if(own_pointers){for(auto prop:proposals)if(prop)delete prop;}};//delete proposals
   virtual proposal_distribution_set* clone()const;
-  proposal_distribution_set(vector<proposal_distribution*> &props,vector<double> &shares,double adapt_rate=0,double target_acceptance_rate=0.2);
+  proposal_distribution_set(vector<proposal_distribution*> &props,vector<double> &shares,double adapt_rate=0,double target_acceptance_rate=0.2,bool take_pointers=true);
   ///For proposals which draw from a chain, we need to know which chain
   void set_chain(chain *c){for(int i=0;i<Nsize;i++)proposals[i]->set_chain(c);};
   ///Randomly select from proposals i in 0..n and draw.
@@ -190,8 +191,11 @@ public:
   void reject();
   string show();
   string report();//For status reporting on adaptive
-};  
-    
+};
+
+///Convenience constructor for a set of involution proposals based on the state
+proposal_distribution_set involution_proposal_set(const stateSpace &space,double adapt_rate=0,double target_acceptance_rate=0.2);
+
 ///DifferentialEvolution
 ///Based mainly on (ter Braak and Vrugt 08, Stat Comput (2008) 18: 435–446)
 ///Also SampsonEA2011 ArXiV:1105.2088

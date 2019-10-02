@@ -171,7 +171,7 @@ private:
   vector<stateSpaceInvolution *> potentialSyms;
 public:
   bool addSymmetry(stateSpaceInvolution &involution);
-  const vector<stateSpaceInvolution *>get_potentialSyms(){
+  const vector<stateSpaceInvolution *>get_potentialSyms()const{
     return potentialSyms;
   };
 };
