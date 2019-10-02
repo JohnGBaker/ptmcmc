@@ -15,6 +15,7 @@
 //#include <utility>
 //#include <memory>
 #include "restart.hh"
+#include "newran.h"
 
 using namespace std;
 
@@ -401,19 +402,48 @@ class stateSpaceTransformND : public stateSpaceTransform {
 ///Involutions are a special class of state space transforms representing symmetries.  They are automorphisms
 ///where the function is its own inverse, so the transformed space is identical to the domain and the inverse
 ///state transform is the same as the forward state transform.  We provide a test to verify this property.
+///
+///We also allow functions which depend on an additional vector of uniform random numbers of length nrand, with
+///values in (-1,1).  These can represent continuous symmetries.  In this case, despite the name, the transform
+///need not be its own inverse.  Rather the inverse should be acheived by reversing the sign on the random
+///vector.  If a family of point-wise involutions is required, then the function should depend only on the
+///absolute value of each random number.
+///
+///Note that this is still in development and we may generalize this further beyond involutions or even beyond
+///endomorphisms.  The interface should be considered volatile for now.
 class stateSpaceInvolution : public stateSpaceTransform {
   string label;
+  int nrand;
 protected:
   const stateSpace *domainSpace; //Note the Transform can be applied as long as this can be identified as a subspace.
   bool have_working_space;
 public:
-  stateSpaceInvolution(const stateSpace &sp,string label):label(label){
+  stateSpaceInvolution(const stateSpace &sp,string label="",int nrand=0):label(label),nrand(nrand){
     have_working_space=false;
     transformState_registered=false;
     jacobian_registered=false;
     defWorkingStateSpace_registered=false;
-    user_object=nullptr;
+    if(nrand>0)
+      user_object=new vector<double>(nrand);
+    else
+      user_object=nullptr;
     domainSpace=&sp;
+  };
+  stateSpaceInvolution(const stateSpaceInvolution &other):
+    stateSpaceInvolution(*other.domainSpace,other.label,other.nrand){
+    if(nrand==0)user_object=other.user_object;
+    have_working_space=other.have_working_space;
+    transformState_registered=other.transformState_registered;
+    user_transformState=other.user_transformState;
+    jacobian_registered=other.jacobian_registered;
+    user_jacobian=other.user_jacobian;
+    defWorkingStateSpace_registered=other.defWorkingStateSpace_registered;
+    user_defWorkingStateSpace=other.user_defWorkingStateSpace;
+  };
+  ~stateSpaceInvolution(){if(nrand>0) delete (vector<double>*) user_object;};
+  virtual void set_random(Random &rng)const{
+    vector<double> *randoms=(vector<double>*)user_object;
+    for(int i=0;i<nrand;i++)(*randoms)[i]=(rng.Next()*2.0-1.0);
   };
   virtual string get_label()const {return label;};
   virtual stateSpace transform(const stateSpace &sp)override{return stateSpace(sp);};//Should we enforce that domain is subspace of sp?
@@ -457,16 +487,31 @@ public:
   virtual double test_involution(const state &s, double verbose_lev=0){
     //should return 0 if the function is indeed its own inverse and jacobian(x)*jacobian(f(x))==1; 
     state image=transformState(s);
+    double jac=jacobian(s);
+    vector<double> *randoms;
+    if(nrand>0){
+      randoms=(vector<double>*)user_object;
+      //For random seeded involutions, drawing on nrand random doubles in (-1,1),
+      //The inverse transformation should be realized by the negative of the
+      //random vector value.  In case a point-wise self inverse map is applied,
+      //it should depend only the absolute value of the random number.
+      //Here we flip the sign on the random vector for the inverse transf.
+      for(int i=0;i<nrand;i++)(*randoms)[i]*=-1;
+    }
     state image2=transformState(image);
+    double jac2=jacobian(image);
+    if(nrand>0){//Now flip the sign back restore the original random vector
+      for(int i=0;i<nrand;i++)(*randoms)[i]*=-1;
+    }
     state diff = s.add(image2.scalar_mult(-1));
-    double jacdiff=jacobian(s)*jacobian(image)-1;
+    double jacdiff=jac*jac2-1;
     double result=diff.innerprod(diff)+jacdiff*jacdiff;
     if(result*verbose_lev>1){
       cout<<"test_involution: s="<<s.get_string()<<endl;
       cout<<"                s'="<<image.get_string()<<endl;
       cout<<"               s''="<<image2.get_string()<<endl;
-      cout<<"   J="<<jacobian(s)<<endl;
-      cout<<"  J'="<<jacobian(image)<<endl;
+      cout<<"   J="<<jac<<endl;
+      cout<<"  J'="<<jac2<<endl;
     }
     return result;
   };
@@ -486,7 +531,9 @@ private:
   bool transformState_registered,jacobian_registered,defWorkingStateSpace_registered;
   friend class stateSpace;
 public:
-  void register_reference_object(void *object){user_object=object;};    
+  void register_reference_object(void *object){
+    if(nrand>0)cout<<"stateSpaceInvolution::register_reference_object[label='"<<label<<"']: Cannot set user_object when nrand>0!"<<endl;
+    user_object=object;};    
   void register_transformState(state (*function)(void *object, const state &s)){
     user_transformState=function;
     transformState_registered=true;

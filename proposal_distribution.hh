@@ -47,6 +47,7 @@ class involution_proposal: public proposal_distribution{
 public:
   involution_proposal(const stateSpaceInvolution &involution):involution(involution){};
   state draw(state &s,chain *caller){
+    involution.set_random(*(caller->getPRNG()));
     log_hastings=log(involution.jacobian(s));
     return involution.transformState(s);
   };

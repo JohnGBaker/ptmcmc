@@ -11,7 +11,7 @@ int main(){
   vector<string> names={"m1","m2","a1","a2","tc","dist","inc","phi","lamb","beta","psi"};
   space.set_names(names);
 
-  //Add involution to space for a test:
+  //Add involution to space for a test, there are a couple examples:
   stateSpaceInvolution scrunch(space,"scrunch");
   scrunch.register_transformState(
 				  [](void *object, const state &s){
@@ -29,7 +29,6 @@ int main(){
 				    result.set_param(1,y);
 				    return result;
 				  });
-  
   scrunch.register_jacobian(
 			    [](void *object, const state &s){
 			      double x=s.get_param(0);
@@ -42,28 +41,62 @@ int main(){
 			      else ss=1;
 			      return ss;
 			      });
+
+  stateSpaceInvolution random_rotation(space,"randrot",1);// 1 means need 1 random number
+  random_rotation.register_transformState
+    (
+     [](void *object, const state &s){
+       vector<double> *random_val=(vector<double>*)object;//a random val between 0 and 1
+       state result=s;
+       double x=s.get_param(0);
+       double y=s.get_param(1);
+       double r=sqrt(x*x+y*y);
+       double phi=atan2(y,x);
+       //double dphi=M_PI*((*random_val)[0])/2.0+0.03;//This breaks symmetry enough to be detected in the proposal test
+       double dphi=M_PI*((*random_val)[0]);
+       //cout<<"rotating by "<<dphi<<endl;
+       phi+=dphi;
+       x=r*cos(phi);
+       y=r*sin(phi);
+       result.set_param(0,x);	      
+       result.set_param(1,y);
+       return result;
+     });
   
+
   //set target dist
   double seed=clock()/(double)CLOCKS_PER_SEC;
   cout<<"seed="<<seed<<endl;
   ProbabilityDist::setSeed(seed);
-  vector<double> cents={0,0,0};
+  vector<double> cents={1,0,0};
   vector<double> sigmas={1,2,3};
   gaussian_dist_product dist(&space,cents,sigmas);
 
   cout<<"Testing scrunch involution."<<endl;
   int ntest=20;
+  double testsum=0;
   for(int i=0;i<ntest;i++){
     state s=dist.drawSample(*ProbabilityDist::getPRNG());
-    cout<<" "<<scrunch.test_involution(s,100)<<endl;
+    testsum+=scrunch.test_involution(s,1000000);
   }
+  cout<<"RMS test_involution: "<<sqrt(testsum/ntest)<<endl;
+
+  cout<<"Testing randrot involution."<<endl;
+  testsum=0;
+  for(int i=0;i<ntest;i++){
+    state s=dist.drawSample(*ProbabilityDist::getPRNG());
+    random_rotation.set_random(*ProbabilityDist::getPRNG());
+    testsum+=random_rotation.test_involution(s,1000000);
+  }
+  cout<<"RMS test_involution: "<<sqrt(testsum/ntest)<<endl;
 
   
   //set proposal
   vector<double> propsigmas={0.1,0.1,0.1};
   //gaussian_prop prop(propsigmas);
   //draw_from_dist prop(propsigmas);
-  involution_proposal prop(scrunch);
+  //involution_proposal prop(scrunch);
+  involution_proposal prop(random_rotation);
   
   //Setup and perform test
   test_proposal testprop(prop,dist);
