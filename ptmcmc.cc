@@ -44,7 +44,6 @@ void ptmcmc_sampler::select_proposal(){
     (*optValue("gauss_draw_frac"))>>gauss_draw_frac;
     (*optValue("cov_draw_frac"))>>cov_draw_frac;
     (*optValue("covariance_file"))>>covariance_file;
-    (*optValue("prop_adapt_rate"))>>prop_adapt_rate;
     bool adapt_more=optSet("prop_adapt_more");
     //Do some sanity checking/fixing
     if(gauss_1d_frac<0)gauss_1d_frac=0;
@@ -447,6 +446,7 @@ void ptmcmc_sampler::processOptions(){
   *optValue("pt_dump_n")>>dump_n;
   if(dump_n>Nptc||dump_n<0)dump_n=Nptc;
   if(Nptc==0)dump_n=1;
+  (*optValue("prop_adapt_rate"))>>prop_adapt_rate;
   *optValue("pt_stop_evid_err")>>pt_stop_evid_err;  
   *optValue("chain_init_file")>>initialization_file;
   *optValue("chain_ess_stop")>>ess_stop;

@@ -61,7 +61,13 @@ public:
     ptmcmc_sampler* s=new ptmcmc_sampler();
     s->copyOptioned(*this);
     if(have_setup)s->setup(*chain_llike,*chain_prior,output_precision);
-    if(have_cprop)s->select_proposal();
+
+    if(have_cprop){
+      //s->select_proposal();
+      s->cprop=cprop->clone();
+      s->have_cprop=true;
+      s->chain_Ninit=chain_Ninit;
+    }
     cout<<"prior is:"<<chain_prior->show()<<endl;
     return s;
   };

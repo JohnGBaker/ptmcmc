@@ -160,7 +160,8 @@ public:
     int npar=2;
     stateSpace space(npar);
     string names[]={"p0","p1"};
-    space.set_names(names);  
+    space.set_names(names);
+
     nativeSpace=space;
     defWorkingStateSpace(nativeSpace);
     best=state(&space,space.size());
@@ -181,6 +182,7 @@ public:
     double prior_vol=4*halfwidths[0]*halfwidths[1];
     Ztheor=std::log(like_integral)-std::log(prior_vol);
     cout<<"Theoretically expected ln(evidence)="<<Ztheor<<endl;
+    
   };
   void defWorkingStateSpace(const stateSpace &sp){
     checkSetup();//Call this assert whenever we need options to have been processed.
@@ -228,7 +230,9 @@ class gaussian_shell_ND_likelihood : public bayes_likelihood {
   double x0,r0;
   double lnnormfac;
   double twosigmasq;
+  double sigmapoverm;
   bool one,logx;
+  vector<stateSpaceInvolution> symmetries;
 public:
   double Ztheor;
   gaussian_shell_ND_likelihood(int dim=2):dim(dim),one(false),logx(false),bayes_likelihood(nullptr,nullptr,nullptr){};
@@ -251,7 +255,62 @@ public:
     string names[npar];
     idx_p.resize(dim);
     for(int i=0;i<npar;i++)names[i]="p"+to_string(i);
-    space.set_names(names);  
+    space.set_names(names);
+    
+    //Define rotational potential symmetry [on first two dimensions]
+    stateSpaceInvolution random_rotation(space,"randrot",2);// 1 means need 1 random number
+    random_rotation.register_transformState
+    (
+     [](void *object, const state &s){
+       vector<double> *random_val=(vector<double>*)object;//a random val between 0 and 1
+       state result=s;
+       int np=s.size();
+       vector<double> x0rot(np);
+       x0rot[0]=3;
+       int i0=fabs((*random_val)[1])*(np-1.0);
+       double x=s.get_param(i0)-x0rot[i0];
+       double y=s.get_param(i0+1)-x0rot[i0+1];
+       double r=sqrt(x*x+y*y);
+       double phi=atan2(y,x);
+       double dphi=M_PI*((*random_val)[0]);
+       //dphi=dphi/2+0.03;//Including this hack breaks symmetry enough to be detected in the proposal test
+       //cout<<"rotating by "<<dphi<<endl;
+       phi+=dphi;
+       x=r*cos(phi);
+       y=r*sin(phi);
+       result.set_param(i0,x-x0rot[i0]);	      
+       result.set_param(i0+1,y-x0rot[i0+1]);
+       return result;
+     });
+    //Define rotational potential symmetry [on first two dimensions]
+    stateSpaceInvolution random_rotation_reflection(space,"randrotref",2);// 1 means need 1 random number
+    random_rotation_reflection.register_transformState
+    (
+     [](void *object, const state &s){
+       vector<double> *random_val=(vector<double>*)object;//a random val between 0 and 1
+       state result=s;
+       int np=s.size();
+       vector<double> x0rot(np);
+       x0rot[0]=3;
+       int i0=fabs((*random_val)[1])*(np-1.0);
+       double x=s.get_param(i0)-x0rot[i0];
+       double y=s.get_param(i0+1)-x0rot[i0+1];
+       double r=sqrt(x*x+y*y);
+       double phi=atan2(y,x);
+       double dphi=M_PI*((*random_val)[0]);
+       //dphi=dphi/2+0.03;//Including this hack breaks symmetry enough to be detected in the proposal test
+       //cout<<"rotating by "<<dphi<<endl;
+       phi+=dphi;
+       x=r*cos(phi);
+       y=r*sin(phi);
+       result.set_param(i0,x+x0rot[i0]);	      
+       result.set_param(i0+1,y+x0rot[i0+1]);
+       return result;
+     });
+    symmetries.push_back(random_rotation);
+    symmetries.push_back(random_rotation_reflection);
+    for(auto & symmetry: symmetries)space.addSymmetry(symmetry);
+ 
     nativeSpace=space;
     defWorkingStateSpace(nativeSpace);
     best=state(&space,space.size());
@@ -280,8 +339,12 @@ public:
     setPrior(new mixed_dist_product(&nativeSpace,types,centers,halfwidths));
     x0=3.0;
     r0=2;
-    double sigma=0.1;
+    //double sigma=0.01;sigmapoverm=100.0;
+    double sigma=0.1;sigmapoverm=1.0;
+    cout<<"sigmap="<<sigma*sqrt(sigmapoverm)<<"  sigmam="<<sigma/sqrt(sigmapoverm)<<endl;
     twosigmasq=2*sigma*sigma;
+    //twosigmasq_plus=twosigmasq*sigmapoverm
+    //twosigmasq_minus=twosigmasq/sigmapoverm
     lnnormfac=-0.5*std::log(M_PI*twosigmasq);
     int sph_dim=dim-1;
     int n0=1;          //even
@@ -299,7 +362,7 @@ public:
     double nsphere_area=Acoeff*pow(r0,sph_dim);
     double like_integral=nsphere_area;//Good approx for r0/sigma>>1 since r-integral is normalized;
     if(not one)like_integral*=2;
-    Ztheor=std::log(like_integral)-std::log(prior_vol)
+    Ztheor=std::log(like_integral)-std::log(prior_vol);
     cout<<"Theoretically expected ln(evidence)="<<Ztheor<<endl;
   };
   void defWorkingStateSpace(const stateSpace &sp){
@@ -312,11 +375,12 @@ public:
     valarray<double>params=s.get_params();
     //double result=log_poisson(s);
     double x=params[idx_p[0]];
-    if(not one)x=abs(x);//Reflect across x to make two shells
+    //if(not one)x=abs(x);//Reflect across x to make two shells
     if(logx){
       if(x<0)return -INFINITY;
       x=std::log(x);
     }
+    
     double dx=x-x0;
     double r2=dx*dx;
     for(int i=1;i<dim;i++){//Already handled distinct dim-0 separately
@@ -325,8 +389,21 @@ public:
     }
     dx=sqrt(r2)-r0;
     r2=dx*dx;
-    const double sqrt2pi=sqrt(2*M_PI);
-    double result = lnnormfac - r2/twosigmasq;
+    double resultp=-r2/(twosigmasq*sigmapoverm)-0.5*log(sigmapoverm);//result for "plus" side
+    dx=x+x0;
+    r2=dx*dx;
+    for(int i=1;i<dim;i++){
+      dx=params[idx_p[i]];
+      r2+=dx*dx;
+    }
+    dx=sqrt(r2)-r0;
+    r2=dx*dx;
+    double resultm=-r2/(twosigmasq/sigmapoverm)+0.5*log(sigmapoverm);//result for "minus" side
+    double result=lnnormfac;
+    if(resultm>resultp)result+=resultm;
+    else result+=resultp;
+    //const double sqrt2pi=sqrt(2*M_PI);
+    //double result = lnnormfac - r2/twosigmasqpm;
     double post=result;
     post+=nativePrior->evaluate_log(s);//May need a mechanism to check that Prior is set
     #pragma omp critical
@@ -373,7 +450,7 @@ int main(int argc, char*argv[]){
 
   //Add some command more line options
   opt.add(Option("nchains","Number of consequtive chain runs. Default 1","1"));
-  opt.add(Option("seed","Pseudo random number grenerator seed in [0,1). (Default=-1, use clock to seed.)","-1"));
+  opt.add(Option("seed","Pseudo random number generator seed in [0,1). (Default=-1, use clock to seed.)","-1"));
   opt.add(Option("precision","Set output precision digits. (Default 13).","13"));
   opt.add(Option("outname","Base name for output files (Default 'mcmc_output').","mcmc_output"));
   
@@ -433,7 +510,16 @@ int main(int argc, char*argv[]){
   //Set the proposal distribution 
   int Ninit;
   proposal_distribution *prop=ptmcmc_sampler::new_proposal_distribution(Npar,Ninit,opt,prior.get(),&scales);
-  cout<<"Proposal distribution is:\n"<<prop->show()<<endl;
+  //Next (possibly) supplement the proposal with involution proposal
+  if(true and space.get_potentialSyms().size()>0){
+    cout<<"Adding potential symmetries to proposal."<<endl;
+    proposal_distribution_set *symprops=involution_proposal_set(space).clone();
+    vector<proposal_distribution*> props={prop,symprops};
+    vector<double> shares={0.9,0.1};
+    prop=new proposal_distribution_set(props,shares,0.00001);
+  }
+  cout<<"Proposal distribution is...:\n"<<prop->show()<<endl;
+  
   //set up the mcmc sampler (assuming mcmc)
   mcmc.setup(Ninit,*like,*prior,*prop,output_precision);
 
