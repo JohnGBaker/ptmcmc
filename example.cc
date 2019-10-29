@@ -230,7 +230,7 @@ class gaussian_shell_ND_likelihood : public bayes_likelihood {
   double x0,r0;
   double lnnormfac;
   double twosigmasq;
-  double sigmapoverm;
+  double sigmapoverm,lnsigmapoverm;
   bool one,logx;
   vector<stateSpaceInvolution> symmetries;
 public:
@@ -258,46 +258,44 @@ public:
     space.set_names(names);
     
     //Define rotational potential symmetry [on first two dimensions]
-    stateSpaceInvolution random_rotation(space,"randrot",2);// 1 means need 1 random number
+    stateSpaceInvolution random_rotation(space,"randrot",1);// 1 means need 1 random number
     random_rotation.register_transformState
     (
-     [](void *object, const state &s){
-       vector<double> *random_val=(vector<double>*)object;//a random val between 0 and 1
+     [](const state &s,void *object, const vector<double> &randoms){
        state result=s;
        int np=s.size();
        vector<double> x0rot(np);
        x0rot[0]=3;
-       int i0=fabs((*random_val)[1])*(np-1.0);
+       int i0=fabs(randoms[1])*(np-1.0);
        double x=s.get_param(i0)-x0rot[i0];
        double y=s.get_param(i0+1)-x0rot[i0+1];
        double r=sqrt(x*x+y*y);
        double phi=atan2(y,x);
-       double dphi=M_PI*((*random_val)[0]);
+       double dphi=M_PI*(randoms[0]);
        //dphi=dphi/2+0.03;//Including this hack breaks symmetry enough to be detected in the proposal test
        //cout<<"rotating by "<<dphi<<endl;
        phi+=dphi;
        x=r*cos(phi);
        y=r*sin(phi);
-       result.set_param(i0,x-x0rot[i0]);	      
-       result.set_param(i0+1,y-x0rot[i0+1]);
+       result.set_param(i0,x+x0rot[i0]);	      
+       result.set_param(i0+1,y+x0rot[i0+1]);
        return result;
      });
     //Define rotational potential symmetry [on first two dimensions]
     stateSpaceInvolution random_rotation_reflection(space,"randrotref",2);// 1 means need 1 random number
     random_rotation_reflection.register_transformState
     (
-     [](void *object, const state &s){
-       vector<double> *random_val=(vector<double>*)object;//a random val between 0 and 1
+     [](const state &s,void *object, const vector<double> &randoms){
        state result=s;
        int np=s.size();
        vector<double> x0rot(np);
        x0rot[0]=3;
-       int i0=fabs((*random_val)[1])*(np-1.0);
+       int i0=fabs(randoms[1])*(np-1.0);
        double x=s.get_param(i0)-x0rot[i0];
        double y=s.get_param(i0+1)-x0rot[i0+1];
        double r=sqrt(x*x+y*y);
        double phi=atan2(y,x);
-       double dphi=M_PI*((*random_val)[0]);
+       double dphi=M_PI*(randoms[0]);
        //dphi=dphi/2+0.03;//Including this hack breaks symmetry enough to be detected in the proposal test
        //cout<<"rotating by "<<dphi<<endl;
        phi+=dphi;
@@ -346,6 +344,7 @@ public:
     //twosigmasq_plus=twosigmasq*sigmapoverm
     //twosigmasq_minus=twosigmasq/sigmapoverm
     lnnormfac=-0.5*std::log(M_PI*twosigmasq);
+    lnsigmapoverm=std::log(sigmapoverm);
     int sph_dim=dim-1;
     int n0=1;          //even
     double Acoeff=2;  //case
@@ -389,7 +388,7 @@ public:
     }
     dx=sqrt(r2)-r0;
     r2=dx*dx;
-    double resultp=-r2/(twosigmasq*sigmapoverm)-0.5*log(sigmapoverm);//result for "plus" side
+    double resultp=-r2/(twosigmasq*sigmapoverm)-0.5*lnsigmapoverm;//result for "plus" side
     dx=x+x0;
     r2=dx*dx;
     for(int i=1;i<dim;i++){
@@ -398,7 +397,7 @@ public:
     }
     dx=sqrt(r2)-r0;
     r2=dx*dx;
-    double resultm=-r2/(twosigmasq/sigmapoverm)+0.5*log(sigmapoverm);//result for "minus" side
+    double resultm=-r2/(twosigmasq/sigmapoverm)+0.5*lnsigmapoverm;//result for "minus" side
     double result=lnnormfac;
     if(resultm>resultp)result+=resultm;
     else result+=resultp;
@@ -484,9 +483,10 @@ int main(int argc, char*argv[]){
   istringstream(opt.value("outname"))>>outname;
 
   //report
-  cout.precision(output_precision);
   cout<<"\noutname = '"<<outname<<"'"<<endl;
+  cout.precision(20);
   cout<<"seed="<<seed<<endl; 
+  cout.precision(output_precision);
   cout<<"Running on "<<omp_get_max_threads()<<" thread"<<(omp_get_max_threads()>1?"s":"")<<"."<<endl;
 
   //Should probably move this to ptmcmc/bayesian
@@ -509,20 +509,22 @@ int main(int argc, char*argv[]){
   //Bayesian sampling [assuming mcmc]:
   //Set the proposal distribution 
   int Ninit;
-  proposal_distribution *prop=ptmcmc_sampler::new_proposal_distribution(Npar,Ninit,opt,prior.get(),&scales);
+  //proposal_distribution *prop=ptmcmc_sampler::new_proposal_distribution(Npar,Ninit,opt,prior.get(),&scales);
   //Next (possibly) supplement the proposal with involution proposal
-  if(true and space.get_potentialSyms().size()>0){
-    cout<<"Adding potential symmetries to proposal."<<endl;
-    proposal_distribution_set *symprops=involution_proposal_set(space).clone();
-    vector<proposal_distribution*> props={prop,symprops};
-    vector<double> shares={0.9,0.1};
-    prop=new proposal_distribution_set(props,shares,0.00001);
-  }
-  cout<<"Proposal distribution is...:\n"<<prop->show()<<endl;
+  //if(false and space.get_potentialSyms().size()>0){
+  //  cout<<"Adding potential symmetries to proposal."<<endl;
+  //  proposal_distribution_set *symprops=involution_proposal_set(space).clone();
+  //  vector<proposal_distribution*> props={prop,symprops};
+  //  vector<double> shares={0.9,0.1};
+  //  prop=new proposal_distribution_set(props,shares,0.00001);
+  //}
+  //cout<<"Proposal distribution is...:\n"<<prop->show()<<endl;
   
   //set up the mcmc sampler (assuming mcmc)
-  mcmc.setup(Ninit,*like,*prior,*prop,output_precision);
-
+  //mcmc.setup(Ninit,*like,*prior,*prop,output_precision);
+  mcmc.setup(*like,*prior,output_precision);
+  mcmc.select_proposal();
+  
   //Prepare for chain output
   ss<<outname;
   string base=ss.str();

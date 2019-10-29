@@ -14,7 +14,7 @@ int main(){
   //Add involution to space for a test, there are a couple examples:
   stateSpaceInvolution scrunch(space,"scrunch");
   scrunch.register_transformState(
-				  [](void *object, const state &s){
+				  [](const state &s,void *object, const vector<double> &randoms){
 				    double x=s.get_param(0);
 				    double y=s.get_param(1);
 				    double r=sqrt(x*x+y*y);
@@ -30,7 +30,7 @@ int main(){
 				    return result;
 				  });
   scrunch.register_jacobian(
-			    [](void *object, const state &s){
+			    [](const state &s,void *object, const vector<double> &randoms){
 			      double x=s.get_param(0);
 			      double y=s.get_param(1);
 			      double r=sqrt(x*x+y*y);
@@ -46,14 +46,13 @@ int main(){
   stateSpaceInvolution random_rotation(space,"randrot",1);// 1 means need 1 random number
   random_rotation.register_transformState
     (
-     [](void *object, const state &s){
-       vector<double> *random_val=(vector<double>*)object;//a random val between 0 and 1
+     [](const state &s,void *object, const vector<double> &randoms){
        state result=s;
        double x=s.get_param(0);
        double y=s.get_param(1);
        double r=sqrt(x*x+y*y);
        double phi=atan2(y,x);
-       double dphi=M_PI*((*random_val)[0]);
+       double dphi=M_PI*(randoms[0]);
        //dphi=dphi/2+0.03;//Including this hack breaks symmetry enough to be detected in the proposal test
        //cout<<"rotating by "<<dphi<<endl;
        phi+=dphi;

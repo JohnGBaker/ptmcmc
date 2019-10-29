@@ -411,6 +411,8 @@ class stateSpaceTransformND : public stateSpaceTransform {
 ///
 ///Note that this is still in development and we may generalize this further beyond involutions or even beyond
 ///endomorphisms.  The interface should be considered volatile for now.
+///
+///Some clean-up needed of hacky overloading of user_object for random numbers
 class stateSpaceInvolution : public stateSpaceTransform {
   string label;
   int nrand;
@@ -423,27 +425,12 @@ public:
     transformState_registered=false;
     jacobian_registered=false;
     defWorkingStateSpace_registered=false;
-    if(nrand>0)
-      user_object=new vector<double>(nrand);
-    else
-      user_object=nullptr;
+    randoms.resize(nrand);
+    user_object=nullptr;
     domainSpace=&sp;
   };
-  stateSpaceInvolution(const stateSpaceInvolution &other):
-    stateSpaceInvolution(*other.domainSpace,other.label,other.nrand){
-    if(nrand==0)user_object=other.user_object;
-    have_working_space=other.have_working_space;
-    transformState_registered=other.transformState_registered;
-    user_transformState=other.user_transformState;
-    jacobian_registered=other.jacobian_registered;
-    user_jacobian=other.user_jacobian;
-    defWorkingStateSpace_registered=other.defWorkingStateSpace_registered;
-    user_defWorkingStateSpace=other.user_defWorkingStateSpace;
-  };
-  ~stateSpaceInvolution(){if(nrand>0) delete (vector<double>*) user_object;};
-  virtual void set_random(Random &rng)const{
-    vector<double> *randoms=(vector<double>*)user_object;
-    for(int i=0;i<nrand;i++)(*randoms)[i]=(rng.Next()*2.0-1.0);
+  virtual void set_random(Random &rng){
+    for(auto & x : randoms)x=(rng.Next()*2.0-1.0);
   };
   virtual string get_label()const {return label;};
   virtual stateSpace transform(const stateSpace &sp)override{return stateSpace(sp);};//Should we enforce that domain is subspace of sp?
@@ -451,7 +438,7 @@ public:
   virtual state transformState(const state &s)const override{    
     if(transformState_registered){
       if(have_working_space){
-	return (*user_transformState)(user_object,s);
+	return (*user_transformState)(s,user_object,randoms);
       } else {
 	cout<<"stateSpaceInvolution:: No working state space."<<endl;
 	exit(-1);
@@ -465,7 +452,7 @@ public:
     if(transformState_registered){
       if(jacobian_registered){
 	if(have_working_space)
-	  return (*user_jacobian)(user_object,s);
+	  return (*user_jacobian)(s,user_object,randoms);
 	else {
 	  cout<<"stateSpaceInvolution:: No working state space."<<endl;
 	  exit(-1);
@@ -479,39 +466,41 @@ public:
   };
   virtual void defWorkingStateSpace(const stateSpace &sp){
     if(transformState_registered){
-      if(defWorkingStateSpace_registered)(*user_defWorkingStateSpace)(user_object,sp);
+      if(defWorkingStateSpace_registered)(*user_defWorkingStateSpace)(sp,user_object);
       have_working_space=true;
       return;
     }
   };
-  virtual double test_involution(const state &s, double verbose_lev=0){
+  virtual double test_involution(const state &s, double verbose_lev=0, ostream &out=cout){
     //should return 0 if the function is indeed its own inverse and jacobian(x)*jacobian(f(x))==1; 
     state image=transformState(s);
     double jac=jacobian(s);
-    vector<double> *randoms;
-    if(nrand>0){
-      randoms=(vector<double>*)user_object;
-      //For random seeded involutions, drawing on nrand random doubles in (-1,1),
-      //The inverse transformation should be realized by the negative of the
-      //random vector value.  In case a point-wise self inverse map is applied,
-      //it should depend only the absolute value of the random number.
-      //Here we flip the sign on the random vector for the inverse transf.
-      for(int i=0;i<nrand;i++)(*randoms)[i]*=-1;
-    }
+    //For random seeded involutions, drawing on nrand random doubles in (-1,1),
+    //The inverse transformation should be realized by the negative of the
+    //random vector value.  In case a point-wise self inverse map is applied,
+    //it should depend only the absolute value of the random number.
+    //Here we flip the sign on the random vector for the inverse transf.
+    for(auto &x : randoms)x*=-1;
     state image2=transformState(image);
     double jac2=jacobian(image);
-    if(nrand>0){//Now flip the sign back restore the original random vector
-      for(int i=0;i<nrand;i++)(*randoms)[i]*=-1;
-    }
+    for(auto &x : randoms)x*=-1;//Flip the sign back restore the original random vector
     state diff = s.add(image2.scalar_mult(-1));
     double jacdiff=jac*jac2-1;
     double result=diff.innerprod(diff)+jacdiff*jacdiff;
     if(result*verbose_lev>1){
-      cout<<"test_involution: s="<<s.get_string()<<endl;
-      cout<<"                s'="<<image.get_string()<<endl;
-      cout<<"               s''="<<image2.get_string()<<endl;
-      cout<<"   J="<<jac<<endl;
-      cout<<"  J'="<<jac2<<endl;
+      out<<"test_involution: s="<<s.get_string()<<endl;
+      out<<"                s'="<<image.get_string()<<endl;
+      out<<"               s''="<<image2.get_string()<<endl;
+      out<<"   J="<<jac<<endl;
+      out<<"  J'="<<jac2<<endl;
+      if(nrand>0){
+	out<<"randoms: [";
+	for(int i=0;i<nrand;i++){
+	  if(i>0)cout<<",";
+	  out<<randoms[i];
+	}
+	out<<"]"<<endl;
+      }
     }
     return result;
   };
@@ -524,26 +513,27 @@ public:
   ///function register_reference_object().  The user has the option to register a
   ///defWorkingStateSpace() function to preset the location of data within the state object.
 private:
-  state (*user_transformState)(void *object, const state &s);
-  double (*user_jacobian)(void *object, const state &s);
-  void (*user_defWorkingStateSpace)(void *object, const stateSpace &d);
+  state (*user_transformState)(const state &s,void *object, const vector<double> &randoms);
+  double (*user_jacobian)(const state &s,void *object, const vector<double> &randoms);
+  void (*user_defWorkingStateSpace)(const stateSpace &d, void *object);
   void * user_object;
+  vector<double>randoms;
   bool transformState_registered,jacobian_registered,defWorkingStateSpace_registered;
   friend class stateSpace;
 public:
   void register_reference_object(void *object){
     if(nrand>0)cout<<"stateSpaceInvolution::register_reference_object[label='"<<label<<"']: Cannot set user_object when nrand>0!"<<endl;
     user_object=object;};    
-  void register_transformState(state (*function)(void *object, const state &s)){
+  void register_transformState(state (*function)(const state &s,void *object, const vector<double> &randoms)){
     user_transformState=function;
     transformState_registered=true;
     have_working_space=true;//Assume the working space is known unless defWorkingStateSpace is registered
   };
-  void register_jacobian(double (*function)(void *object, const state &s)){
+  void register_jacobian(double (*function)(const state &s,void *object, const vector<double> &randoms)){
     user_jacobian=function;
     jacobian_registered=true;
   };
-  void register_defWorkingStateSpace(void (*function)(void *object, const stateSpace &sp)){
+  void register_defWorkingStateSpace(void (*function)(const stateSpace &s,void *object)){
     user_defWorkingStateSpace=function;
     defWorkingStateSpace_registered=true;
     have_working_space=false;

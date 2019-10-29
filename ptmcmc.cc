@@ -7,6 +7,7 @@
 #ifdef USE_MPI
 #include <mpi.h>
 #endif
+#include "test_proposal.hh"
 
 
 using namespace std;
@@ -35,7 +36,7 @@ void ptmcmc_sampler::select_proposal(){
     if(reporting())cout<<"Selecting proposal for stateSpace:\n"<<chain_prior->get_space()->show()<<endl;
     int Npar=chain_prior->get_space()->size();
     int proposal_option,SpecNinit;
-    double tmixfac,reduce_gamma_by,de_eps,gauss_1d_frac,gauss_draw_frac,cov_draw_frac;
+    double tmixfac,reduce_gamma_by,de_eps,gauss_1d_frac,gauss_draw_frac,cov_draw_frac,sym_prop_frac;
     bool de_mixing=false;
     bool gauss_temp_scaled=false;
     string covariance_file;
@@ -43,6 +44,7 @@ void ptmcmc_sampler::select_proposal(){
     (*optValue("gauss_1d_frac"))>>gauss_1d_frac;
     (*optValue("gauss_draw_frac"))>>gauss_draw_frac;
     (*optValue("cov_draw_frac"))>>cov_draw_frac;
+    (*optValue("sym_prop_frac"))>>sym_prop_frac;
     (*optValue("covariance_file"))>>covariance_file;
     bool adapt_more=optSet("prop_adapt_more");
     //Do some sanity checking/fixing
@@ -66,9 +68,64 @@ void ptmcmc_sampler::select_proposal(){
     gauss_temp_scaled=optSet("gauss_temp_scaled");
     de_mixing=optSet("de_mixing");
     cprop=new_proposal_distribution_guts(Npar, chain_Ninit, chain_prior, &scales, proposal_option, SpecNinit, tmixfac, reduce_gamma_by, de_eps, gauss_1d_frac,de_mixing,prop_adapt_rate,adapt_more,gauss_draw_frac,cov_draw_frac,gauss_temp_scaled,covariance_file);
+    cout<<"sym_prop_frac="<<sym_prop_frac<<" nsym="<<chain_prior->get_space()->get_potentialSyms().size()<<endl;
+    if(sym_prop_frac>0 and chain_prior->get_space()->get_potentialSyms().size()>0){
+      cout<<"Adding stateSpace potential symmetries to proposal."<<endl;
+      proposal_distribution_set *symprops=involution_proposal_set(*chain_prior->get_space()).clone();
+      vector<proposal_distribution*> props={cprop,symprops};
+      vector<double> shares={1-sym_prop_frac,sym_prop_frac};
+      double rate=0;
+      if(adapt_more)rate=prop_adapt_rate;
+      cprop=new proposal_distribution_set(props,shares,rate);
+    }
     //cprop=new_proposal_distribution(Npar, chain_Ninit, opt, chain_prior, scales);
     if(reporting())cout<<"Proposal distribution is:\n"<<cprop->show()<<endl;
     have_cprop=true;
+}
+
+void ptmcmc_sampler::test_prop(){
+    //Perform propopsal testing if called for
+    string indexstring;(*optValue("prop_test_index"))>>indexstring;
+    cout<<"indexstring='"<<indexstring<<"'"<<endl;
+    vector<int> multiindex;
+    if(indexstring.length()==0)return;
+    if(indexstring!="."){
+      //Parse the index string
+      stringstream ss(indexstring);
+      string elem;
+      while(getline(ss,elem,'-'))
+	multiindex.push_back(atoi(elem.c_str()));
+      cout<<" Testing proposal starting at multiindex:";
+      for(int i:multiindex)cout<<" "<<i;
+      cout<<endl;
+    }
+    //Next generate the test distribution
+    bool fits=false;
+    vector<double> cent;
+    vector<double> sigma;
+    chain_prior->getScales(sigma);
+    while(not fits){
+      state s0=chain_prior->drawSample(*ProbabilityDist::getPRNG());
+      int n=s0.size();
+      cent=s0.get_params_vector();
+      vector<double>topv(n),bottomv(n);
+      double nsigcut=1.0;
+      for(int i=0;i<n;i++){
+	topv[i]=cent[i]+sigma[i]*nsigcut;
+	bottomv[i]=cent[i]-sigma[i]*nsigcut;
+      }
+      state top(s0.getSpace(),topv);
+      state bottom(s0.getSpace(),bottomv);
+      double logcut=-100;
+      cout<<"Checking limits: \ntop="<<top.get_string()<<"\nbottom="<<bottom.get_string()<<endl;
+      if(chain_prior->evaluate_log(top)>logcut and chain_prior->evaluate_log(bottom)>logcut)fits=true;
+      else for(auto &s:sigma)s/=2;
+      
+    }
+    gaussian_dist_product dist(chain_prior->get_space(),cent,sigma);
+    cout<<"Test distribution is: "<<dist.show()<<endl;
+    test_proposal testprop(*cprop,dist,true,multiindex);
+    testprop.test(10000,500,10);
 };
 
 proposal_distribution* ptmcmc_sampler::new_proposal_distribution_guts(int Npar, int &Ninit, const sampleable_probability_function * prior, const valarray<double>*halfwidths,
@@ -407,11 +464,13 @@ void ptmcmc_sampler::addOptions(Options &opt,const string &prefix){
   addOption("covariance_file","Specify file with covariance data for relevant proposal distribution optoins.Default=none","");
   addOption("prop_adapt_rate","Specify a scaling rate (eg 1e-3) for adaptation of sub-proposal fractions, Default=0","0");
   addOption("prop_adapt_more","Adapt more broadly, not just Gaussian mixtures");
+  addOption("sym_prop_frac","Fractional rate at which to apply and stateSpace symmetries as proposals. (Default=0)","0"); 
   addOption("de_ni","Differential-Evolution number of initialization elements per dimension. Default=50.","50");
   addOption("de_eps","Differential-Evolution gaussian scale. Default=1e-4.","1e-4");
   addOption("de_reduce_gamma","Differential Evolution reduce gamma parameter by some factor from nominal value. Default=4.","4");
   addOption("de_mixing","Differential-Evolution support mixing of parallel chains.");
   addOption("de_Tmix","Differential-Evolution degree to encourage mixing info from different temps.(default=300)","300");
+  addOption("prop_test_index","String providing (multi-)index value indicating proposal to test. (eg '.' for all, '0-1' for second member of first member of nested set, Default: no test)","");
   addOption("chain_init_file","Specify chain file from which to draw initializtion points, rather than from prior.","");  
   addOption("chain_ess_stop","Stop MCMC sampling the first time the specified effective sample size is reached. (default never)","-1.0");
   
@@ -509,6 +568,9 @@ int ptmcmc_sampler::initialize(){
     else mhc->initialize(Ninit);
   }
   cc->set_proposal(*cprop);
+  cprop->set_chain(cc);
+  cout<<"About to test"<<endl;
+  test_prop();
   return 0;
 };
 

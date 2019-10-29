@@ -39,13 +39,14 @@ public:
   virtual void accept(){};//external trigger to indicate that proposal was accepted (available for adaptive proposals)
   virtual void reject(){};//external trigger to indicate that proposal was rejected (available for adaptive proposals)
   virtual string report(){return "";};//For status reporting from adaptive proposals
+  virtual string test(const vector<state> &samples,Random &rng){return "";};//Perform an intrinsic test and return the output
 };
 
 //Apply an stateSpaceInvolution map as a proposal:
 class involution_proposal: public proposal_distribution{
-  const stateSpaceInvolution involution;
+  stateSpaceInvolution involution;
 public:
-  involution_proposal(const stateSpaceInvolution &involution):involution(involution){};
+  involution_proposal(stateSpaceInvolution &involution):involution(involution){};
   state draw(state &s,chain *caller){
     involution.set_random(*(caller->getPRNG()));
     log_hastings=log(involution.jacobian(s));
@@ -53,6 +54,17 @@ public:
   };
   involution_proposal* clone()const{return new involution_proposal(*this);};
   string show(){return "Involution["+involution.get_label()+"]()";};
+  string test(const vector<state> &samples,Random &rng){
+    ostringstream outs;
+    outs<<"Testing involution."<<endl;
+    double testsum=0;
+    for(auto s:samples){
+      involution.set_random(rng);
+      testsum+=involution.test_involution(s,1000000);
+    }
+    outs<<"RMS: "<<sqrt(testsum/samples.size())<<endl;
+    return outs.str();
+  };
 };
 
 //Draw from a distribution
@@ -191,6 +203,7 @@ public:
   void reject();
   string show();
   string report();//For status reporting on adaptive
+  vector<proposal_distribution*>  members()const{return proposals;}; 
 };
 
 ///Convenience constructor for a set of involution proposals based on the state

@@ -44,7 +44,7 @@ ${LIB}/libprobdist.a: ${LIB} ${INCDIR}
 chain.o: chain.cc chain.hh states.hh probability_function.hh proposal_distribution.hh ${LIB}/libprobdist.a restart.hh ${INCDIR}/Eigen
 proposal_distribution.o: proposal_distribution.cc states.hh probability_function.hh proposal_distribution.hh ${LIB}/libprobdist.a ${INCDIR}/Eigen
 probability_function.o: probability_function.cc states.hh probability_function.hh ${INCDIR}/newran.h
-ptmcmc.o: ptmcmc.cc bayesian.hh states.hh ptmcmc.hh chain.hh options.hh probability_function.hh proposal_distribution.hh
+ptmcmc.o: ptmcmc.cc bayesian.hh states.hh ptmcmc.hh chain.hh options.hh probability_function.hh proposal_distribution.hh test_proposal.hh
 states.o: states.hh options.hh restart.hh
 
 ${LIB}/libptmcmc.a: ${MCMC_OFILES}
@@ -71,7 +71,7 @@ testPT: testPT.cpp ${LIB}/libprobdist.a ${LIB}/libptmcmc.a
 testGaussian: testGaussian.cc ${LIB}/libprobdist.a ${LIB}/libptmcmc.a
 	${CXX} $(CFLAGS) -g -std=c++11 -o testGaussian $< -lprobdist -lptmcmc -L${LIB} -I${INCDIR} $(LDFLAGS)
 
-example: example.cc ${LIB}/libprobdist.a ${LIB}/libptmcmc.a
+example: example.cc ${LIB}/libprobdist.a ${LIB}/libptmcmc.a test_proposal.hh
 	${CXX} $(CFLAGS) -std=c++11 -o example -lprobdist -lptmcmc -L${LIB} -I${INCDIR} $<
 
 exampleLISA: exampleLISA.cc ${LIB}/libprobdist.a ${LIB}/libptmcmc.a

@@ -42,6 +42,7 @@ public:
 							       
   //proposal_distribution* select_proposal();
   void select_proposal();
+  void test_prop();
   ptmcmc_sampler();
   virtual void checkpoint(string path)override;
   virtual void restart(string path)override;

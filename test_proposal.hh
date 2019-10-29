@@ -49,15 +49,26 @@ class test_proposal {
   shared_ptr<Random> rng;
   proposal_distribution *proposal=nullptr;
   sampleable_probability_function *target_dist=nullptr;
+  bool loop;
   chain ch;
 public:
   //test_proposal(proposal_distribution &proposal, shared_ptr<Random> rng){cout<<"The idea is to provide a ready-made test distribution, perhaps a gaussian mixture, perhaps augmented by gaussians located at proposal-step images of the initial gaussian centers.  This is not yet implemented."<<endl;exit(-1);};
-  test_proposal(proposal_distribution &proposal, sampleable_probability_function &target):
+  test_proposal(proposal_distribution &proposalref, sampleable_probability_function &target,bool loop=false, vector<int> index=vector<int>()):
     rng(new MotherOfAll(ProbabilityDist::getPRNG()->Next())),
-    proposal(&proposal),
-    target_dist(&target)
+    proposal(&proposalref),
+    target_dist(&target),
+    loop(loop)
   {
     //Note: if proposal needs a chain, we may need to make one up with samples from the target dist.
+    //If proposal is a proposal_set and index is provided, then we access only the sub proposal
+    while(index.size()>0){
+      proposal_distribution_set *set=dynamic_cast<proposal_distribution_set*>(proposal);
+      if(set){
+	proposal=set->members()[index[0]];
+	vector<int> subindex(index.begin()+1,index.end());
+	index=subindex;
+      }else break;
+    }
   };
   
   test_proposal(){};//Trivial constructor for development and testing...
@@ -120,9 +131,33 @@ public:
   ///     One approach to this is to compare KL measurements of redraws of the original sample with
   ///     those of the transformed set.
   double test(int Nsamp=10000, double ncyc=5, int ntry=10,double hastings_err=0){
+    cout<<"\n\nTesting proposal: "<<proposal->show()<<endl;
+    //If loop==true, then we make a new test_proposal object for the sub_proposal, and loop;
+    if(loop){
+      proposal_distribution_set *set=dynamic_cast<proposal_distribution_set*>(proposal);
+      if(set){
+	auto members=set->members();
+	int n=members.size();
+	cout<<n<<" members in proposal set"<<endl;
+	int i=0;
+	double result=0;
+	for(auto member : members){
+	  cout<<"Preparing and testing member "<<i<<" of "<<n<<endl;
+	  test_proposal subtest(*member, *target_dist,true);
+	  result+=subtest.test(Nsamp,ncyc,ntry,hastings_err);
+	  i++;
+	}
+	return result;
+      }
+    }
+
     //Draw reference samples
     vector<state> target_samples=sample_target_dist(Nsamp);
 
+    //Perform intrinsic test if any
+    string intrinsic_test_result=proposal->test(target_samples,*rng);
+    if(intrinsic_test_result!="")cout<<" Intrinsic test:\n"<<intrinsic_test_result<<endl;
+    
     //Transform by application of the proposal
     int Naccept_cum=0;
     int Ngoal=ncyc*Nsamp;
@@ -136,6 +171,15 @@ public:
       Naccept_cum+=Naccept;
       if(icyc%int(ncyc/5+1)==0)
 	cout<<100.0*Naccept/Nsamp<<"\% accepted,  "<<100.0*Naccept_cum/Ngoal<<" percent done."<<endl;
+      if(icyc==2000 and Naccept_cum<Ngoal*0.01){//Not sampling fast enough
+	//Reduce goal for number of cycles
+	ncyc=ncyc/2.0;
+	cout<<"Sampling poorly.  Reducing to ncyc="<<ncyc<<endl;
+	//start over
+	Ngoal=ncyc*Nsamp;
+	icyc=0;
+	Naccept_cum=0;
+      }	
       icyc++;
     }
     vector<double> mean,var;
@@ -158,16 +202,24 @@ public:
 
     //For comparison estimate statistics of redraws of samples (expected value is 0)
     double sum=0;
-    vector<double> KLdiffs(ntry),fKLdiffs(ntry);
+    int fntry=30*ntry;
+    vector<double> KLdiffs(ntry),fKLdiffs(fntry);
     for(int i=0;i<ntry;i++){
       //draw alternative samples;
       vector<state> alt_samples=sample_target_dist(Nsamp);
       KLdiffs[i]=KL_divergence(alt_samples,target_samples,use_approxNN);
-      fKLdiffs[i]=fake_KL_divergence(alt_samples,target_samples);
-      cout<<"("<<KLdiffs[i]<<","<<fKLdiffs[i]<<")"<<(i<ntry-1?",":"");
+      //cout<<"("<<KLdiffs[i]<<","<<fKLdiffs[i]<<")"<<(i<ntry-1?",":"");
       //cout<<KLdiffs[i]<<(i<ntry-1?",":"");
     }
-    cout<<endl;
+    //cout<<endl;
+    cout<<"Computing 'fake' KL divergences:"<<endl;
+    for(int i=0;i<fntry;i++){
+      //draw alternative samples;
+      vector<state> alt_samples=sample_target_dist(Nsamp);
+      fKLdiffs[i]=fake_KL_divergence(alt_samples,target_samples);
+      //cout<<"("<<KLdiffs[i]<<","<<fKLdiffs[i]<<")"<<(i<fntry-1?",":"");
+    }
+    //cout<<endl;
     //draw alternative samples;
     vector<state> alt_samples=sample_target_dist(Nsamp);
     double altKLtransformed=KL_divergence(transformed,alt_samples,use_approxNN);
@@ -192,9 +244,13 @@ public:
     if(altKLtransformed-KLtransformed>fabs(KLcut))cout<<"When 'Transformed' is signficantly less than 'alt-Transformed' it may indicate that the effect of the proposal (after ncyc="<<ncyc<<" applications) is too small to measure at this level."<<endl;
     if(altKLtransformed<KLcut)cout<<"PASS"<<endl;
     else cout<<"FAIL\nKL value is "<<altKLtransformed/KLcut<<" times the stated threshold."<<endl;
-    if(ntry>1){
+    //Report fake KL tests
+    Ncut=sqrt(fntry);
+    KLcut=0;
+    cut_frac=Ncut*1.0/fntry;
+    if(fntry>1){
       //cout<<"fKLdiffs";for(auto diff:fKLdiffs)cout<<diff<<" ";cout<<endl;
-      KLcut=(fKLdiffs[ntry-Ncut]+fKLdiffs[ntry-Ncut-1])/2.0;
+      KLcut=(fKLdiffs[fntry-Ncut]+fKLdiffs[fntry-Ncut-1])/2.0;
       cout<<"\nEstimate that only "<<cut_frac*100<<"\% of fKLdiff measurements are likely to exceed "<<KLcut<<" for matching distributions."<<endl;
     }
     cout<<"Transformed fKLdiv="<<fKLtransformed<<" <-> "<<fKLtransformedX<<endl;
