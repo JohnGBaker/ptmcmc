@@ -1484,8 +1484,8 @@ void parallel_tempering_chains::step(){
       for(int i=0;i<Ntemps-1;i++){
 	//Compute upside log_evidence ratio
 	if(nproc==1){
-	  log_eratio_up[i]=   log_evidence_ratio(i  ,i+1,istatsbin,add_every_N);
-	  log_eratio_down[i]=-log_evidence_ratio(i+1,i  ,istatsbin,add_every_N);
+	  log_eratio_up[i]=   log_evidence_ratio(i  ,i+1,istatsbin,1);
+	  log_eratio_down[i]=-log_evidence_ratio(i+1,i  ,istatsbin,1);
 	  evidence+=(log_eratio_up[i]+log_eratio_down[i])/2.0;
 	} else evidence+=1; //MPI not yet implemented with MPI
       }
@@ -1896,7 +1896,7 @@ double parallel_tempering_chains::log_evidence_ratio(int ia,int ib,int ilen,int 
   double sum=0;
   double count=0;
   for(int i=istart;i<size;i+=every){
-    double x=chains[ib].getLogLike(i)*amb;
+    double x=chains[ib].getLogLike(i,true)*amb;
     //double x=chains[ib].getLogLike(i)*amb-xmax;
     sum+=x;
     count++;
