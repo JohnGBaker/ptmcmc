@@ -199,9 +199,9 @@ public:
 	auto members=set->members();
 	int n=members.size();
 	cout<<n<<" members in proposal set"<<endl;
-	int i=1;
+	int i=0;
 	for(auto member : members){
-	  cout<<"Preparing and testing member "<<i<<" of "<<n<<endl;
+	  cout<<"Preparing and testing member "<<i+1<<" of "<<n<<endl;
 	  string subpath=path;
 	  if(path!="")subpath=subpath+"-"+to_string(i);
 	  cout<<"subpath='"<<subpath<<"'"<<endl;

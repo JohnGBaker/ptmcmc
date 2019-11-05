@@ -35,7 +35,7 @@ const bool narrowband=true;
 
 const bool no_class=false;
 const bool use_inheritance_interface=false; //only relevant if no_class=false
-const bool use_basic_setup=true; //only relevant with use_inheritance_interface=true
+const bool use_basic_setup=false; //only relevant with use_inheritance_interface=true
 
 // Routines for simplified likelihood 22 mode, frozen LISA, lowf, fixed masses (near 1e6) and fixed t0
 static double funcphiL(double m1, double m2, double tRef,double phiRef){
@@ -81,31 +81,150 @@ double simpleCalculateLogLCAmpPhase(double d, double phiL, double inc, double la
   return simplelogL;
 }
 
+///Functions implementing potential parameter space symmetries
+///This functions are of a standard form needed for specifying (potential)
+///symmetries of the parameter state space, and can be exploited as
+///specialized MCMC proposals.
+
+//TDI A/E symmetric (in stationary/low-freq limit) half rotation of constellation or quarter rotation with polarization flip
+//uses 1 random var
+state LISA_quarter_rotation_symmetry(const state &s,void *object, const vector<double> &randoms){
+  state result=s;
+  int nrot=int(fabs(randoms[0])*2)+1;
+  if(randoms[0]<0)nrot=-nrot;
+  //cout<<"nrot="<<nrot<<endl;
+  int ilambda=3,ipsi=5;
+  double lamb=s.get_param(ilambda);
+  double psi=s.get_param(ipsi);
+  const double halfpi=M_PI/2;
+  lamb+=nrot*halfpi;
+  if(abs(nrot)%2==1)psi+=halfpi;
+  result.set_param(ilambda,lamb);
+  result.set_param(ipsi,psi);
+  return result;
+};
+
+//Source (even l dominant) half rotation symmetry or quarter rotation with polarization flip
+//uses 1 random var
+state source_quarter_rotation_symmetry(const state &s,void *object, const vector<double> &randoms){
+  state result=s;
+  int nrot=int(fabs(randoms[0])*2)+1;
+  if(randoms[0]<0)nrot=-nrot;
+  int iphi=1,ipsi=5;
+  double phi=s.get_param(iphi);
+  double psi=s.get_param(ipsi);
+  const double halfpi=M_PI/2;
+  phi+=nrot*halfpi;
+  if(abs(nrot)%2==1)psi+=halfpi;
+  result.set_param(iphi,phi);
+  result.set_param(ipsi,psi);
+  return result;
+};
+
+//TDI A/E symmetric (in stationary/low-freq limit) relection through constellation plane
+//uses 0 random vars
+state LISA_plane_reflection_symmetry(const state &s,void *object, const vector<double> &randoms){
+  state result=s;
+  int nrot=1;if(randoms[0]<0)nrot=-1;
+  int ibeta=4;
+  double beta=s.get_param(ibeta);
+  beta=M_PI-beta;
+  result.set_param(ibeta,beta);
+  return result;
+};
+
+//Source (even l dominant) half rotation symmetry or quarter rotation with polarization flip
+state transmit_receive_inc_swap_symmetry(const state &s,void *object, const vector<double> &randoms){
+  const double halfpi=M_PI/2;
+  state result=s;
+  int iphi=1,iinc=2,ilamb=3,ibeta=4,ipsi=5;
+  vector<double> params=s.get_params_vector();
+  double phi=s.get_param(iphi);
+  double inc=s.get_param(iinc);
+  double lamb=s.get_param(ilamb);
+  double theta=halfpi-s.get_param(ibeta);
+  //double fourpsi=4*s.get_param(ipsi);
+  double twopsi=2*s.get_param(ipsi);
+  double ti4=pow(tan(inc/2),4);
+  double tt4=pow(tan(theta/2),4);
+  double Phi=atan2(sin(twopsi)*(ti4-tt4),cos(twopsi)*(ti4+tt4));
+  //cout<<"Phi="<<Phi<<" ti4="<<ti4<<" tt4="<<tt4<<endl;
+  result.set_param(iinc,theta);
+  result.set_param(ibeta,halfpi-inc);
+  result.set_param(iphi,phi+Phi/2);
+  result.set_param(ilamb,lamb-Phi/2);
+  return result;
+};
+
+//Approximate distance inclination symmetry
+//uses 1 random var
+state dist_inc_scale_symmetry(const state &s,void *object, const vector<double> &randoms){
+  state result=s;
+  //To avoid issues at the edges we make sure that the transformation of the inclination
+  //never crosses its limits.
+  //Note that f:x->ln(pi/x-1) has range (inf,-inf) on domain (0,pi) with f(pi-x)=-f(x)
+  //and inverse pi/(exp(f(x))+1)=x
+  //We then step uniformly in f(x).
+  int idist=0,iinc=2;
+  double dist=s.get_param(idist);
+  double df=randoms[0]*0.1; //Uniformly transform inc by up to 0.1 radian
+  double oldinc=s.get_param(iinc);
+  double oldf=log(M_PI/oldinc-1);
+  double newf=oldf+df;
+  double newinc=M_PI/(exp(newf)+1);
+  double fac=sin(oldinc)/sin(newinc);
+  //cout<<"f,inc:"<<oldf<<"->"<<newf<<" "<<oldinc<<"->"<<newinc<<" --> fac="<<fac<<endl;;
+  //cout<<"d*sin(i)^4: "<<dist*pow(sin(oldinc),4)<<" ";
+  dist=dist*pow(fac,4);
+  //cout<<dist*pow(sin(newinc),4)<<endl;
+  //cout<<"fac 1/fac: "<<fac<<" "<<1/fac<<endl;;
+  result.set_param(idist,dist);
+  result.set_param(iinc,newinc);
+  return result;
+};
+//Approximate distance inclination symmetry jacobian
+//uses 1 random var
+double dist_inc_scale_symmetry_jac(const state &s,void *object, const vector<double> &randoms){
+  state result=s;
+  double dinc=randoms[0]*0.1; //Uniformly transform inc by up to 1 radian
+  int iinc=2;
+  double df=randoms[0]*0.1; //Uniformly transform inc by up to 0.1 radian
+  double oldinc=s.get_param(iinc);
+  double oldf=log(M_PI/oldinc-1);
+  double newf=oldf+df;
+  double newinc=M_PI/(exp(newf)+1);
+  double fac=pow(sin(oldinc)/sin(newinc),4);
+  if(isnan(fac))
+    cout<<"fac is nan:"<<oldf<<"->"<<newf<<" "<<oldinc<<"->"<<newinc<<" --> fac="<<fac<<endl;;
+  return fac; 
+};
+
+
+
 ///Likelihood function interface variants
 ///
 
 // Least intimate interface for Simplified LISA likelihood not relying on any class
 // Since are is no data, we don't even need a reference object. A struct or vector or
 // other object could be set up if the likelihood needs some data.
-
+// no_class=true option
 double simple_likelihood_evaluate_log_nc(void *object, const state &s){
-    valarray<double>params=s.get_params();
-    double d=params[0];
-    double phi=params[1];
-    double inc=params[2];
-    double lambd=params[3];
-    double beta=params[4];
-    double psi=params[5];
-    double result=simpleCalculateLogLCAmpPhase(d, phi, inc, lambd, beta, psi);
-    //static int count=0;
-    //cout<<count<<endl;
-    //count++;
-    //cout<<"state: "<<s.get_string()<<endl;
-    //cout<<"  logL="<<result<<endl;
-
-    return result;
+  valarray<double>params=s.get_params();
+  double d=params[0];
+  double phi=params[1];
+  double inc=params[2];
+  double lambd=params[3];
+  double beta=params[4];
+  double psi=params[5];
+  double result=simpleCalculateLogLCAmpPhase(d, phi, inc, lambd, beta, psi);
+  //static int count=0;
+  //cout<<count<<endl;
+  //count++;
+  //cout<<"state: "<<s.get_string()<<endl;
+  //cout<<"  logL="<<result<<endl;
+  
+  return result;
 };
-
 
 void simple_likelihood_setup_nc(bayes_likelihood *blike){
   //blike->register_reference_object(*some_object);  //Use this if likelihood needs some data
@@ -117,8 +236,8 @@ void simple_likelihood_setup_nc(bayes_likelihood *blike){
   string names[]={"d","phi","inc","lambda","beta","psi"};
   space.set_names(names);
   space.set_bound(1,boundary(boundary::wrap,boundary::wrap,0,2*M_PI));//set 2-pi-wrapped space for phi.  Turn on if not narrow banding
-  //if(not narrowband)
-  //space.set_bound(3,boundary(boundary::wrap,boundary::wrap,0,2*M_PI));//set 2-pi-wrapped space for lambda.
+  if(not narrowband)
+    space.set_bound(3,boundary(boundary::wrap,boundary::wrap,0,2*M_PI));//set 2-pi-wrapped space for lambda.
   //else space.set_bound(4,boundary(boundary::limit,boundary::limit,0.2,0.6));//set narrow limits for beta
   space.set_bound(5,boundary(boundary::wrap,boundary::wrap,0,M_PI));//set pi-wrapped space for pol.
   
@@ -152,7 +271,10 @@ public:
     string names[]={"d","phi","inc","lambda","beta","psi"};//double phiRef, double d, double inc, double lambd, double beta, double psi) 
     space.set_names(names);
     space.set_bound(1,boundary(boundary::wrap,boundary::wrap,0,2*M_PI));//set 2-pi-wrapped space for phi.  Turn on if not narrow banding
-    if(not narrowband)space.set_bound(3,boundary(boundary::wrap,boundary::wrap,0,2*M_PI));//set 2-pi-wrapped space for lambda.
+    if(not narrowband){
+      space.set_bound(2,boundary(boundary::limit,boundary::limit,0,M_PI));//set 2-pi limited space for lambda.
+      space.set_bound(3,boundary(boundary::wrap,boundary::wrap,0,2*M_PI));//set 2-pi-wrapped space for lambda.
+    }
     //else space.set_bound(4,boundary(boundary::limit,boundary::limit,0.2,0.6));//set narrow limits for beta
     space.set_bound(5,boundary(boundary::wrap,boundary::wrap,0,M_PI));//set pi-wrapped space for pol.
     if(use_basic_setup){
@@ -243,6 +365,8 @@ public:
 class simple_likelihood_ni {
   int idx_phi,idx_d,idx_inc,idx_lambda,idx_beta,idx_psi;
   bayes_likelihood *blike;
+  vector<stateSpaceInvolution> symmetries;
+
 public:
   //simple_likelihood():bayes_likelihood(nullptr,nullptr,nullptr){};
   simple_likelihood_ni(bayes_likelihood *blike):blike(blike){
@@ -259,10 +383,36 @@ public:
     string names[]={"d","phi","inc","lambda","beta","psi"};//double phiRef, double d, double inc, double lambd, double beta, double psi) 
     space.set_names(names);
     space.set_bound(1,boundary(boundary::wrap,boundary::wrap,0,2*M_PI));//set 2-pi-wrapped space for phi.  Turn on if not narrow banding
-    if(not narrowband)space.set_bound(3,boundary(boundary::wrap,boundary::wrap,0,2*M_PI));//set 2-pi-wrapped space for lambda.
+    //maybe this breaks testsuite?
+    if(not narrowband){
+      space.set_bound(2,boundary(boundary::limit,boundary::limit,0,M_PI));//set 2-pi limited space for lambda.
+      space.set_bound(3,boundary(boundary::wrap,boundary::wrap,0,2*M_PI));//set 2-pi-wrapped space for lambda.
+    }
     //else space.set_bound(4,boundary(boundary::limit,boundary::limit,0.2,0.6));//set narrow limits for beta
     space.set_bound(5,boundary(boundary::wrap,boundary::wrap,0,M_PI));//set pi-wrapped space for pol.
 
+    //Set up potential state-space symmetries
+    stateSpaceInvolution LISA_quarter_rotation(space,"LISA_quarter_rotation",1);// 1 means need 1 random number
+    LISA_quarter_rotation.register_transformState(LISA_quarter_rotation_symmetry);
+    stateSpaceInvolution source_quarter_rotation(space,"source_quarter_rotation",1);// 1 means need 1 random number
+    source_quarter_rotation.register_transformState(source_quarter_rotation_symmetry);
+    stateSpaceInvolution LISA_plane_reflection(space,"LISA_plane_reflection",0);
+    LISA_plane_reflection.register_transformState(LISA_plane_reflection_symmetry);
+    stateSpaceInvolution transmit_receive_inc_swap(space,"transmit_receive_inc_swap",0);
+    transmit_receive_inc_swap.register_transformState(transmit_receive_inc_swap_symmetry);
+    stateSpaceInvolution dist_inc_scale(space,"dist_inc_scale",1);
+    dist_inc_scale.register_transformState(dist_inc_scale_symmetry);
+    dist_inc_scale.register_jacobian(dist_inc_scale_symmetry_jac);
+
+    symmetries.push_back(LISA_quarter_rotation);
+    symmetries.push_back(source_quarter_rotation);
+    symmetries.push_back(LISA_plane_reflection);
+    symmetries.push_back(transmit_receive_inc_swap);
+    symmetries.push_back(dist_inc_scale);
+    for(auto & symmetry: symmetries)space.addSymmetry(symmetry);
+ 
+
+    //Set up prior
     vector<double> centers((initializer_list<double>){  1.667,  PI, PI/2,  PI,    0, PI/2});
     vector<double>  scales((initializer_list<double>){  1.333,  PI, PI/2,  PI, PI/2, PI/2});
     vector<string>      types((initializer_list<string>){  "uni","uni", "pol", "uni", "cpol", "uni"});
@@ -275,6 +425,7 @@ public:
     
     blike->basic_setup(&space, types, centers, scales);
   };
+  
   
   static void defWorkingStateSpace(void *object, const stateSpace &sp){
     //In this case we implement *object as a class object very similar to the inherited version
