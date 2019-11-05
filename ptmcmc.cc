@@ -121,11 +121,14 @@ void ptmcmc_sampler::test_prop(){
       if(chain_prior->evaluate_log(top)>logcut and chain_prior->evaluate_log(bottom)>logcut)fits=true;
       else for(auto &s:sigma)s/=2;
       
+      if(fits){
+	gaussian_dist_product dist(chain_prior->get_space(),cent,sigma,true);
+	cout<<"Test distribution is: "<<dist.show()<<endl;
+	test_proposal testprop(*cprop,dist,true,"./",multiindex);
+	fits=testprop.test(10000,500,10,0,0.005);
+	if(not fits)for(auto &s:sigma)s*=4;
+      }
     }
-    gaussian_dist_product dist(chain_prior->get_space(),cent,sigma);
-    cout<<"Test distribution is: "<<dist.show()<<endl;
-    test_proposal testprop(*cprop,dist,true,multiindex);
-    testprop.test(10000,500,10);
 };
 
 proposal_distribution* ptmcmc_sampler::new_proposal_distribution_guts(int Npar, int &Ninit, const sampleable_probability_function * prior, const valarray<double>*halfwidths,

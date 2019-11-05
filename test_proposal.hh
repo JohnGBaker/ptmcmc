@@ -51,15 +51,27 @@ class test_proposal {
   sampleable_probability_function *target_dist=nullptr;
   bool loop;
   chain ch;
+  string path;
 public:
   //test_proposal(proposal_distribution &proposal, shared_ptr<Random> rng){cout<<"The idea is to provide a ready-made test distribution, perhaps a gaussian mixture, perhaps augmented by gaussians located at proposal-step images of the initial gaussian centers.  This is not yet implemented."<<endl;exit(-1);};
-  test_proposal(proposal_distribution &proposalref, sampleable_probability_function &target,bool loop=false, vector<int> index=vector<int>()):
+  test_proposal(proposal_distribution &proposalref, sampleable_probability_function &target, bool loop=false, string path_="", vector<int> index=vector<int>()):
     rng(new MotherOfAll(ProbabilityDist::getPRNG()->Next())),
     proposal(&proposalref),
     target_dist(&target),
-    loop(loop)
+    loop(loop),
+    path(path_)
   {
     //Note: if proposal needs a chain, we may need to make one up with samples from the target dist.
+    //configure output name
+    if(path!=""){
+      //cout<<"path.back()='"<<path.back()<<"'"<<endl;
+      //cout<<(path.back()=='/'?"match":"non-match")<<endl;
+      if(path.back()=='/')path=path+"test_prop";
+      if(index.size()>0)path=path+"_"+to_string(index[0]);
+      if(index.size()>1)for(int i: vector<int>(index.begin()+1,index.end()))path+="-"+to_string(i);
+      cout<<"path='"<<path<<"'"<<endl;
+    }
+			    
     //If proposal is a proposal_set and index is provided, then we access only the sub proposal
     while(index.size()>0){
       proposal_distribution_set *set=dynamic_cast<proposal_distribution_set*>(proposal);
@@ -72,11 +84,37 @@ public:
   };
   
   test_proposal(){};//Trivial constructor for development and testing...
-  vector<state> sample_target_dist(int nsamp){
+  vector<state> sample_target_dist(int nsamp, double maxfail=1e100){
     //make a set of samples from the target distribution
     vector<state> samples(nsamp);
-    for( auto &sample : samples)sample=target_dist->drawSample(*rng);
+    bool done=false;
+    for( auto &sample : samples){
+      int failcount=0;
+      done=false;
+      while(not (done or failcount>maxfail)){
+	sample=target_dist->drawSample(*rng);
+	sample.enforce();
+	if(not sample.invalid())done=true;
+	else failcount++;
+	//if(sample.get_params_vector()==copy.get_params_vector())done=true;
+	//else cout<<"rejected state "<<copy.get_string()<<endl;
+	//No we are using rejection sampling to reject any part of the
+	//target distribution outside of the stateSpace domain
+      }
+      if(not done){
+	cout<<"test_proposal::sample_target_dist: Struggling to find draw valid samples. Bailing out."<<endl;
+	return vector<state>(0);//
+      }
+    }
     return samples;
+  };
+  void write_samples(vector<state> samps, string tag){
+    if(path!=""){
+      string file=path+"_"+tag+".dat";
+      cout<<"Will write to "<<file<<endl;
+      ofstream out(file);
+      for(auto s : samps)out<<s.get_string()<<endl;
+    }
   };
   vector<state> transform_samples(vector<state> &samples, int & Naccept,double hastings_err=0){
     //Apply the proposal via Metropolis-Hastings step, to each sample and return result.
@@ -90,7 +128,10 @@ public:
       //cout<<i<<endl;
       state &oldstate=samples[i];
       double oldlpdf=target_dist->evaluate_log(oldstate);
-      state newstate=proposal->draw(oldstate,&ch); //If prop needs a nontrivial chain then this won't work yet.
+      oldstate.enforce();//this shouldn't be needed
+      if(oldstate.invalid())cout<<"enforcement failure for oldstate "<<oldstate.get_string()<<endl;
+      state newstate=proposal->draw(oldstate,&ch); 
+      newstate.enforce();
       double newlpdf=target_dist->evaluate_log(newstate);
       
       //Now the test: 
@@ -102,11 +143,27 @@ public:
 	double x=rng->Next(); //pick a number
 	accept=(log(x)<log_hastings_ratio);
       }
-      
+
+      //cout<<"old: "<<oldstate.get_string()<<" --> "<<oldlpdf<<endl;
+      //cout<<"new: "<<newstate.get_string()<<" --> "<<newlpdf<<endl;
+      //cout<<"    "<<(accept?"ACCEPTED    ":    "REJECTED")<<endl;
       if(accept){
+	if(newstate.invalid())cout<<"enforcement failure for newstate "<<newstate.get_string()<<endl;
 	Naccept++;
 	proposal->accept(); //As with MCMC, this allows some proposals to 'adapt'
 	transformed[i]=newstate;
+	if(oldstate.dist2(newstate)<1e-16){
+	  cout<<"test_proposal: Transformed state not significantly different."<<endl;
+	  cout<<"                s="<<oldstate.get_string()<<endl;
+	  cout<<"               s'="<<newstate.get_string()<<"  dist2="<<oldstate.dist2(newstate)<<endl;
+	  vector<state> v={oldstate};
+	  involution_proposal *invprop = dynamic_cast<involution_proposal*>(proposal);
+	  if(invprop){
+	    stateSpaceInvolution involution=invprop->get_involution();
+	    cout<<" Intrinsic test:"<<endl;
+	    involution.test_involution(oldstate,-1);
+	  }
+	}
       }
       else {
 	proposal->reject();
@@ -130,8 +187,11 @@ public:
   ///  4. A challenge is knowing what level of difference is significant, and what level is measurable.
   ///     One approach to this is to compare KL measurements of redraws of the original sample with
   ///     those of the transformed set.
-  double test(int Nsamp=10000, double ncyc=5, int ntry=10,double hastings_err=0){
+  ///  5. Note ncyc will be cut back if sampling is too inefficient
+  ///  6. If acceptance rate is < min_accept then will return with failure, otherwise returns true.
+  bool test(int Nsamp=10000, double ncyc=5, int ntry=10, double hastings_err=0, double min_accept=0){
     cout<<"\n\nTesting proposal: "<<proposal->show()<<endl;
+    cout<<"ncyc="<<ncyc<<endl;
     //If loop==true, then we make a new test_proposal object for the sub_proposal, and loop;
     if(loop){
       proposal_distribution_set *set=dynamic_cast<proposal_distribution_set*>(proposal);
@@ -139,25 +199,31 @@ public:
 	auto members=set->members();
 	int n=members.size();
 	cout<<n<<" members in proposal set"<<endl;
-	int i=0;
-	double result=0;
+	int i=1;
 	for(auto member : members){
 	  cout<<"Preparing and testing member "<<i<<" of "<<n<<endl;
-	  test_proposal subtest(*member, *target_dist,true);
-	  result+=subtest.test(Nsamp,ncyc,ntry,hastings_err);
+	  string subpath=path;
+	  if(path!="")subpath=subpath+"-"+to_string(i);
+	  cout<<"subpath='"<<subpath<<"'"<<endl;
+	  test_proposal subtest(*member, *target_dist,true, subpath);
+	  bool ok=subtest.test(Nsamp,ncyc,ntry,hastings_err,min_accept);
+	  if(not ok)return false;
 	  i++;
 	}
-	return result;
+	return true;
       }
     }
 
-    //Draw reference samples
-    vector<state> target_samples=sample_target_dist(Nsamp);
 
+    //Draw reference samples
+    vector<state> target_samples=sample_target_dist(Nsamp,100);
+    if(target_samples.size()<Nsamp)return false;
+    write_samples(target_samples,"target");
+    
     //Perform intrinsic test if any
     string intrinsic_test_result=proposal->test(target_samples,*rng);
     if(intrinsic_test_result!="")cout<<" Intrinsic test:\n"<<intrinsic_test_result<<endl;
-    
+
     //Transform by application of the proposal
     int Naccept_cum=0;
     int Ngoal=ncyc*Nsamp;
@@ -169,11 +235,15 @@ public:
       vector<state> old=transformed;
       transformed=transform_samples(transformed, Naccept,hastings_err);
       Naccept_cum+=Naccept;
-      if(icyc%int(ncyc/5+1)==0)
+      if(icyc%int(ncyc+1)==0)
 	cout<<100.0*Naccept/Nsamp<<"\% accepted,  "<<100.0*Naccept_cum/Ngoal<<" percent done."<<endl;
       if(icyc==2000 and Naccept_cum<Ngoal*0.01){//Not sampling fast enough
 	//Reduce goal for number of cycles
 	ncyc=ncyc/2.0;
+	if(Naccept*1.0/Nsamp<min_accept){
+	  cout<<"Acceptance rate too low. Giving up."<<endl;
+	  return false;
+	}
 	cout<<"Sampling poorly.  Reducing to ncyc="<<ncyc<<endl;
 	//start over
 	Ngoal=ncyc*Nsamp;
@@ -182,6 +252,8 @@ public:
       }	
       icyc++;
     }
+    write_samples(transformed,"transformed");
+
     vector<double> mean,var;
     var=get_sample_var(target_samples,mean);
     cout<<"target mean:      ";for(auto x:mean)cout<<x<<" ";cout<<endl;
@@ -256,13 +328,13 @@ public:
     cout<<"Transformed fKLdiv="<<fKLtransformed<<" <-> "<<fKLtransformedX<<endl;
 
     cout<<"Alt-transformed fKLdiv="<<altfKLtransformed<<" <-> "<<altfKLtransformedX<<endl;
-    if(altfKLtransformed-fKLtransformed>fabs(KLcut))cout<<"When 'Transformed' is signficantly less than 'alt-Transformed' it mayindicates that the effect of the proposal (after ncyc="<<ncyc<<" applications) is too small to measure at this level."<<endl;
+    if(altfKLtransformed-fKLtransformed>fabs(KLcut))cout<<"When 'Transformed' is signficantly less than 'alt-Transformed' it may indicate that the effect of the proposal (after ncyc="<<ncyc<<" applications) is too small to measure at this level."<<endl;
     if(altfKLtransformed<KLcut)cout<<"PASS"<<endl;
     else cout<<"FAIL\nKL value is "<<altfKLtransformed/KLcut<<" times the stated threshold."<<endl;
-    double result=altKLtransformed;
-    if(result<0)result=0;
-    result+=altfKLtransformed;
-    return result;
+    //double result=altKLtransformed;
+    //if(result<0)result=0;
+    //result+=altfKLtransformed;
+    return true;
   };
 	
     double KL_divergence(vector<state> &samplesP,vector<state> &samplesQ,bool approx_nn=true){
