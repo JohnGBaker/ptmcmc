@@ -181,7 +181,6 @@ class state :restartable {
   bool valid;
   const stateSpace *space;
   valarray<double> params;
-  void enforce();
 public:
   //Need assignment operator since default valarray assignment is problematic
   const state& operator=(const state model){space=model.space,valid=model.valid,params.resize(model.size(),0);params=model.params;return *this;};
@@ -222,6 +221,7 @@ public:
     for(int i=0;i<params.size();i++)readDouble(iss,params[i]);
   };
   int size()const{return params.size();}
+  void enforce();
   //some algorithms rely on using the states as a vector space
   virtual state add(const state &other)const;
   virtual state scalar_mult(double x)const;
@@ -438,7 +438,10 @@ public:
   virtual state transformState(const state &s)const override{    
     if(transformState_registered){
       if(have_working_space){
-	return (*user_transformState)(s,user_object,randoms);
+	state transformed=(*user_transformState)(s,user_object,randoms);
+	//Enforce stateSpace limits
+	transformed.enforce();
+	return transformed;
       } else {
 	cout<<"stateSpaceInvolution:: No working state space."<<endl;
 	exit(-1);
@@ -484,15 +487,18 @@ public:
     state image2=transformState(image);
     double jac2=jacobian(image);
     for(auto &x : randoms)x*=-1;//Flip the sign back restore the original random vector
-    state diff = s.add(image2.scalar_mult(-1));
+    //state diff = s.add(image2.scalar_mult(-1));
+    //double err=diff.innerprod(diff);
+    double err=s.dist2(image2);
     double jacdiff=jac*jac2-1;
-    double result=diff.innerprod(diff)+jacdiff*jacdiff;
-    if(result*verbose_lev>1){
+    double result=err+jacdiff*jacdiff;
+    if(verbose_lev<0 or result*verbose_lev>1){
       out<<"test_involution: s="<<s.get_string()<<endl;
       out<<"                s'="<<image.get_string()<<endl;
-      out<<"               s''="<<image2.get_string()<<endl;
+      out<<"               s''="<<image2.get_string()<<"  err="<<err<<endl;
       out<<"   J="<<jac<<endl;
-      out<<"  J'="<<jac2<<endl;
+      out<<"  J'="<<jac2<<"  err="<<jacdiff*jacdiff<<endl;
+      
       if(nrand>0){
 	out<<"randoms: [";
 	for(int i=0;i<nrand;i++){
