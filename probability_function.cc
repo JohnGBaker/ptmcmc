@@ -14,7 +14,7 @@ gaussian_dist_product::gaussian_dist_product(const stateSpace *space,unsigned in
   for(size_t i=0;i<dim;i++)dists[i]=new GaussianDist(x0s[i],sigmas[i]);
 };
 
-gaussian_dist_product::gaussian_dist_product(const stateSpace *space, const valarray<double>&x0s,const valarray<double>&sigmas):x0s(x0s),sigmas(sigmas),sampleable_probability_function(space){
+gaussian_dist_product::gaussian_dist_product(const stateSpace *space, const valarray<double>&x0s,const valarray<double>&sigmas, bool wrap_probability):x0s(x0s),sigmas(sigmas),sampleable_probability_function(space),wrap_probability(wrap_probability){
   dim=x0s.size();
   if(dim!=sigmas.size()){
     cout<<"gaussian_dist_product(constructor): Array sizes mismatch.\n";
@@ -53,7 +53,29 @@ double gaussian_dist_product::evaluate(state &s)const{
   }
   double result=1;
   vector<double> pars=s.get_params_vector();
-  for(uint i=0;i<dim;i++)result*=dists[i]->pdf(pars[i]);
+  if(wrap_probability){
+    for(uint i=0;i<dim;i++){
+      boundary b=space->get_bound(i);
+      double resulti=dists[i]->pdf(pars[i]);
+      if(b.isWrapped()){
+	const double tol=1e-12;
+	double xplus=pars[i],xminus=pars[i],delta=1;
+	double xmin,xmax,width;
+	b.getDomainLimits(xmin,xmax);
+	width=xmax-xmin;
+	int count=0;
+	while(delta>tol and count<100){
+	  xplus+=width;
+	  xminus-=width;
+	  delta=dists[i]->pdf(xminus)+dists[i]->pdf(xplus);
+	  resulti+=delta;
+	  count++;
+	}
+      }
+      result*=resulti;
+    }
+  }
+  else for(uint i=0;i<dim;i++)result*=dists[i]->pdf(pars[i]);
   return result;
 };
 

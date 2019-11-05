@@ -93,11 +93,12 @@ class gaussian_dist_product: public sampleable_probability_function{
   valarray<double> x0s;
   valarray<double> sigmas;
   vector<ProbabilityDist*> dists;
+  bool wrap_probability;
 public:
   gaussian_dist_product(const stateSpace *space,unsigned int N=1);
-  gaussian_dist_product(const stateSpace *space, const valarray<double>&x0s,const valarray<double>&sigmas);
-  gaussian_dist_product(const stateSpace *space, const vector<double>&x0s,const vector<double>&sigmas):
-    gaussian_dist_product(space,valarray<double>(x0s.data(), x0s.size()),valarray<double>(sigmas.data(), sigmas.size()))
+  gaussian_dist_product(const stateSpace *space, const valarray<double>&x0s,const valarray<double>&sigmas,bool wrap_probability=false);
+  gaussian_dist_product(const stateSpace *space, const vector<double>&x0s,const vector<double>&sigmas,bool wrap_probability=false):
+    gaussian_dist_product(space,valarray<double>(x0s.data(), x0s.size()),valarray<double>(sigmas.data(), sigmas.size()), wrap_probability)
   {};
   virtual ~gaussian_dist_product();
   state drawSample(Random &rng)const;
