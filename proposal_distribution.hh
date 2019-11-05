@@ -65,6 +65,7 @@ public:
     outs<<"RMS: "<<sqrt(testsum/samples.size())<<endl;
     return outs.str();
   };
+  stateSpaceInvolution get_involution(){return involution;};
 };
 
 //Draw from a distribution
