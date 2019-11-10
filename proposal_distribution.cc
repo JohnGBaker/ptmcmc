@@ -42,7 +42,7 @@ void reset_bins(vector<double> &shares, vector<double> &bin_max){
   }
 };
 
-proposal_distribution_set::proposal_distribution_set(vector<proposal_distribution*> &props,vector<double> &shares,double adapt_rate,double target_acceptance_rate,bool take_pointers):shares(shares),adapt_rate(adapt_rate),target_acceptance_rate(target_acceptance_rate),own_pointers(take_pointers){
+proposal_distribution_set::proposal_distribution_set(vector<proposal_distribution*> &props,vector<double> &shares_,double adapt_rate,double target_acceptance_rate,bool take_pointers):shares(shares_),adapt_rate(adapt_rate),target_acceptance_rate(target_acceptance_rate),own_pointers(take_pointers){
   //First some checks
   if(props.size()!=shares.size()){
     cout<<"proposal_distribution_set(constructor): Array sizes mismatched.\n";
@@ -102,6 +102,7 @@ state proposal_distribution_set::draw(state &s,chain * caller){
 
 //For the adaptive option, we steer the mixing fraction to opt
 void proposal_distribution_set::accept(){
+  proposal_distribution::accept();
   //Here is the idea:
   //Target acceptance rate = target_acc_rate
   //Then: if two accepts in a row reduce weight scaling rate by target_acc_rate^2
@@ -119,6 +120,7 @@ void proposal_distribution_set::accept(){
 };
 
 void proposal_distribution_set::reject(){
+  proposal_distribution::reject();
   //Here is the idea:
   //Target acceptance rate = target_acc_rate
   //Then: if two accepts in a row reduce weight scaling rate by target_acc_rate^2
@@ -135,17 +137,30 @@ void proposal_distribution_set::reject(){
   proposals[last_dist]->reject();
 };
 
-string proposal_distribution_set::report(){//For status reporting on adaptive
+string proposal_distribution_set::report(int style){//For status reporting on adaptive
   ostringstream ss;
-  
-  ss<<"shares=["<<shares[0]<<proposals[0]->report();
-  for(int i=1;i<Nsize;i++){
-    ss<<","<<shares[i];
-    ss<<proposals[i]->report();
+  if(style==0){
+    ss<<proposal_distribution::report(style)<<":";
+    ss<<"["<<proposals[0]->report(style);
+    for(int i=1;i<Nsize;i++){
+      ss<<",";
+      string rep=proposals[i]->report(style);
+      if(rep!="") ss<<proposals[i]->report(style);
+    }
+    ss<<"]";
+  } else if(style==1){
+    string rep=proposals[0]->report(style);
+    ss<<"shares=["<<shares[0];
+    if(rep!="")ss<<":"<<rep;
+    for(int i=1;i<Nsize;i++){
+      ss<<","<<shares[i];
+      string rep=proposals[i]->report(style);
+      if(rep!="") ss<<":"<<rep;
+    }
+    ss<<"]";
   }
-  ss<<"]";
   return ss.str();
-    
+  
 };
 
 string proposal_distribution_set::show(){

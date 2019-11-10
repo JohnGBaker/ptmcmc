@@ -883,6 +883,7 @@ void MH_chain::step(proposal_distribution &prop,void *data){
     double oldlprior=current_lpost-invtemp*current_llike;
     //state newstate=prop.draw(current_state,*rng);
     state newstate=prop.draw(current_state,this);
+    //newstate.enforce();
     double newlike,newlpost,newlprior=lprior->evaluate_log(newstate);
     //cout<<"MH_chain::step: newlprior="<<newlprior<<endl;
     if((!newstate.invalid())&&((!current_lpost>-1e200&&newlprior>-1e200)||newlprior-oldlprior>minPrior)){//Avoid spurious likelihood calls where prior effectively vanishes. But try anyway if current_lpost is huge. 
@@ -1052,9 +1053,9 @@ string MH_chain::status(){
     return s.str();
 };
 
-string MH_chain::report_prop(){
+string MH_chain::report_prop(int style){
   if(default_prop_set)
-    return default_prop->report();
+    return default_prop->report(style);
   else return "NoProp";
 };
 
@@ -1991,10 +1992,10 @@ string parallel_tempering_chains::status(){
   return s.str();
 };
  
-string parallel_tempering_chains::report_prop(){//Not yet MPI aware
+string parallel_tempering_chains::report_prop(int style){//Not yet MPI aware
   ostringstream result("");
   for(auto i: mychains)
-    result<<" T="<<temps[i]<<"; "<<props[i]->report()<<endl;//"; "<<chains[i].show();
+    result<<" T="<<temps[i]<<"; "<<props[i]->report(style)<<endl;//"; "<<chains[i].show();
   return result.str();
 };
 

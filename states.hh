@@ -404,10 +404,12 @@ class stateSpaceTransformND : public stateSpaceTransform {
 ///state transform is the same as the forward state transform.  We provide a test to verify this property.
 ///
 ///We also allow functions which depend on an additional vector of uniform random numbers of length nrand, with
-///values in (-1,1).  These can represent continuous symmetries.  In this case, despite the name, the transform
-///need not be its own inverse.  Rather the inverse should be acheived by reversing the sign on the random
+///values in (-1,1).  These can represent continuous symmetries.  In this case, the transform is an involution
+///on the product of the stateSpace together with nrand copies of the signed unit interval. It need not be its
+//own inverse on the stateSpace alone.  Rather the inverse should be acheived by reversing the sign on the random
 ///vector.  If a family of point-wise involutions is required, then the function should depend only on the
-///absolute value of each random number.
+///absolute value of each random number. With nrand>0 the Jacobian function should provide the Jacobian on the
+///full space including the random components.
 ///
 ///Note that this is still in development and we may generalize this further beyond involutions or even beyond
 ///endomorphisms.  The interface should be considered volatile for now.

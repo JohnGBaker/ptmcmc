@@ -70,12 +70,12 @@ void ptmcmc_sampler::select_proposal(){
     cprop=new_proposal_distribution_guts(Npar, chain_Ninit, chain_prior, &scales, proposal_option, SpecNinit, tmixfac, reduce_gamma_by, de_eps, gauss_1d_frac,de_mixing,prop_adapt_rate,adapt_more,gauss_draw_frac,cov_draw_frac,gauss_temp_scaled,covariance_file);
     cout<<"sym_prop_frac="<<sym_prop_frac<<" nsym="<<chain_prior->get_space()->get_potentialSyms().size()<<endl;
     if(sym_prop_frac>0 and chain_prior->get_space()->get_potentialSyms().size()>0){
-      cout<<"Adding stateSpace potential symmetries to proposal."<<endl;
-      proposal_distribution_set *symprops=involution_proposal_set(*chain_prior->get_space()).clone();
-      vector<proposal_distribution*> props={cprop,symprops};
-      vector<double> shares={1-sym_prop_frac,sym_prop_frac};
       double rate=0;
       if(adapt_more)rate=prop_adapt_rate;
+      cout<<"Adding stateSpace potential symmetries to proposal."<<endl;
+      proposal_distribution_set *symprops=involution_proposal_set(*chain_prior->get_space(),rate).clone();
+      vector<proposal_distribution*> props={cprop,symprops};
+      vector<double> shares={1-sym_prop_frac,sym_prop_frac};
       cprop=new proposal_distribution_set(props,shares,rate);
     }
     //cprop=new_proposal_distribution(Npar, chain_Ninit, opt, chain_prior, scales);
@@ -87,9 +87,22 @@ void ptmcmc_sampler::test_prop(){
     //Perform propopsal testing if called for
     string indexstring;(*optValue("prop_test_index"))>>indexstring;
     cout<<"indexstring='"<<indexstring<<"'"<<endl;
-    vector<int> multiindex;
     if(indexstring.length()==0)return;
-    if(indexstring!="."){
+    //Look for "+" at the end to to potentially increase rigor of the testing
+    int rigor=0;
+    while((not indexstring.empty()) and indexstring.back()=='+'){
+      rigor++;
+      indexstring.pop_back();
+    }
+    //Check for L to indicate looping
+    bool looping=false;
+    if((not indexstring.empty()) and indexstring.back()=='L'){
+      looping=true;
+      indexstring.pop_back();
+    }
+    //Process multiindex
+    vector<int> multiindex;
+    if(indexstring!="." and not indexstring.empty()){
       //Parse the index string
       stringstream ss(indexstring);
       string elem;
@@ -124,8 +137,11 @@ void ptmcmc_sampler::test_prop(){
       if(fits){
 	gaussian_dist_product dist(chain_prior->get_space(),cent,sigma,true);
 	cout<<"Test distribution is: "<<dist.show()<<endl;
-	test_proposal testprop(*cprop,dist,true,"./",multiindex);
-	fits=testprop.test(10000,500,10,0,0.005);
+	int fac=pow(2,rigor);
+	int samples=10000*fac,ncyc=500*fac,tries=10*fac;	
+	cout<<"Testing on "<<samples<<" samples, applying proposal through "<<ncyc<<" cycles and calibrating with "<<tries<<" trials."<<endl;
+	test_proposal testprop(*cprop,dist,looping,"./",multiindex);
+	fits=testprop.test(samples,ncyc,tries,0,0.005);
 	if(not fits)for(auto &s:sigma)s*=4;
       }
     }
@@ -473,7 +489,7 @@ void ptmcmc_sampler::addOptions(Options &opt,const string &prefix){
   addOption("de_reduce_gamma","Differential Evolution reduce gamma parameter by some factor from nominal value. Default=4.","4");
   addOption("de_mixing","Differential-Evolution support mixing of parallel chains.");
   addOption("de_Tmix","Differential-Evolution degree to encourage mixing info from different temps.(default=300)","300");
-  addOption("prop_test_index","String providing (multi-)index value indicating proposal to test. (eg '.' for all, '0-1' for second member of first member of nested set, Default: no test)","");
+  addOption("prop_test_index","String providing (multi-)index value indicating proposal to test. Append L to loop and +s for more rigor. (eg '.' for all, '0-1L+' for rigorous test looping over sub-proposals below second member of first member of nested set, Default: no test)","");
   addOption("chain_init_file","Specify chain file from which to draw initializtion points, rather than from prior.","");  
   addOption("chain_ess_stop","Stop MCMC sampling the first time the specified effective sample size is reached. (default never)","-1.0");
   
@@ -664,7 +680,7 @@ int ptmcmc_sampler::run(const string & base, int ic){
           #endif
 	  if(nproc>1){
 	    if(istep==0 and reporting())cout<<"No proposal reports with multiple MPI procs."<<endl;
-	  } else cout<<"Proposal report:\n"<<cc->report_prop()<<endl;	  
+	  } else cout<<"Proposal report:\n"<<cc->report_prop(1)<<"\nacceptance report:\n"<<cc->report_prop(0)<<endl;	  
 	}
 	if(reporting())cout<<"Effective sample size test"<<endl;
 	auto ess_len=cc->report_effective_samples(-1,save_every*1000,save_every);

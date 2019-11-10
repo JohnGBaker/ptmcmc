@@ -121,6 +121,7 @@ public:
     //Number of acceptances goes in Naccept
     //set hastings_err!=0 to force a nontrivial test (even with a good proposal)
     Naccept=0;
+    int nsame=0;double report_thresh=0.01,threshstep=0.01;
     size_t N=samples.size();
     vector<state> transformed(N);
     
@@ -153,15 +154,21 @@ public:
 	proposal->accept(); //As with MCMC, this allows some proposals to 'adapt'
 	transformed[i]=newstate;
 	if(oldstate.dist2(newstate)<1e-16){
-	  cout<<"test_proposal: Transformed state not significantly different."<<endl;
-	  cout<<"                s="<<oldstate.get_string()<<endl;
-	  cout<<"               s'="<<newstate.get_string()<<"  dist2="<<oldstate.dist2(newstate)<<endl;
-	  vector<state> v={oldstate};
-	  involution_proposal *invprop = dynamic_cast<involution_proposal*>(proposal);
-	  if(invprop){
-	    stateSpaceInvolution involution=invprop->get_involution();
-	    cout<<" Intrinsic test:"<<endl;
-	    involution.test_involution(oldstate,-1);
+	  nsame++;
+	  if(nsame>Naccept*report_thresh){
+	    report_thresh+=threshstep;
+	    cout<<"test_proposal: Transformed state not significantly different."<<endl;
+	    cout<<" Nsame/Naccept"<<nsame<<"/"<<Naccept<<"="<<nsame*1.0/Naccept<<endl;	     
+	    cout<<"                s="<<oldstate.get_string()<<endl;
+	    cout<<"               s'="<<newstate.get_string()<<"  dist2="<<oldstate.dist2(newstate)<<endl;
+	    
+	    vector<state> v={oldstate};
+	    involution_proposal *invprop = dynamic_cast<involution_proposal*>(proposal);
+	    if(invprop){
+	      stateSpaceInvolution involution=invprop->get_involution();
+	      cout<<" Intrinsic test:"<<endl;
+	      involution.test_involution(oldstate,-1);
+	    }
 	  }
 	}
       }
@@ -457,6 +464,8 @@ public:
     //This applies a simplified alternative to the KL divergence (which is difficult to compute accurately from samples).
     //The calculation is based on the means and variances of the two samples and would agree with the KL diverences
     //for large samples of Gaussian distributions.
+    //The KL-divergence between two Gaussians is
+    // 2 KLdiv(P,Q) = Tr [ cov(P) cov(Q)^-1 ]- dim - log | cov(P) cov(Q)^-1 | - (mu(P)-mu(Q))^t cov(Q)^-1 (mu(P)-mu(Q))^t
     Eigen::MatrixXd covP,covQ,invCovQ,covPinvCovQ;
     Eigen::VectorXd meanP,meanQ,dmu;
     covP=get_sample_cov(samplesP,meanP);

@@ -22,9 +22,11 @@ class proposal_distribution {
 protected:
   double log_hastings;
   int last_type;
+  int accept_count;
+  int reject_count;
 public:
   virtual ~proposal_distribution(){};
-  proposal_distribution(){log_hastings=0;last_type=0;};
+  proposal_distribution(){log_hastings=0;last_type=0;accept_count=0;reject_count=0;};
   virtual double log_hastings_ratio(){return log_hastings;};//(proposal part of Hasting ratio for most recent draw;
   virtual void set_chain(chain *c){};//Not always needed.
   //virtual state draw(state &s,Random &rng){return s;};//The base class won't be useful.
@@ -36,9 +38,13 @@ public:
   ///Return type of draw (where that is relevant, otherwise 0)
   virtual int type(){return last_type;}
   virtual bool support_mixing(){return false;}
-  virtual void accept(){};//external trigger to indicate that proposal was accepted (available for adaptive proposals)
-  virtual void reject(){};//external trigger to indicate that proposal was rejected (available for adaptive proposals)
-  virtual string report(){return "";};//For status reporting from adaptive proposals
+  virtual void accept(){accept_count++;};//external trigger to indicate that proposal was accepted (available for adaptive proposals)
+  virtual void reject(){reject_count++;};//external trigger to indicate that proposal was rejected (available for adaptive proposals)
+  virtual string report(int style=0){;//For status reporting on acceptance rate(0) or adaptive shares(1)
+    ostringstream ss;
+    if(style==0)ss<<accept_count*1.0/(accept_count+reject_count)<<"("<<accept_count<<")";
+    return ss.str();
+  };
   virtual string test(const vector<state> &samples,Random &rng){return "";};//Perform an intrinsic test and return the output
 };
 
@@ -193,7 +199,7 @@ class proposal_distribution_set: public proposal_distribution{
 public:
   virtual ~proposal_distribution_set(){if(own_pointers){for(auto prop:proposals)if(prop)delete prop;}};//delete proposals
   virtual proposal_distribution_set* clone()const;
-  proposal_distribution_set(vector<proposal_distribution*> &props,vector<double> &shares,double adapt_rate=0,double target_acceptance_rate=0.2,bool take_pointers=true);
+  proposal_distribution_set(vector<proposal_distribution*> &props,vector<double> &shares,double adapt_rate=0,double target_acceptance_rate=0.5,bool take_pointers=true);
   ///For proposals which draw from a chain, we need to know which chain
   void set_chain(chain *c){for(int i=0;i<Nsize;i++)proposals[i]->set_chain(c);};
   ///Randomly select from proposals i in 0..n and draw.
@@ -203,12 +209,12 @@ public:
   void accept();
   void reject();
   string show();
-  string report();//For status reporting on adaptive
+  string report(int style=0);//For status reporting on acceptance rate(0) or adaptive shares(1)
   vector<proposal_distribution*>  members()const{return proposals;}; 
 };
 
 ///Convenience constructor for a set of involution proposals based on the state
-proposal_distribution_set involution_proposal_set(const stateSpace &space,double adapt_rate=0,double target_acceptance_rate=0.2);
+proposal_distribution_set involution_proposal_set(const stateSpace &space,double adapt_rate=0,double target_acceptance_rate=0.5);
 
 ///DifferentialEvolution
 ///Based mainly on (ter Braak and Vrugt 08, Stat Comput (2008) 18: 435–446)
