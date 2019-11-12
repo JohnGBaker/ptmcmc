@@ -47,6 +47,15 @@ cpdef Quit():
 random.seed()
 resetRNGseed(random.random())
 
+#General purpose
+#cdef np.ndarray[np.npy_double, ndim=1, mode='c'] get_vector(vector[double] vals):
+#    result=np.zeros(vals.size())
+#    for i in range(vals.size()):result[i]=vals[i]
+#    return result
+cdef object get_vector(vector[double] vals):
+    result=[0]*vals.size()
+    for i in range(vals.size()):result[i]=vals[i]
+    return result
 
 
 cdef class boundary:
@@ -104,7 +113,8 @@ cdef class stateSpace:
             self.space=states.stateSpace(<int>dim)
             self.spaceptr=&self.space
             self.constpointer=False
-            
+        self.potentialSyms=[]
+        
     cpdef void set_bound(self, str name, boundary b):
         #print('set_bound for ',name)
         if self.constpointer: return #maybe raise an exception
@@ -138,6 +148,11 @@ cdef class stateSpace:
     cpdef str show(self):
         return (self.spaceptr.show()).decode('UTF-8')
 
+    cpdef bool addSymmetry(self, involution sym):
+        self.potentialSyms.append(sym)
+        return self.space.addSymmetry(sym.cinv[0])
+                      
+
 """
 cdef double nada(void * obj,const states.state &s)nogil:
     printf(" th in:%i\n",PyEval_ThreadsInitialized())
@@ -152,14 +167,24 @@ cdef class state:
     """
     
     #start with ref to c++ instance, need a pointer if supporting inheritance?
-    def __cinit__(self, stateSpace space=None, list values=None):
+    def __cinit__(self, object space_or_state=None, list values=None):
+
         """
         Versions of constructor:
           stateSpace(space=stateSpace,values=list)  :  set state from list of values
         """
-
-        if values is not None  and space is not None:
-            self.set_from_list(space,values)
+        cdef stateSpace space
+        if space_or_state is not None:
+            if type(space_or_state) is state:
+                space=space_or_state.getSpace()
+                if values is None:values=space_or_state.get_params()
+            elif type(space_or_state) is stateSpace:
+                space=space_or_state
+            else:
+                raise ValueError("state constructor: space_or_state argument should be a state or stateSpace. Got type '"+str(type(space_or_state))+"'")
+            if values is not None:
+                self.set_from_list(space,values)
+                
     cdef set_from_list(self,stateSpace sp,list values):
             cdef vector[double] valuesvec
             valuesvec.resize(len(values))
@@ -169,7 +194,10 @@ cdef class state:
         self.cstate=states.state(obj)
     cpdef str get_string(self):
         return (self.cstate.get_string()).decode('UTF-8')
-    cpdef np.ndarray[np.npy_double, ndim=1, mode='c'] get_params(self):
+    cpdef object get_params(self):
+        cdef vector[double] params=self.cstate.get_params_vector()
+        return get_vector(params)
+    cpdef np.ndarray[np.npy_double, ndim=1, mode='c'] get_params_np(self):
         cdef vector[double] params=self.cstate.get_params_vector()
         result=np.zeros(params.size())
         for i in range(params.size()):result[i]=params[i]
@@ -181,6 +209,66 @@ cdef class state:
     cpdef str show(self):
         return (self.cstate.show()).decode('UTF-8')
 
+cdef class involution:
+    """
+    User should define a class to inherit from this one overriding evaluate_log()
+    """
+
+    #cdef states.stateSpaceInvolution *cinv
+    #cdef have_init
+
+    def __cinit__(self, stateSpace sp, str label,int nrand, transformState_func,jacobian_func=None, timing_every=0):
+        print("Constructing involution '"+label+"' = "+str(self)+"  nrand="+str(nrand)+"\n  transformState_func type="+str(type(transformState_func)))
+        self.label=label
+        cdef string clabel=label.encode('UTF-8')
+        if(timing_every>0):
+            self.timer.every=timing_every
+            self.cinv=new states.stateSpaceInvolution(sp.space,clabel,nrand,&self.timer)
+        else:
+            self.cinv=new states.stateSpaceInvolution(sp.space,clabel,nrand)
+
+        self.cinv.register_transformState(<states.state (*)(void *object, const states.state &s, const vector[double] &randoms)>self.call_transformState)
+        self.transformState=transformState_func
+        if jacobian_func is not None:
+            self.cinv.register_jacobian(<double (*)(void *object, const states.state &s, const vector[double] &randoms)>self.call_jacobian)
+            self.jacobian=jacobian_func
+        self.cinv.register_reference_object(<void*>self)
+
+
+    def __dealloc__(self):
+        print("deallocating involution '"+self.label+"' = "+str(self))
+        del self.cinv
+        
+    cdef states.state call_transformState(self, const states.state &s, const vector[double] &randoms) with gil:
+        #A note on performance: Testing involution proposals via python is typically
+        #much slower than in C++. In an example where C++ realizes the state transform
+        #in 100ns, even doing nothing here requires 250ns.  Doing nothing in
+        #self.transformState require 700ns (7x slower than C++) while a basic python
+        #implementation of the same thing takes 2600ns.  This makes testing slow, but
+        #these times are still very small compared to typical likelihood evals.
+        #
+        #print("Transforming state")
+        #print("'"+self.label+"'  transformState_func type="+str(type(self.transformState)))
+        #cdef int tid=openmp.omp_get_thread_num()
+        #print('Acquired GIL: Thread',tid)
+        st=state()
+        st.cstate=states.state(s)
+        #+200ns to here
+        #cdef np.ndarray[np.npy_double, ndim=1, mode='c'] rnd=get_vector(randoms)
+        #return st.cstate
+        #listresult=self.transformState(st)
+        #cdef state result=state(st.getSpace(),listresult)
+        cdef state result=self.transformState(st,get_vector(randoms))
+        #print("Transformed state")
+        return result.cstate
+    
+    cdef double call_jacobian(self, const states.state &s, const vector[double] &randoms) with gil:
+        st=state()
+        st.cstate=states.state(s)
+        result=self.jacobian(st,get_vector(randoms)) #should retern a list of param values
+        return result
+    
+
 
 cdef class likelihood:
     """
@@ -188,6 +276,7 @@ cdef class likelihood:
     """
 
     cdef bayesian.bayes_likelihood *like
+    cdef stateSpace space
     def __cinit__(self):
         self.like=new bayesian.bayes_likelihood()
         #check_posterior #User can set to false to skip checks for unreasonable posterior values
@@ -220,6 +309,7 @@ cdef class likelihood:
         
     cpdef void basic_setup( self, stateSpace space, list types, list centers, list scales):
         cdef int n=space.size()
+        self.space=space #We hold on to this so it doesn't go out of scope
         cdef vector[string] typesvec
         cdef vector[double] centersvec
         cdef vector[double] scalesvec

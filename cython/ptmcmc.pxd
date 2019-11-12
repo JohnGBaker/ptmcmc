@@ -40,20 +40,33 @@ cdef class stateSpace:
     cdef states.stateSpace space  #should this be changed to a pointer?
     cdef const states.stateSpace *spaceptr
     cdef bool constpointer
+    cdef object potentialSyms
     cpdef void set_bound(self, str name, boundary b)
     cpdef void set_names(self, list stringnames)
     cpdef int size(self)
     cpdef int requireIndex(self, str name)
     cdef void point(self, const states.stateSpace *sp)
     cpdef str show(self)
-
+    cpdef bool addSymmetry(self, involution sym)
 
 cdef class state:
     cdef states.state cstate
     cdef set_from_list(self,stateSpace sp,list values)
     cdef wrap(self,states.state obj)
     cpdef str get_string(self)
-    cpdef np.ndarray[np.npy_double, ndim=1, mode='c'] get_params(self)
+    cpdef object get_params(self)
+    cpdef np.ndarray[np.npy_double, ndim=1, mode='c'] get_params_np(self)
     cpdef stateSpace getSpace(self)
     cpdef str show(self)
+
+cdef class involution:
+    cdef states.stateSpaceInvolution *cinv
+    cdef object transformState
+    cdef object jacobian
+    cdef str label
+    cdef states.timing_data timer
+    cdef states.state call_transformState(self, const states.state &s, const vector[double] &randoms)with gil
+    cdef double call_jacobian(self, const states.state &s, const vector[double] &randoms)with gil
+    
+
 

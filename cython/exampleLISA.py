@@ -22,13 +22,15 @@ import numpy as np
 import ptmcmc
 import random
 import pyximport; pyximport.install()
-import simple_likelihood_funcs
+import math
+
+#import simple_likelihood_funcs
 import sys
 
 MTSUN_SI=4.9254923218988636432342917247829673e-6
 PI=3.1415926535897932384626433832795029
 I = complex(0.0, 1.0)
-narrowband=True
+narrowband=False
 
 # Routines for simplified likelihood 22 mode, frozen LISA, lowf, fixed masses (near 1e6) and fixed t0
 def funcphiL(m1, m2, tRef, phiRef):
@@ -75,6 +77,161 @@ def simpleCalculateLogLCAmpPhase(d, phiL, inc, lambdL, betaL, psiL):
   #simplelogL = -1./2 * factor * ( (sa - sainj).real**2+(sa-sainj).imag**2 + (se - seinj).real**2+ (se-seinj).imag**2)
   return simplelogL
 
+#Implementing potential parameter space symmetries
+#These class definitions are of a standard form needed for specifying (potential)
+#symmetries of the parameter state space, and can be exploited as
+#specialized MCMC proposals.
+
+#TDI A/E symmetric (in stationary/low-freq limit) half rotation of constellation or quarter rotation with polarization flip
+#uses 1 random var
+
+halfpi=PI/2;
+idist=0
+iphi=1
+iinc=2
+ilamb=3
+ibeta=4
+ipsi=5;
+    
+def LISA_quarter_rotation_symmetry_transf(s, randoms): 
+    #print("applying quarter rotation")
+    #sp=s.getSpace()
+    #ilamb=sp.requireIndex("lambda")
+    #ipsi=sp.requireIndex("psi")   #Takes an extra us to do this step, slows testing
+    parvals=s.get_params()
+    nrot=randoms[0]
+    nrot=int(abs(randoms[0])*2)+1
+    if(randoms[0]<0):nrot=-nrot;
+    lamb=parvals[ilamb]
+    psi=parvals[ipsi]
+    lamb+=nrot*halfpi;
+    if(abs(nrot)%2==1):psi+=halfpi;
+    parvals[ilamb]=lamb
+    parvals[ipsi]=psi
+    #print("applied quarter rotation")
+    return ptmcmc.state(s,parvals);
+
+def source_quarter_rotation_symmetry_transf(s, randoms): 
+    #sp=s.getSpace()
+    #ilamb=sp.requireIndex("lambda")
+    #ipsi=sp.requireIndex("psi")   #Takes an extra us to do this step, slows testing
+    iphi=1
+    ipsi=5
+    param=s.get_params()
+    nrot=randoms[0]
+    nrot=int(abs(randoms[0])*2)+1
+    if(randoms[0]<0):nrot=-nrot;
+    phi=param[iphi]
+    psi=param[ipsi]
+    phi+=nrot*halfpi;
+    if(abs(nrot)%2==1):psi+=halfpi;
+    param[iphi]=phi
+    param[ipsi]=psi
+    return ptmcmc.state(s,param);
+
+#TDI A/E symmetric (in stationary/low-freq limit) relection through constellation plane, simultaneous with source plane reflection and polarization flip
+#Uses 0 random vars
+def LISA_plane_reflection_symmetry_transf(s, randoms): 
+    param=s.get_params()
+    beta=param[ibeta]
+    psi=param[ipsi]
+    inc=param[iinc]
+    inc=PI-inc;
+    beta=-beta;
+    psi=PI-psi;
+    param[iinc]=inc
+    param[ibeta]=beta
+    param[ipsi]=psi
+    return ptmcmc.state(s,param);
+
+def transmit_receive_inc_swap_symmetry_transf(s, randoms): 
+    param=s.get_params()
+    phi=param[iphi]
+    inc=param[iinc]
+    lamb=param[ilamb]
+    beta=param[ibeta]
+    psi=param[ipsi]
+    theta=halfpi-beta
+    twopsi=2*psi
+    ti4=math.tan(inc/2)**4;
+    tt4=math.tan(theta/2)**4;
+    Phi=math.atan2(math.sin(twopsi)*(ti4-tt4),math.cos(twopsi)*(ti4+tt4))/2;
+    param[iinc]=theta
+    param[ibeta]=halfpi-inc
+    param[iphi]=phi-Phi#sign differs from that in notes
+    param[ilamb]=lamb-Phi
+    return ptmcmc.state(s,param);
+
+#Approximate distance inclination symmetry
+#uses 2 random var
+dist_inc_jump_size=0.1;
+def dist_inc_scale_symmetry_transf(s, randoms): 
+    #We apply a symmetry to preserve d'*F(x')=d*F(x) where F(x)=1/cos(x)^2
+    #Depending on the sign of the second random number, x is either the source inclination, or the
+    #line-of-sight inclination relative to the LISA plane, theta=pi/2-beta;
+    #To avoid issues at the edges we make sure that the transformation of the inclination
+    #never crosses its limits.
+    #Note that f:x->ln(pi/x-1) has range (inf,-inf) on domain (0,pi) with f(pi-x)=-f(x)
+    #and inverse pi/(exp(f(x))+1)=x
+    #We then step uniformly in f(x). So, for random number y,
+    # x'=finv(f(x)+y)
+    param=s.get_params()
+    use_theta=False;
+    if(abs(randoms[1]*2)<1): #Half of the time we apply the transformation to theta (LISA includination) rather than source inclination
+      use_theta=True
+      oldalt=halfpi-param[ibeta]
+    else:
+      oldalt=param[iinc]
+    dist=param[idist]
+    df=randoms[0]*dist_inc_jump_size #Uniformly transform reparameterized inc
+    oldf=math.log(PI/oldalt-1);
+    newf=oldf+df;
+    newalt=PI/(math.exp(newf)+1);
+    cosold=math.cos(oldalt)
+    cosnew=math.cos(newalt)
+    fac=cosnew/cosold;
+    #double fac=(cosnew*cosnew+1)/(cosold*cosold+1);
+    dist=dist*fac;
+    param[idist]=dist
+    if(use_theta):
+      param[ibeta]=halfpi-newalt #convert back to beta
+    else:
+      param[iinc]=newalt
+    return ptmcmc.state(s,param);
+
+#Approximate distance inclination symmetry jacobian
+#uses 1 random var
+def dist_inc_scale_symmetry_jac(s, randoms): 
+    #The transformation has the form:
+    #  d' = d F(x)/F'(x')
+    #  x' = finv( f(x) + y )
+    #  y' = -y
+    #where x is the selected inclination variable and y is the random number.
+    #The Jacobian is then -F(x)f'(x) / (F(x')f'(x'))
+    #Because the random step is performed on the rescaled inclination f(x)=ln(pi/x-1)
+    #we have 1/f'(x) = x(1-x/pi)
+    param=s.get_params()
+    use_theta=False
+    if(abs(randoms[1]*2)<1): #Half of the time we apply the transformation to theta (LISA includination) rather than source inclination
+      use_theta=True
+      oldalt=halfpi-param[ibeta]
+    else:
+      oldalt=param[iinc]
+    dist=param[idist]
+    df=randoms[0]*dist_inc_jump_size #Uniformly transform reparameterized inc
+    oldf=math.log(PI/oldalt-1);
+    newf=oldf+df;
+    newalt=PI/(math.exp(newf)+1);
+    cosold=math.cos(oldalt)
+    cosnew=math.cos(newalt)
+    fac=cosnew/cosold;
+    fac*=(PI-newalt)*newalt/(PI-oldalt)/oldalt;
+    return fac; 
+
+
+def trivial_transf(s, randoms): 
+    return s
+
 class simple_likelihood(ptmcmc.likelihood):
     def __init__(self):
 
@@ -87,7 +244,21 @@ class simple_likelihood(ptmcmc.likelihood):
         #if(not narrowband):space.set_bound('lambda',ptmcmc.boundary('wrap','wrap',0,2*PI))
         #else: space.set_bound('beta',ptmcmc.boundary('limit','limit',0.2,0.6))
         space.set_bound('psi',ptmcmc.boundary('wrap','wrap',0,PI))
+        if(not narrowband):
+            space.set_bound("d",ptmcmc.boundary("limit","limit",0,30)) #set 2-pi limited space for lambda.
+            space.set_bound("inc",ptmcmc.boundary("limit","limit",0,PI)) #set 2-pi limited space for lambda.
+            space.set_bound("lambda",ptmcmc.boundary("wrap","wrap",0,2*PI)) #set 2-pi-wrapped space for lambda.
+            space.set_bound("beta",ptmcmc.boundary("limit","limit",-PI/2,PI/2)) #set limited space for beta.
 
+        #Add potential symmetries
+        tevery=1000000; #1000000 for timing test
+        space.addSymmetry(ptmcmc.involution(space,"LISA_quarter_rotation",1,LISA_quarter_rotation_symmetry_transf,timing_every=tevery))
+        space.addSymmetry(ptmcmc.involution(space,"source_quarter_rotation",1,source_quarter_rotation_symmetry_transf,timing_every=tevery))
+        space.addSymmetry(ptmcmc.involution(space,"LISA_plane_reflection",0,LISA_plane_reflection_symmetry_transf,timing_every=tevery))
+        space.addSymmetry(ptmcmc.involution(space,"transmit_receive_inc_swap",0,transmit_receive_inc_swap_symmetry_transf,timing_every=tevery))
+        space.addSymmetry(ptmcmc.involution(space,"dist_inc_scale",2,dist_inc_scale_symmetry_transf,dist_inc_scale_symmetry_jac,timing_every=tevery))
+        #space.addSymmetry(ptmcmc.involution(space,"trivial",1,trivial_transf))
+        
         #Set up prior
         centers= [ 1.667,    PI,    PI/2,    PI,       0,    PI/2]
         scales=  [ 1.333,    PI,    PI/2,    PI,    PI/2,    PI/2]
@@ -107,8 +278,8 @@ class simple_likelihood(ptmcmc.likelihood):
         lambd=params[3]
         beta=params[4]
         psi=params[5]
-        #result=simpleCalculateLogLCAmpPhase(d, phi, inc, lambd, beta, psi);
-        result=simple_likelihood_funcs.simpleCalculateLogLCAmpPhase(d, phi, inc, lambd, beta, psi);
+        result=simpleCalculateLogLCAmpPhase(d, phi, inc, lambd, beta, psi);
+        #result=simple_likelihood_funcs.simpleCalculateLogLCAmpPhase(d, phi, inc, lambd, beta, psi);
         #if False:
         #  global count
         #  print(count)
@@ -125,7 +296,7 @@ count=0
 #//main test program
 def main(argv):
 
-
+    ptmcmc.Init() 
     #//prep command-line options
     #Options opt(true);
     opt=ptmcmc.Options()

@@ -32,6 +32,7 @@ cdef extern from '../states.hh' :
         #void replaceParam(int i, const string &newname, const boundary &newbound)
         #^ TBD
         #void attach(const stateSpace &other)
+        bool addSymmetry(stateSpaceInvolution &involution);
 
     cdef cppclass state:
         
@@ -64,6 +65,21 @@ cdef extern from '../states.hh' :
         #void restart(string path)override
         #string save_string()const
         #void restore_string(const string s)
+
+    cdef cppclass stateSpaceInvolution:
+        stateSpaceInvolution() except+
+        stateSpaceInvolution(const stateSpace &sp,string label,int nrand) except+
+        stateSpaceInvolution(const stateSpace &sp,string label,int nrand,timing_data * timer) except+
+        
+        void register_reference_object(void *object)
+        void register_transformState(state (*function)(void *object, const state &s, const vector[double] &randoms))
+        void register_jacobian(double (*function)(void *object, const state &s, const vector[double] &randoms))
+        void register_defWorkingStateSpace(void (*function)(void *object, const stateSpace &s))
+
+    ctypedef struct timing_data:
+        int every
+    
+        
 
 
     
