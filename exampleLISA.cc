@@ -88,7 +88,7 @@ double simpleCalculateLogLCAmpPhase(double d, double phiL, double inc, double la
 
 //TDI A/E symmetric (in stationary/low-freq limit) half rotation of constellation or quarter rotation with polarization flip
 //uses 1 random var
-state LISA_quarter_rotation_symmetry(const state &s,void *object, const vector<double> &randoms){
+state LISA_quarter_rotation_symmetry(void *object, const state &s, const vector<double> &randoms){
   state result=s;
   int nrot=int(fabs(randoms[0])*2)+1;
   if(randoms[0]<0)nrot=-nrot;
@@ -106,7 +106,7 @@ state LISA_quarter_rotation_symmetry(const state &s,void *object, const vector<d
 
 //Source (even l dominant) half rotation symmetry or quarter rotation with polarization flip
 //uses 1 random var
-state source_quarter_rotation_symmetry(const state &s,void *object, const vector<double> &randoms){
+state source_quarter_rotation_symmetry(void *object, const state &s, const vector<double> &randoms){
   state result=s;
   int nrot=int(fabs(randoms[0])*2)+1;
   if(randoms[0]<0)nrot=-nrot;
@@ -121,20 +121,42 @@ state source_quarter_rotation_symmetry(const state &s,void *object, const vector
   return result;
 };
 
-//TDI A/E symmetric (in stationary/low-freq limit) relection through constellation plane
+void show_test(const state s){
+  valarray<double>params=s.get_params();
+  double d=params[0];
+  double phi=params[1];
+  double inc=params[2];
+  double lambd=params[3];
+  double beta=params[4];
+  double psi=params[5];
+  complex<double> sa= funcsa(d, phi, inc, lambd, beta, psi);
+  complex<double> se= funcse(d, phi, inc, lambd, beta, psi);
+  cout<<"state: "<<s.get_string()<<endl;
+  cout<<"   sa: "<<sa<<" mod:"<<abs(sa)<<" arg:"<<arg(sa)<<endl;
+  cout<<"   se: "<<se<<" mod:"<<abs(se)<<" arg:"<<arg(se)<<endl;
+};
+
+
+//TDI A/E symmetric (in stationary/low-freq limit) relection through constellation plane, simultaneous with source plane reflection and polarization flip
 //uses 0 random vars
-state LISA_plane_reflection_symmetry(const state &s,void *object, const vector<double> &randoms){
+state LISA_plane_reflection_symmetry(void *object, const state &s, const vector<double> &randoms){
   state result=s;
   int nrot=1;if(randoms[0]<0)nrot=-1;
-  int ibeta=4;
+  int iinc=2,ibeta=4,ipsi=5;
   double beta=s.get_param(ibeta);
-  beta=M_PI-beta;
+  double psi=s.get_param(ipsi);
+  double inc=s.get_param(iinc);
+  inc=M_PI-inc;
+  beta=-beta;
+  psi=M_PI-psi;
+  result.set_param(iinc,inc);
   result.set_param(ibeta,beta);
+  result.set_param(ipsi,psi);
   return result;
 };
 
-//Source (even l dominant) half rotation symmetry or quarter rotation with polarization flip
-state transmit_receive_inc_swap_symmetry(const state &s,void *object, const vector<double> &randoms){
+
+state transmit_receive_inc_swap_symmetry(void *object, const state &s, const vector<double> &randoms){
   const double halfpi=M_PI/2;
   state result=s;
   int iphi=1,iinc=2,ilamb=3,ibeta=4,ipsi=5;
@@ -147,58 +169,102 @@ state transmit_receive_inc_swap_symmetry(const state &s,void *object, const vect
   double twopsi=2*s.get_param(ipsi);
   double ti4=pow(tan(inc/2),4);
   double tt4=pow(tan(theta/2),4);
-  double Phi=atan2(sin(twopsi)*(ti4-tt4),cos(twopsi)*(ti4+tt4));
+  double Phi=atan2(sin(twopsi)*(ti4-tt4),cos(twopsi)*(ti4+tt4))/2;
   //cout<<"Phi="<<Phi<<" ti4="<<ti4<<" tt4="<<tt4<<endl;
   result.set_param(iinc,theta);
   result.set_param(ibeta,halfpi-inc);
-  result.set_param(iphi,phi+Phi/2);
-  result.set_param(ilamb,lamb-Phi/2);
+  result.set_param(iphi,phi-Phi);//sign differs from that in notes
+  result.set_param(ilamb,lamb-Phi);
+  //cout<<"before:"<<endl;
+  //show_test(s);
+  //cout<<"after:"<<endl;
+  //show_test(result);
   return result;
 };
 
 //Approximate distance inclination symmetry
-//uses 1 random var
-state dist_inc_scale_symmetry(const state &s,void *object, const vector<double> &randoms){
+//uses 2 random var
+double dist_inc_jump_size=0.1;
+double maxf2=100;
+state dist_inc_scale_symmetry(void *object, const state &s, const vector<double> &randoms){
   state result=s;
+  //We apply a symmetry to preserve d'*F(x')=d*F(x) where F(x)=1/cos(x)^2
+  //Depending on the sign of the second random number, x is either the source inclination, or the
+  //line-of-sight inclination relative to the LISA plane, theta=pi/2-beta;
   //To avoid issues at the edges we make sure that the transformation of the inclination
   //never crosses its limits.
   //Note that f:x->ln(pi/x-1) has range (inf,-inf) on domain (0,pi) with f(pi-x)=-f(x)
   //and inverse pi/(exp(f(x))+1)=x
-  //We then step uniformly in f(x).
+  //We then step uniformly in f(x). So, for random number y,
+  // x'=finv(f(x)+y)
   int idist=0,iinc=2;
+  bool use_theta=false;
+  if(abs(randoms[1]*2)<1){ //Half of the time we apply the transformation to theta (LISA includination) rather than source inclination
+    use_theta=true;
+    iinc=4;
+  }
   double dist=s.get_param(idist);
-  double df=randoms[0]*0.1; //Uniformly transform inc by up to 0.1 radian
+  double df=randoms[0]*dist_inc_jump_size; //Uniformly transform reparameterized inc
   double oldinc=s.get_param(iinc);
+  if(use_theta)oldinc=M_PI/2-oldinc;//convert beta to theta
   double oldf=log(M_PI/oldinc-1);
   double newf=oldf+df;
+  //if(newf*newf>maxf2)newf=oldf-df;//Avoid drifting into numerically dubious region in reversible way
   double newinc=M_PI/(exp(newf)+1);
-  double fac=sin(oldinc)/sin(newinc);
-  //cout<<"f,inc:"<<oldf<<"->"<<newf<<" "<<oldinc<<"->"<<newinc<<" --> fac="<<fac<<endl;;
-  //cout<<"d*sin(i)^4: "<<dist*pow(sin(oldinc),4)<<" ";
-  dist=dist*pow(fac,4);
-  //cout<<dist*pow(sin(newinc),4)<<endl;
-  //cout<<"fac 1/fac: "<<fac<<" "<<1/fac<<endl;;
+  double cosold=cos(oldinc),cosnew=cos(newinc);
+  double fac=cosnew/cosold;
+  //double fac=(cosnew*cosnew+1)/(cosold*cosold+1);
+  dist=dist*fac;
   result.set_param(idist,dist);
+  if(use_theta)newinc=M_PI/2-newinc;//convert back to beta if needed
   result.set_param(iinc,newinc);
+  double t4=pow(tan(oldinc/2),4);
+  if(false and (t4<0.02 or t4>50)){
+    cout<<"small/large t4 --------"<<t4<<endl;
+    cout<<"use_theta="<<use_theta<<endl;
+    cout<<"fac = 1 + "<<fac-1<<" = "<<fac;
+    cout<<"before:"<<endl;
+    show_test(s);
+    cout<<"after:"<<endl;
+    show_test(result);
+  }
   return result;
 };
 //Approximate distance inclination symmetry jacobian
 //uses 1 random var
-double dist_inc_scale_symmetry_jac(const state &s,void *object, const vector<double> &randoms){
+double dist_inc_scale_symmetry_jac(void *object, const state &s, const vector<double> &randoms){
+  //The transformation has the form:
+  //  d' = d F(x)/F'(x')
+  //  x' = finv( f(x) + y )
+  //  y' = -y
+  //where x is the selected inclination variable and y is the random number.
+  //The Jacobian is then -F(x)f'(x) / (F(x')f'(x'))
+  //Because the random step is performed on the rescaled inclination f(x)=ln(pi/x-1)
+  //we have 1/f'(x) = x(1-x/pi)
   state result=s;
-  double dinc=randoms[0]*0.1; //Uniformly transform inc by up to 1 radian
   int iinc=2;
-  double df=randoms[0]*0.1; //Uniformly transform inc by up to 0.1 radian
+  bool use_theta=false;
+  if(abs(randoms[1]*2)<1){ //Half of the time we apply the transformation to theta (LISA includination) rather than source inclination
+    use_theta=true;
+    iinc=4;
+  }
+  double df=randoms[0]*dist_inc_jump_size; //Uniformly transform reparameterized inc
   double oldinc=s.get_param(iinc);
+  if(use_theta)oldinc=M_PI/2-oldinc;//convert beta to theta 
   double oldf=log(M_PI/oldinc-1);
   double newf=oldf+df;
+  //if(newf*newf>maxf2)newf=oldf-df;//Avoid drifting into numerically dubious region in reversible way
   double newinc=M_PI/(exp(newf)+1);
-  double fac=pow(sin(oldinc)/sin(newinc),4);
-  if(isnan(fac))
-    cout<<"fac is nan:"<<oldf<<"->"<<newf<<" "<<oldinc<<"->"<<newinc<<" --> fac="<<fac<<endl;;
+  double cosold=cos(oldinc),cosnew=cos(newinc);
+  double fac=cosnew/cosold;
+  //double fac=(cosnew*cosnew+1)/(cosold*cosold+1);
+  fac*=(M_PI-newinc)*newinc/(M_PI-oldinc)/oldinc;
+  if(isnan(fac)){
+    cout<<"fac is nan:"<<oldf<<"->"<<newf<<" "<<oldinc<<"->"<<newinc<<" --> fac="<<fac<<endl;
+    cout<<"state: "<<s.get_string()<<endl;
+  }
   return fac; 
 };
-
 
 
 ///Likelihood function interface variants
@@ -357,6 +423,9 @@ public:
   };
 };
 
+timing_data qrperf;
+
+			       
 // Next alternative interface for Simplified LISA likelihood not relying on class inheritance
 // In this case we still implement as a class for maximum similarity to the original inheritance
 // interface, but no class is needed, as demonstrated with the no_class _nc option
@@ -385,13 +454,17 @@ public:
     space.set_bound(1,boundary(boundary::wrap,boundary::wrap,0,2*M_PI));//set 2-pi-wrapped space for phi.  Turn on if not narrow banding
     //maybe this breaks testsuite?
     if(not narrowband){
+      space.set_bound(0,boundary(boundary::limit,boundary::limit,0,30));//set 2-pi limited space for lambda.
       space.set_bound(2,boundary(boundary::limit,boundary::limit,0,M_PI));//set 2-pi limited space for lambda.
       space.set_bound(3,boundary(boundary::wrap,boundary::wrap,0,2*M_PI));//set 2-pi-wrapped space for lambda.
+      space.set_bound(4,boundary(boundary::limit,boundary::limit,-M_PI/2,M_PI/2));//set limited space for beta.
+
     }
     //else space.set_bound(4,boundary(boundary::limit,boundary::limit,0.2,0.6));//set narrow limits for beta
     space.set_bound(5,boundary(boundary::wrap,boundary::wrap,0,M_PI));//set pi-wrapped space for pol.
 
     //Set up potential state-space symmetries
+    qrperf.every=1000000;
     stateSpaceInvolution LISA_quarter_rotation(space,"LISA_quarter_rotation",1);// 1 means need 1 random number
     LISA_quarter_rotation.register_transformState(LISA_quarter_rotation_symmetry);
     stateSpaceInvolution source_quarter_rotation(space,"source_quarter_rotation",1);// 1 means need 1 random number
@@ -400,7 +473,8 @@ public:
     LISA_plane_reflection.register_transformState(LISA_plane_reflection_symmetry);
     stateSpaceInvolution transmit_receive_inc_swap(space,"transmit_receive_inc_swap",0);
     transmit_receive_inc_swap.register_transformState(transmit_receive_inc_swap_symmetry);
-    stateSpaceInvolution dist_inc_scale(space,"dist_inc_scale",1);
+    stateSpaceInvolution dist_inc_scale(space,"dist_inc_scale",2);
+    //stateSpaceInvolution dist_inc_scale(space,"dist_inc_scale",2,&qrperf); //shows timing data
     dist_inc_scale.register_transformState(dist_inc_scale_symmetry);
     dist_inc_scale.register_jacobian(dist_inc_scale_symmetry_jac);
 
@@ -409,6 +483,9 @@ public:
     symmetries.push_back(LISA_plane_reflection);
     symmetries.push_back(transmit_receive_inc_swap);
     symmetries.push_back(dist_inc_scale);
+    //symmetries.push_back(dist_inc_scale);//Even more of the same
+    //symmetries.push_back(dist_inc_scale);//Even more of the same
+    //symmetries.push_back(dist_inc_scale);//Even more of the same
     for(auto & symmetry: symmetries)space.addSymmetry(symmetry);
  
 
@@ -558,8 +635,8 @@ int main(int argc, char*argv[]){
   //Bayesian sampling [assuming mcmc]:
   //Set the proposal distribution 
   int Ninit;
-  proposal_distribution *prop=ptmcmc_sampler::new_proposal_distribution(Npar,Ninit,opt,prior.get(),&scales);
-  cout<<"Proposal distribution is:\n"<<prop->show()<<endl;
+  //proposal_distribution *prop=ptmcmc_sampler::new_proposal_distribution(Npar,Ninit,opt,prior.get(),&scales);
+  //cout<<"Proposal distribution is:\n"<<prop->show()<<endl;
   //set up the mcmc sampler (assuming mcmc)
   //mcmc.setup(Ninit,*like,*prior,*prop,output_precision);
   //mcmc.setup(*like,*prior,output_precision);

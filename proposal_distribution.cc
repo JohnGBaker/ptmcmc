@@ -24,9 +24,9 @@ proposal_distribution_set* proposal_distribution_set::clone()const{//need a deep
 
 proposal_distribution_set involution_proposal_set(const stateSpace &space,double adapt_rate,double target_acceptance_rate){
   vector<proposal_distribution*> props;
-  vector<stateSpaceInvolution *> involutions=space.get_potentialSyms();
+  vector<stateSpaceInvolution > involutions=space.get_potentialSyms();
   vector<double> shares(involutions.size(),1.0);
-  for(auto involution : involutions)props.push_back(new involution_proposal(*involution));
+  for(auto involution : involutions)props.push_back(new involution_proposal(involution));
   return proposal_distribution_set(props,shares,adapt_rate,target_acceptance_rate);
 };
 

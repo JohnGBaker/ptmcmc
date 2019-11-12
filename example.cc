@@ -261,7 +261,7 @@ public:
     stateSpaceInvolution random_rotation(space,"randrot",1);// 1 means need 1 random number
     random_rotation.register_transformState
     (
-     [](const state &s,void *object, const vector<double> &randoms){
+     [](void *object, const state &s, const vector<double> &randoms){
        state result=s;
        int np=s.size();
        vector<double> x0rot(np);
@@ -285,7 +285,7 @@ public:
     stateSpaceInvolution random_rotation_reflection(space,"randrotref",2);// 1 means need 1 random number
     random_rotation_reflection.register_transformState
     (
-     [](const state &s,void *object, const vector<double> &randoms){
+     [](void *object, const state &s, const vector<double> &randoms){
        state result=s;
        int np=s.size();
        vector<double> x0rot(np);

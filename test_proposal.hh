@@ -3,6 +3,9 @@
 ///This file provides a class for managing testing of proposal distributions.
 /// FIXME: SO FAR THIS IS JUST A SKETCH OF A PROPOSED IDEA
 
+#ifndef PTMCMC_TEST_PROPOSAL_HH
+#define PTMCMC_TEST_PROPOSAL_HH
+
 #include "states.hh"
 #include "probability_function.hh"
 #include "proposal_distribution.hh"
@@ -125,7 +128,7 @@ public:
     size_t N=samples.size();
     vector<state> transformed(N);
     
-    for(size_t i;i<N;i++){
+    for(size_t i=0;i<N;i++){
       //cout<<i<<endl;
       state &oldstate=samples[i];
       double oldlpdf=target_dist->evaluate_log(oldstate);
@@ -153,7 +156,7 @@ public:
 	Naccept++;
 	proposal->accept(); //As with MCMC, this allows some proposals to 'adapt'
 	transformed[i]=newstate;
-	if(oldstate.dist2(newstate)<1e-16){
+	if(false and oldstate.dist2(newstate)<1e-16){
 	  nsame++;
 	  if(nsame>Naccept*report_thresh){
 	    report_thresh+=threshstep;
@@ -662,3 +665,4 @@ void mrpt_knn() {
 }
 
 		
+#endif

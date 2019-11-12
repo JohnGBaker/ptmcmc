@@ -14,7 +14,7 @@ int main(){
   //Add involution to space for a test, there are a couple examples:
   stateSpaceInvolution scrunch(space,"scrunch");
   scrunch.register_transformState(
-				  [](const state &s,void *object, const vector<double> &randoms){
+				  [](void *object, const state &s, const vector<double> &randoms){
 				    double x=s.get_param(0);
 				    double y=s.get_param(1);
 				    double r=sqrt(x*x+y*y);
@@ -30,7 +30,7 @@ int main(){
 				    return result;
 				  });
   scrunch.register_jacobian(
-			    [](const state &s,void *object, const vector<double> &randoms){
+			    [](void *object, const state &s, const vector<double> &randoms){
 			      double x=s.get_param(0);
 			      double y=s.get_param(1);
 			      double r=sqrt(x*x+y*y);
@@ -46,7 +46,7 @@ int main(){
   stateSpaceInvolution random_rotation(space,"randrot",1);// 1 means need 1 random number
   random_rotation.register_transformState
     (
-     [](const state &s,void *object, const vector<double> &randoms){
+     [](void *object, const state &s, const vector<double> &randoms){
        state result=s;
        double x=s.get_param(0);
        double y=s.get_param(1);

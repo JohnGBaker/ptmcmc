@@ -104,6 +104,12 @@ string stateSpace::show()const{
     for(uint i=0;i<dim;i++){
       s<<"  "<<get_name(i)<<" in "<<bounds[i].show()<<"\n";
     }
+    if(potentialSyms.size()>0){
+      s<<"  Potential Symmetries:"<<endl;
+      for(auto sym:potentialSyms){
+	s<<"    "<<sym.get_label()<<endl;
+      }
+    }
     return s.str();
 };
 
@@ -113,9 +119,32 @@ bool stateSpace::contains(const stateSpace &other){
   return result;
 };
 
+void stateSpace::attach(const stateSpace &other){
+    if((!have_names&&dim!=0)||(!other.have_names&&other.dim!=0)){
+      cout<<"stateSpace::attach: Warning attaching stateSpace without parameter names."<<endl;
+      have_names=false;
+      cout<<"have_names="<<have_names<<" dim="<<dim<<endl;
+      cout<<"other:have_names="<<other.have_names<<" dim="<<other.dim<<endl;
+    } else if(dim>0||other.dim>0)have_names=true;
+    for(int i=0;i<other.dim;i++){
+      bounds.push_back(other.bounds[i]);
+      if(have_names){
+	if(index.count(other.names[i])>0){
+	  cout<<"stateSpace::attach: Attempted to attach a stateSpace with an identical name '"<<other.names[i]<<"'!"<<endl;
+	  cout<<show()<<endl;
+	  exit(1);
+	}
+	names.push_back(other.names[i]);
+	index[other.names[i]]=dim;
+      }
+      dim+=1;
+    }
+    for(auto sym : other.potentialSyms)potentialSyms.push_back(sym);
+  };
+
 bool stateSpace::addSymmetry(stateSpaceInvolution &involution){
   if(contains(*involution.domainSpace)){
-    potentialSyms.push_back(&involution);
+    potentialSyms.push_back(involution);
     return true;
   } else {
     cout<<"StateSpace::addSymmetry: Warning involution's domain is not a subspace of this space."<<endl;

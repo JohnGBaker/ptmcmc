@@ -16,6 +16,7 @@
 //#include <memory>
 #include "restart.hh"
 #include "newran.h"
+#include <chrono>
 
 using namespace std;
 
@@ -142,36 +143,16 @@ public:
     bounds[i]=newbound;
   };
   ///join this space to another space
-  void attach(const stateSpace &other){
-    if((!have_names&&dim!=0)||(!other.have_names&&other.dim!=0)){
-      cout<<"stateSpace::attach: Warning attaching stateSpace without parameter names."<<endl;
-      have_names=false;
-      cout<<"have_names="<<have_names<<" dim="<<dim<<endl;
-      cout<<"other:have_names="<<other.have_names<<" dim="<<other.dim<<endl;
-    } else if(dim>0||other.dim>0)have_names=true;
-    for(int i=0;i<other.dim;i++){
-      bounds.push_back(other.bounds[i]);
-      if(have_names){
-	if(index.count(other.names[i])>0){
-	  cout<<"stateSpace::attach: Attempted to attach a stateSpace with an identical name '"<<other.names[i]<<"'!"<<endl;
-	  cout<<show()<<endl;
-	  exit(1);
-	}
-	names.push_back(other.names[i]);
-	index[other.names[i]]=dim;
-      }
-      dim+=1;
-    }
-    for(auto sym : other.potentialSyms)potentialSyms.push_back(sym);
-  };
+  void attach(const stateSpace &other);
+  
   ///Support for optional additional list of PotentialSymmetries
   ///These are understood to be useful involutions on the space which may interesting in certain applications, like proposals
   ///It is not assumed that the map provides an actual isomorphism of the space.
 private:
-  vector<stateSpaceInvolution *> potentialSyms;
+  vector<stateSpaceInvolution > potentialSyms;
 public:
   bool addSymmetry(stateSpaceInvolution &involution);
-  const vector<stateSpaceInvolution *>get_potentialSyms()const{
+  const vector<stateSpaceInvolution >get_potentialSyms()const{
     return potentialSyms;
   };
 };
@@ -399,6 +380,12 @@ class stateSpaceTransformND : public stateSpaceTransform {
   };
 };
 
+struct timing_data {
+  int count;
+  int every;
+  double time;
+};
+
 ///Involutions are a special class of state space transforms representing symmetries.  They are automorphisms
 ///where the function is its own inverse, so the transformed space is identical to the domain and the inverse
 ///state transform is the same as the forward state transform.  We provide a test to verify this property.
@@ -418,11 +405,12 @@ class stateSpaceTransformND : public stateSpaceTransform {
 class stateSpaceInvolution : public stateSpaceTransform {
   string label;
   int nrand;
+  timing_data * performance_data;
 protected:
   const stateSpace *domainSpace; //Note the Transform can be applied as long as this can be identified as a subspace.
   bool have_working_space;
 public:
-  stateSpaceInvolution(const stateSpace &sp,string label="",int nrand=0):label(label),nrand(nrand){
+  stateSpaceInvolution(const stateSpace &sp,string label="",int nrand=0,timing_data *perf_data=nullptr):label(label),nrand(nrand),performance_data(perf_data){
     have_working_space=false;
     transformState_registered=false;
     jacobian_registered=false;
@@ -430,6 +418,10 @@ public:
     randoms.resize(nrand);
     user_object=nullptr;
     domainSpace=&sp;
+    if(performance_data){
+      performance_data->count=0;
+      performance_data->time=0;
+    }
   };
   virtual void set_random(Random &rng){
     for(auto & x : randoms)x=(rng.Next()*2.0-1.0);
@@ -440,9 +432,18 @@ public:
   virtual state transformState(const state &s)const override{    
     if(transformState_registered){
       if(have_working_space){
-	state transformed=(*user_transformState)(s,user_object,randoms);
+        auto start=chrono::high_resolution_clock::now();
+	state transformed=(*user_transformState)(user_object,s,randoms);
 	//Enforce stateSpace limits
 	transformed.enforce();
+	if(performance_data){
+	  performance_data->count++;
+	  auto stop=chrono::high_resolution_clock::now();
+	  int dtime=chrono::duration_cast<chrono::nanoseconds>(stop - start).count();
+	  performance_data->time+=dtime;
+	  if(performance_data->count%performance_data->every==0)
+	    cout<<"transformState "<<performance_data->time/performance_data->count<<" ns per eval."<<endl;
+	}
 	return transformed;
       } else {
 	cout<<"stateSpaceInvolution:: No working state space."<<endl;
@@ -457,7 +458,7 @@ public:
     if(transformState_registered){
       if(jacobian_registered){
 	if(have_working_space)
-	  return (*user_jacobian)(s,user_object,randoms);
+	  return (*user_jacobian)(user_object,s,randoms);
 	else {
 	  cout<<"stateSpaceInvolution:: No working state space."<<endl;
 	  exit(-1);
@@ -471,7 +472,7 @@ public:
   };
   virtual void defWorkingStateSpace(const stateSpace &sp){
     if(transformState_registered){
-      if(defWorkingStateSpace_registered)(*user_defWorkingStateSpace)(sp,user_object);
+      if(defWorkingStateSpace_registered)(*user_defWorkingStateSpace)(user_object,sp);
       have_working_space=true;
       return;
     }
@@ -521,27 +522,26 @@ public:
   ///function register_reference_object().  The user has the option to register a
   ///defWorkingStateSpace() function to preset the location of data within the state object.
 private:
-  state (*user_transformState)(const state &s,void *object, const vector<double> &randoms);
-  double (*user_jacobian)(const state &s,void *object, const vector<double> &randoms);
-  void (*user_defWorkingStateSpace)(const stateSpace &d, void *object);
+  state (*user_transformState)(void *object, const state &s, const vector<double> &randoms);
+  double (*user_jacobian)(void *object, const state &s, const vector<double> &randoms);
+  void (*user_defWorkingStateSpace)(void *object, const stateSpace &d);
   void * user_object;
   vector<double>randoms;
   bool transformState_registered,jacobian_registered,defWorkingStateSpace_registered;
   friend class stateSpace;
 public:
   void register_reference_object(void *object){
-    if(nrand>0)cout<<"stateSpaceInvolution::register_reference_object[label='"<<label<<"']: Cannot set user_object when nrand>0!"<<endl;
     user_object=object;};    
-  void register_transformState(state (*function)(const state &s,void *object, const vector<double> &randoms)){
+  void register_transformState(state (*function)(void *object, const state &s, const vector<double> &randoms)){
     user_transformState=function;
     transformState_registered=true;
     have_working_space=true;//Assume the working space is known unless defWorkingStateSpace is registered
   };
-  void register_jacobian(double (*function)(const state &s,void *object, const vector<double> &randoms)){
+  void register_jacobian(double (*function)(void *object, const state &s, const vector<double> &randoms)){
     user_jacobian=function;
     jacobian_registered=true;
   };
-  void register_defWorkingStateSpace(void (*function)(const stateSpace &s,void *object)){
+  void register_defWorkingStateSpace(void (*function)(void *object, const stateSpace &s)){
     user_defWorkingStateSpace=function;
     defWorkingStateSpace_registered=true;
     have_working_space=false;
