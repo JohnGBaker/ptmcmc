@@ -268,7 +268,9 @@ class simple_likelihood(ptmcmc.likelihood):
             centers[4] = PI/4   ;scales[4] = PI/4;
             
         #print("simple_likelihood::setup: space="+space.show())
-        self.basic_setup(space, types, centers, scales);
+        #lscales=[0.1 for x in scales]
+        #self.basic_setup(space, types, centers, scales, lscales);
+        self.basic_setup(space, types, centers, scales, scales);
 
     def evaluate_log(self,s):
         params=s.get_params()
@@ -322,6 +324,8 @@ def main(argv):
 
     print('calling opt.parse')
     opt.parse(argv)
+    print("flags=\n"+opt.report())
+
     #bool parseBAD=opt.parse(argc,argv);
     #if(parseBAD) {
     #  cout << "Usage:\n mcmc [-options=vals] " << endl;

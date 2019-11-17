@@ -307,21 +307,28 @@ cdef class likelihood:
         self.like.evaluate_log(s.cstate)
         return self.like.bestPost()
         
-    cpdef void basic_setup( self, stateSpace space, list types, list centers, list scales):
+    cpdef void basic_setup( self, stateSpace space, list types, list centers, list priorScales, list reScales=None):
         cdef int n=space.size()
         self.space=space #We hold on to this so it doesn't go out of scope
         cdef vector[string] typesvec
         cdef vector[double] centersvec
         cdef vector[double] scalesvec
+        cdef vector[double] rescalesvec
         typesvec.resize(n)
         centersvec.resize(n)
         scalesvec.resize(n)
+        rescalesvec.resize(n)
         for i in range(n):
             typesvec[i]=(<str>types[i]).encode('UTF-8')
             centersvec[i]=<double>centers[i]
-            scalesvec[i]=<double>scales[i]
+            scalesvec[i]=<double>priorScales[i]
+            if reScales is not None:
+                rescalesvec[i]=<double>reScales[i]
+            else:
+                rescalesvec[i]=1.0
         if self.like==NULL: raise UnboundLocalError
-        else: self.like.basic_setup(space.spaceptr, typesvec, centersvec, scalesvec)
+        else: self.like.basic_setup(space.spaceptr, typesvec, centersvec, scalesvec, rescalesvec)
+        #else: self.like.basic_setup(space.spaceptr, typesvec, centersvec, scalesvec)
     cpdef state draw_from_prior(self):
         if self.like==NULL: raise UnboundLocalError
         cdef states.state s=self.like.draw_from_prior();
@@ -388,6 +395,13 @@ cdef class Options:
         return parser
     def value(self, argname):
         return self.argsdict[argname]
+    def report(self):
+        result=self.Opt.report().decode('UTF-8')
+        if len(self.argsdict)>0:
+            result+=" --"
+            for name in self.argsdict:
+                result+="\n "+name+":"+str(self.argsdict[name])
+        return  result
 
 #######
 cdef class sampler:
