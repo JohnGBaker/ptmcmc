@@ -10,6 +10,7 @@ import matplotlib.colors as colors
 #from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.widgets import Slider, Button, RadioButtons
 nparmax=12
+filestyle=0
 
 ##########
 # Arguments and argument injest
@@ -35,22 +36,26 @@ def get_basename(fname):
         fname=fname.replace(".out","_t0.dat")
     elif(fname.endswith("_t0.dat")):
         basename=fname.replace("_t0.dat","")
+    elif(fname.endswith(".dat")):
+        basename=fname.replace(".dat","")
+        global filestyle
+        filestyle=1
     print ("basename="+basename)
     return basename,fname
 
-def get_par_names(fname):
+def get_par_names(fname,startcol=5):
     with open(fname) as f:
         line=f.readline()
         line=f.readline()
         names=line.split()
-        names=names[5:]
+        names=names[startcol:]
     return names
 
 def get_xydata(data,i,j,dens,samps):
     d=data[data[:,0]>samps]
     Nd=len(d)
     #print("Reduced data len =",Nd)
-    every=int(Nd/dens)
+    every=max([1,int(Nd/dens)])
     #print(Nd,dens,every)
     x=d[::every,i]
     y=d[::every,j]
@@ -92,13 +97,21 @@ basename,chainname=get_basename(args.fname)
 #read in data
 data=np.loadtxt(chainname,converters={4: lambda s:-1})
 N=len(data)
-dSdN=data[4,0]-data[3,0]
+
+if filestyle==0:
+    dSdN=data[4,0]-data[3,0]
+    parnames=["post",]+get_par_names(chainname)
+    data=np.delete(data,[2,3,4,len(data[0])-1],1)
+elif filestyle==1:
+    dSdN=1
+    data=np.hstack((np.reshape(range(N),(N,1)),data))
+    parnames=["post",]+get_par_names(chainname,startcol=2)
+    data=np.delete(data,[1],1)
+
 print ("Data have ",N," rows representing ",N*dSdN," steps.")
 print ("data[1]=",data[1])
 maxPost=max(data[:,1])
-data=np.delete(data,[2,3,4,len(data[0])-1],1)
 print ("data[1]=",data[1])
-parnames=["post",]+get_par_names(chainname)
 print (parnames)
 
 fig, ax = plt.subplots()
