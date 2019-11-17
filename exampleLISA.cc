@@ -500,7 +500,11 @@ public:
     }
     //cout<<"simple_likelihood::setup: space="<<space.show()<<endl;
     
-    blike->basic_setup(&space, types, centers, scales);
+    //blike->basic_setup(&space, types, centers, scales);
+    vector<double>likelyscales=scales;
+    for( auto & scale:likelyscales)scale=1;
+    blike->basic_setup(&space, types, centers, scales, likelyscales);
+    
   };
   
   

@@ -309,9 +309,12 @@ protected:
   bayes_signal *signal;
   bayes_data *data;
   double best_post;
-  state best;  
+  state best;
+  vector<double>likelyScales;
+  bool have_scales;
+  
 public:
-  bayes_likelihood(stateSpace *sp=nullptr,bayes_data *data=nullptr,bayes_signal *signal=nullptr):probability_function(sp),like0(0),signal(signal){
+  bayes_likelihood(stateSpace *sp=nullptr,bayes_data *data=nullptr,bayes_signal *signal=nullptr):probability_function(sp),like0(0),signal(signal),have_scales(false){
 
     ///Null set up of minimal interface (see below)
     user_object=nullptr;
@@ -347,9 +350,9 @@ public:
   };
   ///This is a more simplified interface for applications which only provide an indep.
   ///which assumes does not depend on access to probability_function.hh (or valarray) 
-  void basic_setup(const stateSpace *sp,const vector<string> &types, const vector<double> &centers,const vector<double> &scales){			   
+  void basic_setup(const stateSpace *sp,const vector<string> &types, const vector<double> &centers,const vector<double> &priorScales,const vector<double> &reScales=vector<double>()){			   
     const valarray<double> centers_va(centers.data(), centers.size());
-    const valarray<double> scales_va(scales.data(), scales.size());
+    const valarray<double> scales_va(priorScales.data(), priorScales.size());
     valarray<int> types_va(types.size());
     const int uni=mixed_dist_product::uniform, gauss=mixed_dist_product::gaussian, pol=mixed_dist_product::polar, cpol=mixed_dist_product::copolar, log=mixed_dist_product::log;
     for(int i=0;i<types.size();i++){
@@ -361,7 +364,22 @@ public:
     }
     nativeSpace=*sp;//have to set this first so prior can reference
     basic_setup(sp, new mixed_dist_product(&nativeSpace,types_va,centers_va,scales_va));
+    if(reScales.size()==priorScales.size()){
+      getScales(likelyScales);
+      for(int i=0;i<likelyScales.size();i++)likelyScales[i]*=reScales[i];
+      have_scales=true;
+    }
     
+  };
+  //Get scale-estimates for each parameter
+  //By default we get these from the prior
+  virtual void getScales(vector<double> &scales){
+    if(have_scales)scales=likelyScales;
+    else{
+      //int dim=getObjectStateSpace()->size();
+      //scales.resize(dim,1);
+      getObjectPrior()->getScales(scales);
+    }
   };
   ///Default set up is based on provided data/signal objects
   virtual void setup(){
@@ -626,6 +644,7 @@ protected:
     int maxFisherIter=15*dim;
     double deltafactor=0.001;
     double tol=10*deltafactor*deltafactor*deltafactor;
+    //TODO Change next two lines to new style vector<double> scales=getScales(), and test
     valarray<double> scales;
     nativePrior->getScales(scales);
     vector<double>labels=data->getLabels();
