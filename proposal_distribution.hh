@@ -146,7 +146,7 @@ public:
     cout<<" transform=\n"<<diagTransform<<endl;
     cout<<" test=\n"<<diagTransform*Evalues.asDiagonal()*diagTransform.inverse()<<endl;
   };
-  virtual ~gaussian_prop(){delete dist;};
+  virtual ~gaussian_prop(){if(dist)delete dist;};
   //state draw(state &s,Random &rng){
     //Umm is this Markovian. Do we need to set log_hastings for...
     //state offset=dist->drawSample(rng);
@@ -178,7 +178,8 @@ public:
     return s.add(offset);
   };
   gaussian_prop* clone()const{return new gaussian_prop(*this);};
-  string show(){ostringstream ss; ss<<"StepBy"<<(identity_trans?"":"Covar")<<"["<<dist->show()<<"](1Dfrac="<<oneDfrac<<",scaleWithTemp="<<scaleWithTemp<<")";return ss.str();};
+  string show(){
+    ostringstream ss; ss<<"StepBy"<<(identity_trans?"":"Covar")<<"["<<(dist?dist->show():"<null>")<<"](1Dfrac="<<oneDfrac<<",scaleWithTemp="<<scaleWithTemp<<")";return ss.str();};
 };
 
 
@@ -197,7 +198,13 @@ class proposal_distribution_set: public proposal_distribution{
   int last_dist;
   bool own_pointers;
 public:
-  virtual ~proposal_distribution_set(){if(own_pointers){for(auto prop:proposals)if(prop)delete prop;}};//delete proposals
+  virtual ~proposal_distribution_set(){
+    //cout<<"Deleting: "<<show()<<endl;
+    if(own_pointers){
+      for(auto prop:proposals){
+	//cout<<" -Deleting: "<<prop->show()<<endl;
+	if(prop)delete prop;
+      }}};//delete proposals
   virtual proposal_distribution_set* clone()const;
   proposal_distribution_set(vector<proposal_distribution*> &props,vector<double> &shares,double adapt_rate=0,double target_acceptance_rate=0.5,bool take_pointers=true);
   ///For proposals which draw from a chain, we need to know which chain
