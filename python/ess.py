@@ -2,6 +2,7 @@
 import numpy as np
 import argparse
 import sys
+import ptmcmc_analysis
 
 class chainData:
     def __init__(self,fname):
@@ -15,8 +16,8 @@ class chainData:
             #could check... if(fname.count(".out")>1):...
             basename=fname.replace(".out","")
             fname=fname.replace(".out","_t0.dat")
-        elif(fname.endswith("_t0.dat")):
-            basename=fname.replace("_t0.dat","")
+        elif(fname.endswith(".dat")):
+            basename=fname.replace(".dat","")
         print ("basename="+basename)
         return basename,fname
 
@@ -46,7 +47,7 @@ class chainData:
             names=names[5:]
         return names
 
-    def getStep(self):
+    def getSteps(self):
         return self.N*self.dSdN
 
     def getState(self,idx):
@@ -145,7 +146,7 @@ def compute_autocovar_windows(chain, feature, width, nevery, burn_windows=3, log
     if(dlag<1.01):dlag=1.01;
 
     #determine output structure
-    ncount=chain.getStep();
+    ncount=chain.getSteps();
     #print("ncount=",ncount)
     Nwin=int(ncount/width) - burn_windows;
     if(Nwin<0):Nwin=0;
@@ -174,7 +175,7 @@ def compute_autocovar_windows(chain, feature, width, nevery, burn_windows=3, log
     means=np.zeros((Nwin,Nlag))
     counts=np.zeros((Nwin,Nlag),dtype=np.int)
 
-    fdata=chain.data[:,2+ifeat]
+    fdata=chain.data[:,chain.ipar0+ifeat]
     #populate output vectors
     print(Nwin," windows:",end='')
     for k in range(Nwin):
@@ -394,7 +395,7 @@ def report_effective_samples(chain, features,width,nevery):
 def report_param_effective_samples(chain, imax=None,width=None, every=None):
     if(every is None):every=chain.dSdN
     if(width is None):width=every*1000
-    while(width<chain.getStep()*0.05):width*=2;
+    while(width<chain.getSteps()*0.05):width*=2;
     if(imax is None or imax<0):imax=chain.npar;
     if(imax>chain.npar):imax=chain.npar;
     def getparam(i):return lambda x:x[i]
@@ -425,12 +426,20 @@ def resample_posterior(chain, ess, length, upsample_fac):
 ################# MAIN ################
 
 parser = argparse.ArgumentParser(description='Compute best effective samples and autocorrelation from chain file.')
-parser.add_argument('fname', metavar='chain_file', type=str, 
-                    help='chain file path')
+parser.add_argument('fname', metavar='chain_file', type=str, help='chain file path')
+#parser.add_argument('fname', metavar='chain_file', nargs='+', type=str, help='chain file path')
+#parser.add_argument('-uselike',action='store_true',help='Include the likelihood')
+parser.add_argument('-noPost',action='store_true',help='Data has no Posterior or Likelihood in first columns ')
+parser.add_argument('-upsample',action='store_true',help='Factor by which to upsample the resampled posterior. (Default=5)')
+args = parser.parse_args()
+print(args)
+
+ptmcmc_analysis.noPostDefault=args.noPost
+
 args = parser.parse_args()
 
-chain=chainData(args.fname)
+chain=ptmcmc_analysis.chainData(args.fname)
 ess,length=report_param_effective_samples(chain)
-upsample_fac=5
+upsample_fac=args.upsample
 resample_posterior(chain,ess,length,upsample_fac)
 
