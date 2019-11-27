@@ -883,7 +883,7 @@ void MH_chain::step(proposal_distribution &prop,void *data){
     double oldlprior=current_lpost-invtemp*current_llike;
     //state newstate=prop.draw(current_state,*rng);
     state newstate=prop.draw(current_state,this);
-    //newstate.enforce();
+    newstate.enforce();
     double newlike,newlpost,newlprior=lprior->evaluate_log(newstate);
     //cout<<"MH_chain::step: newlprior="<<newlprior<<endl;
     if((!newstate.invalid())&&((!current_lpost>-1e200&&newlprior>-1e200)||newlprior-oldlprior>minPrior)){//Avoid spurious likelihood calls where prior effectively vanishes. But try anyway if current_lpost is huge. 
@@ -1065,7 +1065,7 @@ string MH_chain::report_prop(int style){
 // A parallel tempering set of markov (or non-Markovian) chain
 // May add "burn-in" distinction later.
 
-parallel_tempering_chains::parallel_tempering_chains(int Ntemps,double Tmax,double swap_rate,int add_every_N,bool do_evid_in,bool verbose_evid):Ntemps(Ntemps),swap_rate(swap_rate),add_every_N(add_every_N),do_evid(do_evid_in),verbose_evid(verbose_evid){
+parallel_tempering_chains::parallel_tempering_chains(int Ntemps,double Tmax,double swap_rate,int add_every_N,bool do_evid_in,bool verbose_evid,double dpriormin):Ntemps(Ntemps),swap_rate(swap_rate),add_every_N(add_every_N),do_evid(do_evid_in),verbose_evid(verbose_evid),dpriormin(dpriormin){
     props.resize(Ntemps);
     directions.resize(Ntemps,0);
     instances.resize(Ntemps,-1);
@@ -1226,7 +1226,7 @@ void parallel_tempering_chains::initialize( probability_function *log_likelihood
   
   //MPI For thread-safe set-up, to avoid some issues are with the global indexing of chains, and the initialization of chain RNGs, we instantiate all chains, though most will not be used.
   for(int i=0;i<Ntemps;i++){
-    MH_chain c(log_likelihood, log_prior,-30,add_every_N);
+    MH_chain c(log_likelihood, log_prior,dpriormin,add_every_N);
     chains.push_back(c);
   }
   //#pragma omp parallel for schedule (guided, 1)  ///try big chunks first, then specialize

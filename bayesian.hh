@@ -364,6 +364,7 @@ public:
     }
     nativeSpace=*sp;//have to set this first so prior can reference
     basic_setup(sp, new mixed_dist_product(&nativeSpace,types_va,centers_va,scales_va));
+    //basic_setup(sp, new mixed_dist_product(&nativeSpace,types_va,centers_va,scales_va,true));//Verbose
     if(reScales.size()==priorScales.size()){
       getScales(likelyScales);
       for(int i=0;i<likelyScales.size();i++)likelyScales[i]*=reScales[i];
@@ -543,6 +544,7 @@ public:
   };
   virtual double evaluate_log(state &s)override{
     if(evaluate_log_registered){
+      //cout<<"bayesian_likelihood::evaluate_log:Calling user_evaluate_log."<<endl;
       double result =(*user_evaluate_log)(user_object,s);
       if(check_posterior){
 	double post=result+nativePrior->evaluate_log(s);//May need a mechanism to check that prior is set

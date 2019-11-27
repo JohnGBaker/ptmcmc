@@ -211,7 +211,14 @@ cdef class state:
 
 cdef class involution:
     """
-    User should define a class to inherit from this one overriding evaluate_log()
+    User should specify involution function which may depend on nrand random numbers in the range [-1:1]
+    provided in list argument "randoms" as well as a Jacobian, if nontrivial.  The function should be an 
+    involution, meaning a map onto the same space which is its own inverse, when considering the product 
+    of the stateSpace and the space of randoms, and assuming that the function flips the sign of the randoms.
+    An approximate reflection symmetry, and be implemented, for instance with nrand=0, and a rotation symmetry
+    can be implemented with nrand=1.  The user implemetation should be tested by running ptmcmc with the
+    prop_test_index flag.
+    
     """
 
     #cdef states.stateSpaceInvolution *cinv

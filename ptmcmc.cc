@@ -503,7 +503,7 @@ void ptmcmc_sampler::addOptions(Options &opt,const string &prefix){
   addOption("prop_test_index","String providing (multi-)index value indicating proposal to test. Append L to loop and +s for more rigor. (eg '.' for all, '0-1L+' for rigorous test looping over sub-proposals below second member of first member of nested set, Default: no test)","");
   addOption("chain_init_file","Specify chain file from which to draw initializtion points, rather than from prior.","");  
   addOption("chain_ess_stop","Stop MCMC sampling the first time the specified effective sample size is reached. (default never)","-1.0");
-  
+  addOption("chain_dprior_min","Specify a minimum change in log prior beyond which proposal will be rejected without evaluating the likelihood. (Default=-30)","-30");  
 };
 
 void ptmcmc_sampler::processOptions(){
@@ -539,6 +539,7 @@ void ptmcmc_sampler::processOptions(){
   *optValue("pt_stop_evid_err")>>pt_stop_evid_err;  
   *optValue("chain_init_file")>>initialization_file;
   *optValue("chain_ess_stop")>>ess_stop;
+  *optValue("chain_dprior_min")>>dpriormin;
   if(checkp_at_time>0)start_time=omp_get_wtime();
 };
 
@@ -583,14 +584,14 @@ int ptmcmc_sampler::initialize(){
   if(restarting or Nstep<=0)Ninit=0;
   //Create the Chain 
   if(parallel_tempering){
-    parallel_tempering_chains *ptc= new parallel_tempering_chains(Nptc,Tmax,swap_rate,save_every,pt_stop_evid_err>0,pt_stop_evid_err>0);
+    parallel_tempering_chains *ptc= new parallel_tempering_chains(Nptc,Tmax,swap_rate,save_every,pt_stop_evid_err>0,pt_stop_evid_err>0,dpriormin);
     cc=ptc;
     have_cc=true;
     if(pt_evolve_rate>0)ptc->evolve_temps(pt_evolve_rate,pt_evolve_lpost_cut);
     if(pt_reboot_rate>0)ptc->do_reboot(pt_reboot_rate,pt_reboot_cut,pt_reboot_thermal,pt_reboot_every,pt_reboot_grace,pt_reboot_grad,pt_reboot_blindly);
     ptc->initialize(chain_llike,chain_prior,Ninit,initialization_file);
   } else {
-    MH_chain *mhc= new MH_chain(chain_llike,chain_prior,-30,save_every);
+    MH_chain *mhc= new MH_chain(chain_llike,chain_prior,dpriormin,save_every);
     cc=mhc;
     have_cc=true;
     //cprop->set_chain(cc);

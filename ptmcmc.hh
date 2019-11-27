@@ -34,6 +34,7 @@ private:
   double ess_stop;
   string initialization_file;
   double prop_adapt_rate;
+  double dpriormin;
 public:
   static void read_covariance(const string &file,const stateSpace *ss,Eigen::MatrixXd &covar);
   static void write_covariance(const Eigen::MatrixXd &cov, const stateSpace *ss, const string &file);

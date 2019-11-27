@@ -247,6 +247,7 @@ class parallel_tempering_chains: public chain{
   bool do_evolve_temps;
   double evolve_temp_rate,evolve_temp_lpost_cut;
   int maxswapsperstep;
+  double dpriormin;
   //MPI
   bool use_mpi;
   int myproc,nproc,interproc_stride;
@@ -255,7 +256,7 @@ class parallel_tempering_chains: public chain{
   
  public:
   virtual ~parallel_tempering_chains(){  };//assure correct deletion of any child
-  parallel_tempering_chains(int Ntemps,double Tmax,double swap_rate=0.01,int add_every_N=1,bool do_evid=false, bool verbose_evid=true);
+  parallel_tempering_chains(int Ntemps,double Tmax,double swap_rate=0.01,int add_every_N=1,bool do_evid=false, bool verbose_evid=true,double dpriormin=-30);
   virtual void checkpoint(string path)override;
   virtual void restart(string path)override;
   void initialize( probability_function *log_likelihood, const sampleable_probability_function *log_prior,int n=1,string initialization_file="");
