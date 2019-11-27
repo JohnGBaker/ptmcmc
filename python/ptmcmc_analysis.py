@@ -1,3 +1,9 @@
+#ptmcmc analysis support
+#John Baker (2019)
+#Find at github.com/johngbaker/ptmcmc
+#
+#Provides class for holding chain data
+
 import sys
 import os
 import numpy as np
@@ -61,7 +67,7 @@ class chainData:
                 self.ipar0=3
             else:
                 self.ipar0=2
-                data=np.delete(data,[1],1)
+                data=np.delete(data,[2],1)
             parnames+=self.get_par_names(chainfilepath)
         elif self.filestyle==1:
             data=np.loadtxt(chainfilepath)
