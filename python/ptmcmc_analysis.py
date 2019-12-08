@@ -14,6 +14,8 @@ import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.colors as colors
 import matplotlib.cm as cm
+import ess as esspy
+
 #from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.widgets import Slider, Button, RadioButtons
 nparmax=12
@@ -30,6 +32,7 @@ class chainData:
         if useLike is not None:
             self.useLike=useLike #set true to retain like if present
         else:self.useLike=useLikeDefault
+        self.have_ess=False
         print('noPost=',self.noPost)
         self.basename,self.chainfilepath,self.filestyle=self.get_basename(fname)
         self.read_chain(self.chainfilepath)
@@ -120,9 +123,193 @@ class chainData:
         i=int(idx/self.dSdN)
         return self.data[i,self.ipar0:]
 
+    def get_samples(self,nsamp,good_length):
+        ngood=int(good_length/self.dSdN)
+        if(nsamp>ngood):nsamp=ngood
+        n0=int(len(self.data)-ngood)
+        rows=n0+np.random.choice(int(ngood),nsamp)
+        i0=self.names.index('post')+1
+        if self.useLike: i0+=1
+        return self.data[rows,i0:]
+
+    def estimate_ess(self,esslimit=10000):
+        if not self.have_ess: 
+            ess,length=esspy.report_param_effective_samples(self,esslimit=esslimit)
+            self.ess=ess
+            self.acl=(1.0*length)/ess
+            print("ess,acl:",self.ess,self.acl)
+            self.have_ess=True
+        return self.ess,self.acl
+    
+    def KLdivergence(self,other,upsample=1,esslimit=10000):
+        ess,acl=self.estimate_ess(esslimit=esslimit)
+        nP=int(ess*upsample)
+        #print("nP:",ess*upsample,nP,ess,acl)
+        length=int(ess*acl)
+        samplesP=self.get_samples(nP,length)
+        ess,acl=other.estimate_ess(esslimit=esslimit)
+        nQ=int(ess*upsample)
+        length=int(ess*acl)
+        samplesQ=other.get_samples(nQ,length)
+        #print("nP,nQ:",nP,nQ)
+        return KL_divergence(samplesP,samplesQ)
+
+    def fakeKLdivergence(self,other,upsample=1,esslimit=10000):
+        ess,acl=self.estimate_ess(esslimit=esslimit)
+        nP=int(ess*upsample)
+        #print("nP:",ess*upsample,nP,ess,acl)
+        length=int(ess*acl)
+        samplesP=self.get_samples(nP,length)
+        ess,acl=other.estimate_ess(esslimit=esslimit)
+        nQ=int(ess*upsample)
+        length=int(ess*acl)
+        samplesQ=other.get_samples(nQ,length)
+        #print("nP,nQ:",nP,nQ)
+        i0=self.names.index('post')+1
+        #print('pars:',self.names[i0:])
+        return fake_KL_divergence(samplesP,samplesQ)
+        
+        
 #####################################
 #general functions
 
+def KL_divergence(samplesP, samplesQ):
+    '''
+    ///Interesting to apply to both target samples and transformed samples
+    /// Implements eqn 2 of Perez-Cruz 2008 "Kullback-Leibler Divergence Estimation of Continuous Distributions"
+    /// also https://www.princeton.edu/~kulkarni/Papers/Journals/j068_2009_WangKulVer_TransIT.pdf
+    /// with k=1. We infer that the sign is wrong on the sum term there.
+    '''
+    k=2;
+    result=0;
+    N=len(samplesP);
+    r1sqs=all_nnd2(samplesP);
+    #print('r1sqs',r1sqs)
+    s1sqs=np.zeros(N);
+    for i in range(N):s1sqs[i]=one_nnd2(samplesP[i],samplesQ);
+    #print('s1sqs',s1sqs)
+
+    #Here we put a floor on the smallest value of all NN distances
+    #based on the kfloorth smallest distance within the P set
+    kfloor=5;
+    if(kfloor>0):
+      dists=r1sqs;
+      sdists=np.sort(dists)
+      floor=dists[kfloor+1]
+      r1sqs[r1sqs<floor]=floor
+      s1sqs[s1sqs<floor]=floor
+    
+    result+=-sum(np.log(r1sqs/s1sqs))
+    dim=len(samplesP[0])
+    M=len(samplesQ);
+    result *= (0.5*dim)/N;#//factor of 1/2 because we use nearest neighbor dist^2
+    result += np.log(M/(N-1.0));
+    return result;
+  
+def all_nnd2(samples):
+    #Computation of all nearest neighbor distances, brute force.
+    N=len(samples)
+    nni=[-1]*N
+    nnd2=np.zeros(N)-1
+    for i in range(N):
+        for j in range(i+1,N):
+            #print("i,j=",i,j)
+            diff=samples[i]-samples[j]
+            dist2=np.dot(diff.T,diff)
+        if (nnd2[i]<0 or nnd2[i]>dist2):
+            nni[i]=j
+            nnd2[i]=dist2;
+        if(nnd2[i]<0 or nnd2[j]>dist2):
+            nni[j]=i
+            nnd2[j]=dist2;
+    return nnd2
+
+def one_nnd2(x,samples):
+    #Computation of nearest neighbor distance, brute force.
+    N=len(samples)
+    i0=-1
+    for i in range(N):
+        diff=samples[i]-x
+        dist2=np.dot(diff.T,diff)
+        if(i0<0 or nnd2>dist2):
+            i0=i
+            nnd2=dist2;
+    return nnd2
+
+def KLdivergence_Wang09(samplesP, samplesQ, k=1):
+    """ 
+    KL-Divergence estimator based on Wang09:
+    https://www.princeton.edu/~kulkarni/Papers/Journals/j068_2009_WangKulVer_TransIT.pdf
+    Using brute-force kNN
+    k: Number of neighbours considered (default 1)
+    """
+
+    n, m = len(samplesP), len(samplesQ)
+    KLdiv = np.log(m / (n - 1.0))
+    d = float(s1.shape[1])
+
+    for p1 in s1:
+        nu = np.sort(np.linalg.norm(s2-p1, axis=1))[k-1]
+        rho = np.linalg.norm(s1-p1, axis=1)[k]
+        D += (d/n)*np.log(nu/rho)
+    return D
+
+def knn_distance(point, sample, k):
+    """ Euclidean distance from `point` to it's `k`-Nearest
+    Neighbour in `sample` """
+    norms = np.linalg.norm(sample-point, axis=1)
+    return np.sort(norms)[k]
+                                                                       
+def get_sample_cov(samples):
+    N=len(samples)
+    dim=len(samples[0])
+    cov=np.zeros((dim,dim));
+    mean=samples.mean(axis=0)
+    out_mean=np.copy(mean)
+    ssum=np.zeros(dim)
+    for  s in samples:
+        for j in range(dim):
+            jdiff=s[j]-mean[j]
+            cov[j,j]+=jdiff*jdiff
+            for i in range(j+1,dim):
+                idiff=s[i]-mean[i]
+                val=idiff*jdiff
+                cov[i,j]+=val
+                cov[j,i]+=val
+    cov/=(N-1.0)
+    return cov,out_mean
+
+def fake_KL_divergence(samplesP, samplesQ, verbose=False):
+    #This applies a simplified alternative to the KL divergence (which is difficult to compute accurately from samples).
+    #The calculation is based on the means and variances of the two samples and would agree with the KL diverences
+    #for large samples of Gaussian distributions.
+    #The KL-divergence between two Gaussians is
+    # 2 KLdiv(P,Q) = Tr [ cov(P) cov(Q)^-1 ]- dim - log | cov(P) cov(Q)^-1 | - (mu(P)-mu(Q))^t cov(Q)^-1 (mu(P)-mu(Q))^t
+    covP,meanP=get_sample_cov(samplesP)
+    covQ,meanQ=get_sample_cov(samplesQ)
+    dim=len(covP)
+    if verbose:
+        print("meanP:",[x for x in meanP])
+        print("meanQ:",[x for x in meanQ])
+        print("sigmaP:",[covP[i,i] for i in range(dim)])
+        print("sigmaQ:",[covQ[i,i] for i in range(dim)])
+
+    nQ=len(samplesQ)
+    nP=len(samplesP)
+    unbiasing_factor=(nQ-dim-2.0)/(nQ-1.0) #The final factor is to make unbiased for finite nQ, assuming nQ=nP
+    #unbiasing_factor=1
+    invCovQ=np.linalg.pinv(covQ)*unbiasing_factor
+    covPinvCovQ=np.matmul(covP,invCovQ)
+    dmu=meanP-meanQ
+    result=0
+    result += -dim + covPinvCovQ.trace();
+    s,val = np.linalg.slogdet(covPinvCovQ/unbiasing_factor)
+    result+=-val
+    result += np.dot(np.dot(dmu,invCovQ),dmu)
+    result +=- (dim + covPinvCovQ.trace())/nP;
+    #result += (0.5*dim*(dim+1)+1)*(1.0/nP-1.0/nQ) - covPinvCovQ.trace()/nP;
+    return 0.5*result;
+  
 #Read in a set of chain files
 def read_all_chains(names):
     global allparnames,Nmax,Smax
