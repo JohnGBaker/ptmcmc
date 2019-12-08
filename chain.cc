@@ -389,7 +389,7 @@ void chain::compute_effective_samples(vector<bool (*)(const state &,double & val
       //cout<<"nwin,lag,aclen,effss:"<<nwin<<" "<<last_lag<<" "<<ac_len<<" "<<essi<<endl;
       if(ac_len<nevery){
 	//Ignore as spurious any
-	cout<<"aclen<nevery!: "<<ac_len<<" < "<<nevery<<endl;
+	//cout<<"aclen<nevery!: "<<ac_len<<" < "<<nevery<<endl;
         //esses[ifeat]=0;
 	//We don't really trust this result, and so instead set ess supposing aclen=nevery*oversmall_aclen_fac
 	essi=nwin*width/oversmall_aclen_fac/nevery;
@@ -885,6 +885,7 @@ void MH_chain::step(proposal_distribution &prop,void *data){
     state newstate=prop.draw(current_state,this);
     newstate.enforce();
     double newlike,newlpost,newlprior=lprior->evaluate_log(newstate);
+    bool accept=true;
     //cout<<"MH_chain::step: newlprior="<<newlprior<<endl;
     if((!newstate.invalid())&&((!current_lpost>-1e200&&newlprior>-1e200)||newlprior-oldlprior>minPrior)){//Avoid spurious likelihood calls where prior effectively vanishes. But try anyway if current_lpost is huge. 
       newlike=llikelihood->evaluate_log(newstate);
@@ -896,9 +897,12 @@ void MH_chain::step(proposal_distribution &prop,void *data){
     }
     //Now the test: 
     double log_hastings_ratio=prop.log_hastings_ratio();
+    if(isnan(log_hastings_ratio)){
+      accept=false;//It is not clear how best to play this
+      cout<<"Warning prop.log_hastings is NAN!"<<endl;
+    }
     log_hastings_ratio+=newlpost-current_lpost;
     //if(!(current_lpost>-1e200))  cout<<"   log_hastings_ratio="<<log_hastings_ratio<<endl;
-    bool accept=true;
     if(newstate.invalid())accept=false;
     //cout<<Nhist<<"("<<invtemp<<"): ("<<newlike<<","<<newlpost<<")vs.("<<oldlpost<<")->"<<log_hastings_ratio<<endl;//debug
     if(accept and log_hastings_ratio<0){
@@ -911,7 +915,8 @@ void MH_chain::step(proposal_distribution &prop,void *data){
     Ntries++;
     if(accept){
       Naccept++;
-      //cout<<"        accepting"<<endl;//debug
+      if(accept && !isfinite(newlpost))
+	cout<<"        ACCEPTING non finite! like,post,hast"<<newlike<<","<<newlpost<<","<<log_hastings_ratio<<endl;//debug
       last_type=prop.type();
       prop.accept();
       add_state(newstate,newlike,newlpost);

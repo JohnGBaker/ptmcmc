@@ -6,6 +6,8 @@
 
 #include "states.hh"
 
+bool extra_enforcement=false; //This triggers enforcement immediately upon add and mult, but that may be unnecessarily stringent, sometime add and mult are applieed to generate intermediate products.  The old behavior had "true" while "false" seems more likely to yield the intended result as long as enforce is called on the final result. We leave this flag here because the extra_enforcement=false is not yet throughly tested.
+  
 bool boundary::enforce(double &x)const{
   //cout<<"boundary::enforce: testing value "<<x<<" in range "<<show()<<endl;//debug
     //check wrapping first
@@ -89,6 +91,7 @@ bool stateSpace::enforce(valarray<double> &params)const{
     for(uint i=0;i<dim;i++){
       //cout<<"stateSpace::enforce: testing parameter "<<i<<endl;//debug
       if(!bounds[i].enforce(params[i])){
+	//cout<<"stateSpace::enforce: testing parameter "<<i<<" = "<<params[i]<<endl;//debug
 	//cout<<"        FAILED."<<endl;
 	return false;
       }
@@ -195,7 +198,7 @@ state state::add(const state &other)const{
       exit(1);
     }
     for(uint i=0;i<size();i++)result.params[i]=params[i]+other.params[i];
-    result.enforce();
+    if(extra_enforcement)result.enforce();
     return result;
   };
 
@@ -234,7 +237,7 @@ state state::scalar_mult(double x)const{
     //we only require that the result is valid
     state result(space,size());
     for(uint i=0;i<size();i++)result.params[i]=params[i]*x;
-    result.enforce();
+    if(extra_enforcement)result.enforce();
     return result;
   };
 

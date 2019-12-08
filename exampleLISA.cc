@@ -23,7 +23,7 @@ using namespace std;
 const double MTSUN_SI=4.9254923218988636432342917247829673e-6;
 const double PI=3.1415926535897932384626433832795029;
 const complex<double> I(0.0, 1.0);
-const bool narrowband=true;
+const bool narrowband=false;
 
 //We implement 4 different example interfaces to bayes_likelihood:
 // 1. no_class
@@ -263,7 +263,7 @@ double dist_inc_scale_symmetry_jac(void *object, const state &s, const vector<do
     cout<<"fac is nan:"<<oldf<<"->"<<newf<<" "<<oldinc<<"->"<<newinc<<" --> fac="<<fac<<endl;
     cout<<"state: "<<s.get_string()<<endl;
   }
-  return fac; 
+  return fabs(fac); 
 };
 
 
@@ -302,8 +302,12 @@ void simple_likelihood_setup_nc(bayes_likelihood *blike){
   string names[]={"d","phi","inc","lambda","beta","psi"};
   space.set_names(names);
   space.set_bound(1,boundary(boundary::wrap,boundary::wrap,0,2*M_PI));//set 2-pi-wrapped space for phi.  Turn on if not narrow banding
-  if(not narrowband)
+  if(not narrowband){
+    space.set_bound(0,boundary(boundary::limit,boundary::limit,0,30));//set 2-pi limited space for lambda.
+    space.set_bound(2,boundary(boundary::limit,boundary::limit,0,M_PI));//set 2-pi limited space for lambda.
     space.set_bound(3,boundary(boundary::wrap,boundary::wrap,0,2*M_PI));//set 2-pi-wrapped space for lambda.
+    space.set_bound(4,boundary(boundary::limit,boundary::limit,-M_PI/2,M_PI/2));//set limited space for beta.
+  }
   //else space.set_bound(4,boundary(boundary::limit,boundary::limit,0.2,0.6));//set narrow limits for beta
   space.set_bound(5,boundary(boundary::wrap,boundary::wrap,0,M_PI));//set pi-wrapped space for pol.
   
@@ -338,8 +342,10 @@ public:
     space.set_names(names);
     space.set_bound(1,boundary(boundary::wrap,boundary::wrap,0,2*M_PI));//set 2-pi-wrapped space for phi.  Turn on if not narrow banding
     if(not narrowband){
+      space.set_bound(0,boundary(boundary::limit,boundary::limit,0,30));//set 2-pi limited space for lambda.
       space.set_bound(2,boundary(boundary::limit,boundary::limit,0,M_PI));//set 2-pi limited space for lambda.
       space.set_bound(3,boundary(boundary::wrap,boundary::wrap,0,2*M_PI));//set 2-pi-wrapped space for lambda.
+      space.set_bound(4,boundary(boundary::limit,boundary::limit,-M_PI/2,M_PI/2));//set limited space for beta.
     }
     //else space.set_bound(4,boundary(boundary::limit,boundary::limit,0.2,0.6));//set narrow limits for beta
     space.set_bound(5,boundary(boundary::wrap,boundary::wrap,0,M_PI));//set pi-wrapped space for pol.
@@ -458,9 +464,14 @@ public:
       space.set_bound(2,boundary(boundary::limit,boundary::limit,0,M_PI));//set 2-pi limited space for lambda.
       space.set_bound(3,boundary(boundary::wrap,boundary::wrap,0,2*M_PI));//set 2-pi-wrapped space for lambda.
       space.set_bound(4,boundary(boundary::limit,boundary::limit,-M_PI/2,M_PI/2));//set limited space for beta.
-
     }
-    //else space.set_bound(4,boundary(boundary::limit,boundary::limit,0.2,0.6));//set narrow limits for beta
+    else if (true) {
+      space.set_bound(0,boundary(boundary::limit,boundary::limit,0,30));//set 2-pi limited space for lambda.
+
+      space.set_bound(2,boundary(boundary::limit,boundary::limit,0,M_PI));//set 2-pi limited space for lambda.
+      space.set_bound(3,boundary(boundary::wrap,boundary::wrap,0,2*M_PI));//set 2-pi-wrapped space for lambda.
+      space.set_bound(4,boundary(boundary::limit,boundary::limit,-M_PI/2,M_PI/2));//set limited space for beta.
+    }
     space.set_bound(5,boundary(boundary::wrap,boundary::wrap,0,M_PI));//set pi-wrapped space for pol.
 
     //Set up potential state-space symmetries
