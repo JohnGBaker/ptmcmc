@@ -85,6 +85,7 @@ def simpleCalculateLogLCAmpPhase(d, phiL, inc, lambdL, betaL, psiL):
 #TDI A/E symmetric (in stationary/low-freq limit) half rotation of constellation or quarter rotation with polarization flip
 #uses 1 random var
 
+from LISAsymmetries import LISA_quarter_rotation_symmetry_transf,source_quarter_rotation_symmetry_transf,LISA_plane_reflection_symmetry_transf,transmit_receive_inc_swap_symmetry_transf,dist_inc_scale_symmetry_transf,dist_inc_scale_symmetry_jac,dist_alt_pol_symmetry_transf,dist_alt_pol_symmetry_jac
 halfpi=PI/2;
 idist=0
 iphi=1
@@ -92,7 +93,16 @@ iinc=2
 ilamb=3
 ibeta=4
 ipsi=5;
-    
+import LISAsymmetries
+LISAsymmetries.idist=idist
+LISAsymmetries.iphi=iphi
+LISAsymmetries.iinc=iinc
+LISAsymmetries.ilamb=ilamb
+LISAsymmetries.ibeta=ibeta
+LISAsymmetries.ipsi=ipsi
+LISAsymmetries.reverse_phi_sign=True
+
+"""
 def LISA_quarter_rotation_symmetry_transf(s, randoms): 
     #print("applying quarter rotation")
     #sp=s.getSpace()
@@ -228,7 +238,114 @@ def dist_inc_scale_symmetry_jac(s, randoms):
     fac*=(PI-newalt)*newalt/(PI-oldalt)/oldalt;
     return fac; 
 
+#Exact-in-limit distance-altitude-polarization 2-D symmetry
+dist_alt_pol_size=0.1;
+Tlimit=1e15
+def dist_alt_pol_symmetry_jac(s, randoms): 
+    '''
+    This transform exercizes the an exact version of the distance-altitude-polarization symmetry
+    Which exists exactly for signals from a quadrupolar rotatoring source detected by a full
+    polarization non-accelerating detector that is small compared to the wavelength. It uses 
+    2 random vars. 
 
+    The symmetry is realized by a random step in two variables in a transformed coordinate system.
+    '''
+    
+    param=s.get_params()
+
+    #params
+    iota=param[iinc]
+    theta=halfpi-param[ibeta]
+    psi=param[ipsi]
+    dist=param[idist]
+    
+    #intermediates
+    x=math.tan(theta/2)**4
+    y=math.tan(iota/2)**4
+    x2=x*x
+    y2=y*y
+    twoc4psi=2*math.cos(4*psi)
+    ztwoc4psi=x*y*twoc4psi
+    R=(x2+y2+ztwoc4psi)/(1+x2*y2+ztwoc4psi)
+    Delta=(1-x2)*(1-y2)/(dist*(1+math.sqrt(x))*(1+math.sqrt(y)))**2
+
+    #The notes (currently) apply when R<=1, we extend to R>1 noting that
+    #R->1/R when z<->w:
+    #Thus in the case R>1 we need to swap the definitions of z and w, meaning wee change y->1/y in these exprs
+    ypow=1
+    if R>1: ypow=-1
+
+    z=x*y**ypow
+    #z2=z*z
+    if z<1:sgn=-1
+    else: sgn=1
+    s2psi=math.sin(2*psi)
+    c2psi=math.cos(2*psi)
+    
+    #forward reparameterization
+    w=x/y**ypow
+    
+    #transform
+    psit=psi+dist_alt_pol_size*randoms[0]
+    c4psit=math.cos(4*psit)
+    wt=sgn*w+dist_alt_pol_size*randoms[0]
+    if wt>0:sgn=1
+    else:sgn=-1
+    wt=abs(wt)
+
+    #reverse reparameterization and intermediates    
+    T  = ( (wt+1/wt)/2 + c4psit*(1-R**ypow) )/R**ypow
+    if True and  T>Tlimit: #limiting case near poles
+        rootr=math.sqrt(R)
+        if sgn>0:
+            zt=1/(2*T)
+            if wt>1:
+                xt=1/rootr
+                yt=2*T*rootr
+            else:
+                xt=2*T*rootr
+                yt=1/rootr
+        else:
+            zt=2*T
+            if wt>1:
+                xt=rootr/2/T
+                yt=1/rootr
+            else:
+                xt=1/rootr
+                yt=rootr/2/T
+        zt=xt*yt**sgn
+        
+    else:
+        zt = T+sgn*math.sqrt(T*T-1)
+        xt = math.sqrt(zt*wt)
+        if xt<wt*1e-60: yt=R  #handle pathological case
+        else: yt = (xt/wt)**ypow
+    distt = math.sqrt((1-xt*xt)*(1-yt*yt)/Delta) / ((1+math.sqrt(xt))*(1+math.sqrt(yt)))
+
+    #test
+    #Rt=(xt**2+yt**2+xt*yt*2*c4psit)/(1+xt**2*yt**2+xt*yt*2*c4psit)
+    #Deltat=(1-xt**2)*(1-yt**2)/(distt*(1+math.sqrt(xt))*(1+math.sqrt(yt)))**2
+    #print("check: ",x,y,z,w,dist,T,R,Delta)
+    #print("checkt:",xt,yt,xt*yt,wt,distt,T)
+
+    #Jacobian
+    #Ratio of the forward transformation to the directly transformed coords at old point over new point
+    #theta->x: dx/dtheta ~ x*(x^1/4+x^-1/4)
+    #iota->y:  dy/diota  ~ y*(y^1/4+y^-1/4)
+    #(x,y,d)->(w,R,Delta): ~ w*(1-z2)/(z*d*(1+z2+2zcos4psi))
+    #combined: w/d*(x^1/4+x^-1/4)*(y^1/4+y^-1/4)*(1-z2)/(1+z2+2zcos4psi)
+    eps=1e-60
+    x4th=x**0.25+eps
+    y4th=y**0.25+eps
+    xt4th=xt**0.25+eps
+    yt4th=yt**0.25+eps
+    
+    jac=w/dist*(x4th+1/x4th)*(y4th+1/y4th)*(z-1/z)/(z+1/z+twoc4psi)
+    jact=wt/distt*(xt4th+1/xt4th)*(yt4th+1/yt4th)*(zt-1/zt)/(zt+1/zt+2*c4psit)
+
+    return abs(jac/jact)
+"""
+    
 def trivial_transf(s, randoms): 
     return s
 
@@ -257,6 +374,7 @@ class simple_likelihood(ptmcmc.likelihood):
         space.addSymmetry(ptmcmc.involution(space,"LISA_plane_reflection",0,LISA_plane_reflection_symmetry_transf,timing_every=tevery))
         space.addSymmetry(ptmcmc.involution(space,"transmit_receive_inc_swap",0,transmit_receive_inc_swap_symmetry_transf,timing_every=tevery))
         space.addSymmetry(ptmcmc.involution(space,"dist_inc_scale",2,dist_inc_scale_symmetry_transf,dist_inc_scale_symmetry_jac,timing_every=tevery))
+        space.addSymmetry(ptmcmc.involution(space,"dist_alt_pol",2,dist_alt_pol_symmetry_transf,dist_alt_pol_symmetry_jac,timing_every=tevery))
         #space.addSymmetry(ptmcmc.involution(space,"trivial",1,trivial_transf))
         
         #Set up prior
