@@ -8,6 +8,7 @@
 #define PTMCMC_PROPOSAL_HH
 #include "states.hh"
 #include "chain.hh"
+#include "restart.hh"
 #include "probability_function.hh"
 #include <Eigen/Eigen>
 
@@ -18,15 +19,17 @@ using namespace std;
 
 ///A class for defining proposal distributions.
 ///Useful proposal distributions often reference a chain.
-class proposal_distribution {
+class proposal_distribution: public restartable{
+  static int idcount;
 protected:
+  int id;
   double log_hastings;
   int last_type;
   int accept_count;
   int reject_count;
 public:
   virtual ~proposal_distribution(){};
-  proposal_distribution(){log_hastings=0;last_type=0;accept_count=0;reject_count=0;};
+  proposal_distribution(){id=idcount;idcount++;log_hastings=0;last_type=0;accept_count=0;reject_count=0;};
   virtual double log_hastings_ratio(){return log_hastings;};//(proposal part of Hasting ratio for most recent draw;
   virtual void set_chain(chain *c){};//Not always needed.
   //virtual state draw(state &s,Random &rng){return s;};//The base class won't be useful.
@@ -40,6 +43,10 @@ public:
   virtual bool support_mixing(){return false;}
   virtual void accept(){accept_count++;};//external trigger to indicate that proposal was accepted (available for adaptive proposals)
   virtual void reject(){reject_count++;};//external trigger to indicate that proposal was rejected (available for adaptive proposals)
+  virtual void accept( int count){accept_count=count;};//external trigger to indicate that proposal was accepted (available for adaptive proposals)
+  virtual void reject(int count){reject_count=count;};//external trigger to indicate that proposal was rejected (available for adaptive proposals)
+  virtual void checkpoint(string path)override{};
+  virtual void restart(string path)override{};
   virtual string report(int style=0){;//For status reporting on acceptance rate(0) or adaptive shares(1)
     ostringstream ss;
     if(style==0)ss<<accept_count*1.0/(accept_count+reject_count)<<"("<<accept_count<<")";
@@ -197,6 +204,7 @@ class proposal_distribution_set: public proposal_distribution{
   int adapt_every;
   int last_dist;
   bool own_pointers;
+
 public:
   virtual ~proposal_distribution_set(){
     //cout<<"Deleting: "<<show()<<endl;
@@ -214,7 +222,10 @@ public:
   //state draw(state &s,Random &rng);
   state draw(state &s,chain *caller);
   void accept();
+  
   void reject();
+  virtual void checkpoint(string path)override;
+  virtual void restart(string path)override;
   string show();
   string report(int style=0);//For status reporting on acceptance rate(0) or adaptive shares(1)
   vector<proposal_distribution*>  members()const{return proposals;}; 

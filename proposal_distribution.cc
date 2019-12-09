@@ -9,8 +9,10 @@
 
 using namespace std;
 
-//************** PROPOSAL DISTRIBUTION classes ******************************
+// Static data
+int proposal_distribution::idcount=0;
 
+//************** PROPOSAL DISTRIBUTION classes ******************************
 
 proposal_distribution_set* proposal_distribution_set::clone()const{//need a deep clone...
   proposal_distribution_set* result;
@@ -135,6 +137,50 @@ void proposal_distribution_set::reject(){
   adapt_count++;
   if(adapt_count>=adapt_every)reset_bins(shares,bin_max);
   proposals[last_dist]->reject();
+};
+
+void proposal_distribution_set::checkpoint(string path){
+  //save basic data 
+  ostringstream ss;
+  ss<<path;
+  string dir=ss.str();
+  
+  if(adapt_rate>0){
+    mkdir(dir.data(),ACCESSPERMS);
+    ss<<"proposal="<<id<<".cp";
+    ofstream os;
+    openWrite(os,ss.str());
+    writeDoubleVector(os,shares);
+    writeDoubleVector(os,bin_max);
+    vector<int>last_accepted_int(Nsize);
+    for(int i=0;i<Nsize;i++)last_accepted_int[i]=last_accepted[i];//convert bool to int
+    writeIntVector(os,last_accepted_int);
+    writeInt(os,adapt_count);
+    os.close();
+  }
+  for(auto proposal: proposals)proposal->checkpoint(path);
+};
+
+void proposal_distribution_set::restart(string path){
+  //save basic data 
+  ostringstream ss;
+  ss<<path;
+  string dir=ss.str();
+
+  if(adapt_rate>0){
+    mkdir(dir.data(),ACCESSPERMS);
+    ss<<"proposal="<<id<<".cp";
+    ifstream is;
+    openRead(is,ss.str());
+    readDoubleVector(is,shares);
+    readDoubleVector(is,bin_max);
+    vector<int>last_accepted_int(Nsize);
+    readIntVector(is,last_accepted_int);
+    for(int i=0;i<Nsize;i++)last_accepted[i]=last_accepted_int[i];//convert bool to int
+    readInt(is,adapt_count);
+    is.close();
+  }
+  for(auto proposal: proposals)proposal->restart(path);
 };
 
 string proposal_distribution_set::report(int style){//For status reporting on adaptive

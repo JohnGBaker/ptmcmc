@@ -421,6 +421,7 @@ void ptmcmc_sampler::restart(string path){
   openRead(os,ss.str());
   cc->restart(dir);
   readInt(os,istep);
+  cout<<"Restart proposal report:\n"<<cc->report_prop(1)<<"\nacceptance report:\n"<<cc->report_prop(0)<<endl;	  
   restarting=false;
   //cout<<"show:"<<cc->show(true)<<endl;;
   //cout<<"status:"<<cc->status()<<endl;

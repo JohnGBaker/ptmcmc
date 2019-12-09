@@ -590,6 +590,7 @@ void MH_chain::checkpoint(string path){
   chain::checkpoint(path);
   ostringstream ss;
   ss<<path<<"chain"<<id<<"-cp/";
+  string chainpath=ss.str();
   ss<<"MHchain.cp";
   ofstream os;
   openWrite(os,ss.str());
@@ -617,6 +618,7 @@ void MH_chain::checkpoint(string path){
   writeInt(os,Nhist);
   writeInt(os,Nzero);
   writeDouble(os,invtemp);
+  if(default_prop_set)default_prop->checkpoint(chainpath);
 };
 
 void MH_chain::restart(string path){
@@ -624,6 +626,7 @@ void MH_chain::restart(string path){
   chain::restart(path);
   ostringstream ss;
   ss<<path<<"chain"<<id<<"-cp/";
+  string chainpath=ss.str();
   ss<<"MHchain.cp";
   ifstream os; 
   openRead(os,ss.str());
@@ -657,6 +660,7 @@ void MH_chain::restart(string path){
   readInt(os,Nhist);
   readInt(os,Nzero);
   readDouble(os,invtemp);
+  if(default_prop_set)default_prop->restart(chainpath);
 };
 
 void MH_chain::reserve(int nmore){//If you know how long you are going to run, it can be more efficient to reserve up front, rather than resizing ever step
@@ -1283,10 +1287,13 @@ void parallel_tempering_chains::set_proposal(proposal_distribution &proposal){
     //cout<<"                    chain=("<<&chains[i]<<")"<<chains[i].show()<<endl;
     if(props[i]->support_mixing()){
       props[i]->set_chain(this);
+      
       if(myproc==0)cout<<"Supporting chain mixing in proposal distribution."<<endl;
     }
-    else
-      props[i]->set_chain(&chains[i]); //*** This seems to set the last chain to all props...***
+    else{
+      props[i]->set_chain(&chains[i]);
+      chains[i].set_proposal(*props[i]);
+    }
     //Other possible actions, such as a burn-in chain, or a combination of chains would be possible here.
   }
 };
