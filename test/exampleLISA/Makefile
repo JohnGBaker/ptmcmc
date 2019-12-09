@@ -4,8 +4,8 @@ mpi: exampleLISAmpi cp-mpi
 long: exampleLISA_long
 all: basic mpi long
 
-COMMON_FLAGS=--seed=0.012556 --save_every=40 --nevery=500 --prop=7 --pt=20 --pt_evolve_rate=0.01 --pt_stop_evid_err=0.05 --prop_adapt_rate=0.01 --sym_prop_frac=0.3 ##Note --prop_adapt_rate tested successfully without checkpointing, but didn't checkpoint correctly
-COMMON_FLAGS=--seed=0.012556 --save_every=40 --prop=7 --pt=20 --pt_evolve_rate=0.01 --pt_stop_evid_err=0.05 --sym_prop_frac=0.3
+COMMON_FLAGS=--seed=0.012556 --save_every=40 --nevery=500 --prop=7 --pt=20 --pt_evolve_rate=0.01 --pt_stop_evid_err=0.05 --prop_adapt_rate=0.01 --prop_adapt_more --sym_prop_frac=0.3 ##Note --prop_adapt_rate tested successfully without checkpointing, but didn't checkpoint correctly
+#COMMON_FLAGS=--seed=0.012556 --save_every=40 --prop=7 --pt=20 --pt_evolve_rate=0.01 --pt_stop_evid_err=0.05 --sym_prop_frac=0.3
 
 exampleLISA:
 	(export OMP_NUM_THREADS=4 ; time ../../exampleLISA ${COMMON_FLAGS} --chain_ess_stop=2000 --checkp_at_step=10000 --outname=exampleLISA_test_1 ) > exampleLISA_test_1.out
