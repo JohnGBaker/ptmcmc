@@ -39,11 +39,13 @@ void ptmcmc_sampler::select_proposal(){
     if(reporting())cout<<"Selecting proposal for stateSpace:\n"<<chain_prior->get_space()->show()<<endl;
     int Npar=chain_prior->get_space()->size();
     int proposal_option,SpecNinit;
-    double tmixfac,reduce_gamma_by,de_g1_frac,de_eps,gauss_1d_frac,gauss_draw_frac,gauss_step_fac,cov_draw_frac,sym_prop_frac;
+    double tmixfac,reduce_gamma_by,de_g1_frac,de_eps,gauss_1d_frac,prior_draw_frac,prior_draw_Tpow,gauss_draw_frac,gauss_step_fac,cov_draw_frac,sym_prop_frac;
     bool de_mixing=false;
     bool gauss_temp_scaled=false;
     string covariance_file;
     (*optValue("prop"))>>proposal_option;
+    (*optValue("prior_draw_frac"))>>prior_draw_frac;
+    (*optValue("prior_draw_Tpow"))>>prior_draw_Tpow;
     (*optValue("gauss_1d_frac"))>>gauss_1d_frac;
     (*optValue("gauss_draw_frac"))>>gauss_draw_frac;
     (*optValue("gauss_step_fac"))>>gauss_step_fac;
@@ -52,6 +54,8 @@ void ptmcmc_sampler::select_proposal(){
     (*optValue("covariance_file"))>>covariance_file;
     bool adapt_more=optSet("prop_adapt_more");
     //Do some sanity checking/fixing
+    if(prior_draw_frac<0)prior_draw_frac=0;
+    if(prior_draw_frac>1)prior_draw_frac=1;
     if(gauss_1d_frac<0)gauss_1d_frac=0;
     if(gauss_1d_frac>1)gauss_1d_frac=1;
     if(gauss_draw_frac<0)gauss_draw_frac=0;
@@ -60,7 +64,7 @@ void ptmcmc_sampler::select_proposal(){
     if(covariance_file=="")cov_draw_frac=0;
     if(cov_draw_frac<0)cov_draw_frac=0;
     if(cov_draw_frac>1)cov_draw_frac=1;
-    if(gauss_draw_frac+cov_draw_frac>1){
+    if(prior_draw_frac+gauss_draw_frac+cov_draw_frac>1){
       double scale=gauss_draw_frac+cov_draw_frac;
       gauss_draw_frac/=scale;
       cov_draw_frac/=scale;
@@ -73,12 +77,12 @@ void ptmcmc_sampler::select_proposal(){
     (*optValue("de_Tmix"))>>tmixfac;
     gauss_temp_scaled=optSet("gauss_temp_scaled");
     de_mixing=optSet("de_mixing");
-    cprop=new_proposal_distribution_guts(Npar, chain_Ninit, chain_prior, &scales, proposal_option, SpecNinit, tmixfac, reduce_gamma_by, de_g1_frac, de_eps, gauss_1d_frac,de_mixing,prop_adapt_rate,adapt_more,gauss_draw_frac,gauss_step_fac,cov_draw_frac,gauss_temp_scaled,covariance_file);
-    cout<<"sym_prop_frac="<<sym_prop_frac<<" nsym="<<chain_prior->get_space()->get_potentialSyms().size()<<endl;
+    cprop=new_proposal_distribution_guts(Npar, chain_Ninit, chain_prior, &scales, proposal_option, SpecNinit, tmixfac, reduce_gamma_by, de_g1_frac, de_eps, gauss_1d_frac,de_mixing,prop_adapt_rate,adapt_more,prior_draw_frac,prior_draw_Tpow,gauss_draw_frac,gauss_step_fac,cov_draw_frac,gauss_temp_scaled,covariance_file);
+    if(reporting())cout<<"sym_prop_frac="<<sym_prop_frac<<" nsym="<<chain_prior->get_space()->get_potentialSyms().size()<<endl;
     if(sym_prop_frac>0 and chain_prior->get_space()->get_potentialSyms().size()>0){
       double rate=0;
       if(adapt_more)rate=prop_adapt_rate;
-      cout<<"Adding stateSpace potential symmetries to proposal."<<endl;
+      if(reporting())cout<<"Adding stateSpace potential symmetries to proposal."<<endl;
       proposal_distribution_set *symprops=involution_proposal_set(*chain_prior->get_space(),rate).clone();
       vector<proposal_distribution*> props={cprop,symprops};
       vector<double> shares={1-sym_prop_frac,sym_prop_frac};
@@ -157,6 +161,7 @@ proposal_distribution* ptmcmc_sampler::new_proposal_distribution_guts(int Npar, 
 								      int proposal_option,int SpecNinit,
 								      double tmixfac,double reduce_gamma_by,double de_g1_frac, double de_eps,double gauss_1d_frac,
 								      bool de_mixing, double prop_adapt_rate,bool adapt_more,
+								      double prior_draw_frac,double prior_draw_Tpow,
 								      double gauss_draw_frac, double gauss_step_fac, double cov_draw_frac, bool gauss_temp_scaled,
 								      const string &covariance_file
 								      ){
@@ -290,11 +295,25 @@ proposal_distribution* ptmcmc_sampler::new_proposal_distribution_guts(int Npar, 
     }
     vector<proposal_distribution*> set(Nprop_set,nullptr);;
     vector<double>shares(Nprop_set);
+    vector<double>hot_shares(Nprop_set);
+    double Tpow=0;
     int iprop=0;
     set[iprop]=de;
     double gshare=gauss_draw_frac;
-    shares[0]=1-gshare-cov_draw_frac;
+    shares[0]=1-gshare-cov_draw_frac-prior_draw_frac;
+    if(shares[0]<0)shares[0]=0;
     iprop++;
+    if(prior_draw_frac>0){		 
+      set[iprop]=new draw_from_dist(*prior);
+      set.push_back(nullptr);
+      shares.push_back(0);
+      shares[iprop]=prior_draw_frac;
+      hot_shares[iprop]=1;
+      hot_shares.push_back(0);
+      Tpow=prior_draw_Tpow;
+      iprop++;
+      Nprop_set++;
+    }
     //Next optionally add a specific covariance gaussian (top level if hierarchical)
     Eigen::MatrixXd covar;
     read_covariance(covariance_file,prior->get_space(),covar);
@@ -302,6 +321,7 @@ proposal_distribution* ptmcmc_sampler::new_proposal_distribution_guts(int Npar, 
       set[iprop]=new gaussian_prop(covar,gauss_1d_frac,gauss_temp_scaled);	
       set.push_back(nullptr);
       shares.push_back(0);
+      hot_shares.push_back(0);
       shares[iprop]=cov_draw_frac;
       iprop++;
       Nprop_set+=1;
@@ -330,9 +350,9 @@ proposal_distribution* ptmcmc_sampler::new_proposal_distribution_guts(int Npar, 
       }
     }
     if(adapt_more)
-      prop=new proposal_distribution_set(set,shares,prop_adapt_rate);
+      prop=new proposal_distribution_set(set,shares,prop_adapt_rate,Tpow,hot_shares);
     else
-      prop=new proposal_distribution_set(set,shares);
+      prop=new proposal_distribution_set(set,shares,0,Tpow,hot_shares);
     break;
   }
   default:
@@ -488,6 +508,8 @@ void ptmcmc_sampler::addOptions(Options &opt,const string &prefix){
   addOption("prop","Proposal type (0-7). Default=7 (DE with Gaussians.)","7");
   addOption("gauss_1d_frac","With Gaussian proposal distribution variants, specify a fraction which should be taken in one random parameter direction. Default=0.5","0.5");
   addOption("gauss_draw_frac","With Gaussian proposal distribution variants, specify a fraction of Gaussian draws. Default=0.20","0.20");
+  addOption("prior_draw_frac","Add prior draws to general proposal (prop7). Default=0","0");
+  addOption("prior_draw_Tpow","Power for thermal_weighting of any prior draws in proposal. Default=0","0");
   addOption("gauss_step_fac","With Gaussian proposal distribution variants, specify scale-spacing of Gaussian components. Default=2","2");
   addOption("gauss_temp_scaled","With Gaussian proposal distribution variants, scale (co)variance with chain-temp. Default=not");
   addOption("cov_draw_frac","With Gaussian proposal dist variants and a covariance file set, specify a fraction of Gaussian draws with defined covariance. Default=0.50","0.50");
@@ -703,6 +725,14 @@ int ptmcmc_sampler::run(const string & base, int ic){
 	}	
       }
     }
+    //Need to broadcast any STOP decision to all procs with MPI
+#ifdef USE_MPI
+    int nproc;
+    MPI_Comm_size(MPI_COMM_WORLD, &nproc);
+    if(nproc>1){
+      MPI_Bcast(&stop,1,MPI::BOOL,0,MPI_COMM_WORLD);
+    }
+#endif
     if(stop)break;
   }
   for(int ich=0;ich<dump_n;ich++)out[ich]<<"\n"<<endl;

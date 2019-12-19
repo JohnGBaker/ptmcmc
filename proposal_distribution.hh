@@ -27,11 +27,12 @@ protected:
   int last_type;
   int accept_count;
   int reject_count;
+  chain *ch;
 public:
   virtual ~proposal_distribution(){};
-  proposal_distribution(){id=idcount;idcount++;log_hastings=0;last_type=0;accept_count=0;reject_count=0;};
+  proposal_distribution(){id=idcount;idcount++;log_hastings=0;last_type=0;accept_count=0;reject_count=0;ch=nullptr;};
   virtual double log_hastings_ratio(){return log_hastings;};//(proposal part of Hasting ratio for most recent draw;
-  virtual void set_chain(chain *c){};//Not always needed.
+  virtual void set_chain(chain *c){ch=c;};//Not always needed.
   //virtual state draw(state &s,Random &rng){return s;};//The base class won't be useful.
   virtual state draw(state &s,chain *caller){return s;};//The base class won't be useful.
   ///Some proposals require some set-up, such as a chain of sufficient length.
@@ -198,12 +199,15 @@ class proposal_distribution_set: public proposal_distribution{
   vector<double>bin_max;
   //Needed for distribution evolution
   double adapt_rate;
-  double target_acceptance_rate;
   vector<bool>last_accepted;
   int adapt_count;
   int adapt_every;
   int last_dist;
   bool own_pointers;
+  //Needed for thermal scalings
+  double Tpow;
+  vector<double>hot_shares;
+  void reset_bins();
 
 public:
   virtual ~proposal_distribution_set(){
@@ -214,9 +218,9 @@ public:
 	if(prop)delete prop;
       }}};//delete proposals
   virtual proposal_distribution_set* clone()const;
-  proposal_distribution_set(vector<proposal_distribution*> &props,vector<double> &shares,double adapt_rate=0,double target_acceptance_rate=0.5,bool take_pointers=true);
+  proposal_distribution_set(vector<proposal_distribution*> &props,vector<double> &shares,double adapt_rate=0,double Tpow=0,vector<double> hot_shares=vector<double>(),bool take_pointers=true);
   ///For proposals which draw from a chain, we need to know which chain
-  void set_chain(chain *c){for(int i=0;i<Nsize;i++)proposals[i]->set_chain(c);};
+  void set_chain(chain *c){ch=c;for(int i=0;i<Nsize;i++)proposals[i]->set_chain(c);};
   ///Randomly select from proposals i in 0..n and draw.
   ///Sets type() value at i+10*proposals[i].type() 
   //state draw(state &s,Random &rng);
@@ -232,7 +236,7 @@ public:
 };
 
 ///Convenience constructor for a set of involution proposals based on the state
-proposal_distribution_set involution_proposal_set(const stateSpace &space,double adapt_rate=0,double target_acceptance_rate=0.5);
+proposal_distribution_set involution_proposal_set(const stateSpace &space,double adapt_rate=0);
 
 ///DifferentialEvolution
 ///Based mainly on (ter Braak and Vrugt 08, Stat Comput (2008) 18: 435–446)
@@ -251,7 +255,6 @@ class differential_evolution: public proposal_distribution {
   //int save_every;//to save memory it is not necessary to save every element of the history, nearby samples are not independent anyway.
   //int Scount;
   //vector<state> history;
-  chain *ch;
   ///recommended to sometimes try unit scaling, which promotes mode-hopping.
   double gamma_one_frac;
   double reduce_gamma_fac;

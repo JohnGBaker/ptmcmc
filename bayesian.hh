@@ -795,7 +795,7 @@ protected:
   void processOptions(){
     *optValue("stateFile")>>paramfile;
     if(not (paramfile=="")){have_paramfile=true;}
-    cout<<"haveParfile="<<have_paramfile<<endl;
+    //cout<<"haveParfile="<<have_paramfile<<endl;
   };
 };
 

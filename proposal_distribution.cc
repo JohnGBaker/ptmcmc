@@ -24,35 +24,58 @@ proposal_distribution_set* proposal_distribution_set::clone()const{//need a deep
   return result;
 };
 
-proposal_distribution_set involution_proposal_set(const stateSpace &space,double adapt_rate,double target_acceptance_rate){
+proposal_distribution_set involution_proposal_set(const stateSpace &space,double adapt_rate){
   vector<proposal_distribution*> props;
   vector<stateSpaceInvolution > involutions=space.get_potentialSyms();
   vector<double> shares(involutions.size(),1.0);
   for(auto involution : involutions)props.push_back(new involution_proposal(involution));
-  return proposal_distribution_set(props,shares,adapt_rate,target_acceptance_rate);
+  return proposal_distribution_set(props,shares,adapt_rate);
 };
 
 //A little utility for normalizing the shares and presetting the bin limits.
-void reset_bins(vector<double> &shares, vector<double> &bin_max){
+void proposal_distribution_set::reset_bins(){
   int Nsize=shares.size();
+  double Tfac=0;
+  if(Tpow>0){
+    if(not ch){
+      cout<<"proposal_distribution_set::reset_bins(): Thermal scaling requires that chain must be set for proposal."<<endl;
+      Tfac=0;
+    } else
+      Tfac=1-pow(ch->invTemp(),Tpow);
+  }
   double sum=0;
   for(int i=0;i<Nsize;i++)sum+=shares[i];//make sure the portions total one
   for(int i=0;i<Nsize;i++){
     shares[i]/=sum;
-    if(i==0)bin_max[0]=(shares[0]);
-    else bin_max[i]=(bin_max[i-1]+shares[i]);
+    if(i==0)bin_max[0]=shares[0];
+    else {
+      bin_max[i]=bin_max[i-1]+shares[i];
+      if(Tpow>0)bin_max[i]+=(hot_shares[i]-shares[i])*Tfac;
+    }
   }
 };
 
-proposal_distribution_set::proposal_distribution_set(vector<proposal_distribution*> &props,vector<double> &shares_,double adapt_rate,double target_acceptance_rate,bool take_pointers):shares(shares_),adapt_rate(adapt_rate),target_acceptance_rate(target_acceptance_rate),own_pointers(take_pointers){
+proposal_distribution_set::proposal_distribution_set(vector<proposal_distribution*> &props,vector<double> &shares_,double adapt_rate,double Tpow, vector<double> hot_shares_,bool take_pointers):shares(shares_),adapt_rate(adapt_rate),Tpow(Tpow),hot_shares(hot_shares_),own_pointers(take_pointers){
+  //if Tpow>0 do temperature-based weighting
+  //shares[i](T) = shares[i]*(1/T**Tpow) + hot_shares[i]*(1-1/T**Tpow)
+  //so shares[i](T=1) = shares[i]
+  //and shares[i](1/T=0) = hot_shares[i]
   //First some checks
   if(props.size()!=shares.size()){
     cout<<"proposal_distribution_set(constructor): Array sizes mismatched.\n";
     exit(1);
   }
   Nsize=shares.size();
+  if(Tpow>0){
+    double sum=0;
+    for(int i=0;i<hot_shares.size();i++)sum+=hot_shares[i];//make sure the portions total one
+    if(hot_shares.size()!=Nsize or sum<=0){
+      cout<<"proposal_distirubtion_set::With Tpow>0 need to provide hot_shares with sum>0"<<endl;
+      hot_shares=shares;
+    } else for(int i=0;i<Nsize;i++)hot_shares[i]/=sum;
+  }
   bin_max.resize(Nsize);
-  reset_bins(shares,bin_max);
+  reset_bins();
   for(int i=0;i<Nsize;i++)proposals.push_back(props[i]);//no copy here.
   last_type=0;
   last_dist=0;
@@ -106,36 +129,36 @@ state proposal_distribution_set::draw(state &s,chain * caller){
 void proposal_distribution_set::accept(){
   proposal_distribution::accept();
   //Here is the idea:
-  //Target acceptance rate = target_acc_rate
-  //Then: if two accepts in a row reduce weight scaling rate by target_acc_rate^2
-  //and if two rejects in a row reduce weight scaling rate by (1-target_acc_rate)^2
+  //If two accepts in a row reduce weight scaling
+  //and if two rejects in a row reduce weight scaling
+  //to favor mid-range acceptance rate
   if(adapt_rate==0){//Don't adapt here, but possibly adapt a sub_distribution
     proposals[last_dist]->accept();
     return; 
   };
   if(last_accepted[last_dist])//successive accepts
-    shares[last_dist]*=1-adapt_rate*target_acceptance_rate*target_acceptance_rate;
+    shares[last_dist]*=1-adapt_rate*0.25;
   last_accepted[last_dist]=true;
   adapt_count++;
-  if(adapt_count>=adapt_every)reset_bins(shares,bin_max);
+  if(adapt_count>=adapt_every)reset_bins();
   proposals[last_dist]->accept();
 };
 
 void proposal_distribution_set::reject(){
   proposal_distribution::reject();
   //Here is the idea:
-  //Target acceptance rate = target_acc_rate
-  //Then: if two accepts in a row reduce weight scaling rate by target_acc_rate^2
-  //and if two rejects in a row reduce weight scaling rate by (1-target_acc_rate)^2
+  //If two accepts in a row reduce weight scaling
+  //and if two rejects in a row reduce weight scaling
+  //to favor mid-range acceptance rate
   if(adapt_rate==0){//Don't adapt here, but possibly adapt a sub_distribution
     proposals[last_dist]->reject();
     return;
   };
   if(!last_accepted[last_dist])//successive rejects
-    shares[last_dist]*=1-adapt_rate*(1-target_acceptance_rate)*(1-target_acceptance_rate);
+    shares[last_dist]*=1-adapt_rate*0.25;
   last_accepted[last_dist]=false;
   adapt_count++;
-  if(adapt_count>=adapt_every)reset_bins(shares,bin_max);
+  if(adapt_count>=adapt_every)reset_bins();
   proposals[last_dist]->reject();
 };
 
@@ -196,10 +219,11 @@ string proposal_distribution_set::report(int style){//For status reporting on ad
     ss<<"]";
   } else if(style==1){
     string rep=proposals[0]->report(style);
-    ss<<"shares=["<<shares[0];
+    ss<<"shares=["<<bin_max[0];
     if(rep!="")ss<<":"<<rep;
     for(int i=1;i<Nsize;i++){
-      ss<<","<<shares[i];
+      //ss<<","<<shares[i];
+      ss<<","<<bin_max[i]-bin_max[i-1];
       string rep=proposals[i]->report(style);
       if(rep!="") ss<<":"<<rep;
     }
