@@ -37,6 +37,7 @@ cdef extern from '../bayesian.hh' :
          #^ sampleable_probability_function not yet interfaced in python
          void basic_setup(const stateSpace *sp,const vector[string] &types, const vector[double] &centers,const vector[double] &priorScales)                       
          void basic_setup(const stateSpace *sp,const vector[string] &types, const vector[double] &centers,const vector[double] &priorScales,const vector[double] &reScales)                       
+         void getScales(vector[double] &scales)
          #int size()const
          #virtual void reset()
          #virtual state bestState();

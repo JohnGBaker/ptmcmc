@@ -225,7 +225,7 @@ cdef class involution:
     #cdef have_init
 
     def __cinit__(self, stateSpace sp, str label,int nrand, transformState_func,jacobian_func=None, timing_every=0):
-        print("Constructing involution '"+label+"' = "+str(self)+"  nrand="+str(nrand)+"\n  transformState_func type="+str(type(transformState_func)))
+        #print("Constructing involution '"+label+"' = "+str(self)+"  nrand="+str(nrand)+"\n  transformState_func type="+str(type(transformState_func)))
         self.label=label
         cdef string clabel=label.encode('UTF-8')
         if(timing_every>0):
@@ -243,7 +243,7 @@ cdef class involution:
 
 
     def __dealloc__(self):
-        print("deallocating involution '"+self.label+"' = "+str(self))
+        #print("deallocating involution '"+self.label+"' = "+str(self))
         del self.cinv
         
     cdef states.state call_transformState(self, const states.state &s, const vector[double] &randoms) with gil:
@@ -346,7 +346,10 @@ cdef class likelihood:
        sp=stateSpace()
        sp.point(self.like.getObjectStateSpace())
        return sp
-
+    cpdef object getScales(self):
+       cdef vector[double] scales
+       self.like.getScales(scales)
+       return get_vector(scales)
 
 cdef class Options:
     '''
@@ -390,7 +393,7 @@ cdef class Options:
         #process residual char** array back to list of str
         for ccarg in ccargv[1:]:
             argv.append(ccarg.decode('UTF-8'))
-        print('argv=',argv)
+        #print('argv=',argv)
         parser=self.make_parser()
         self.argsdict=vars(parser.parse_args(argv))
     def make_parser(self):
@@ -445,7 +448,11 @@ cdef class sampler:
         new_sampler.opt=self.opt
         new_sampler.mcmcsampler=self.mcmcsampler.clone_ptmcmc_sampler()
         return new_sampler
-    #state getState();
+    cpdef state getState(self):
+        cdef states.state s=self.mcmcsampler.getState()
+        st=state()
+        st.cstate=states.state(s)
+        return st
     #static void Quit();
     cpdef bool reporting(self):
         return self.mcmcsampler.reporting()
