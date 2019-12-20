@@ -200,6 +200,7 @@ void chain::compute_autocovar_windows(bool (*feature)(const state &, double & va
   //set up output grid
   outwindows.resize(Nwin+1);
   int istart=getStep()-Nwin*width;
+
   //cout<<"istart,width,swidth:"<<istart<<" "<<width<<" "<<swidth<<endl;
   for(int i=0;i<=Nwin;i++)outwindows[i]=istart+i*width;
   if(loglag){
@@ -846,6 +847,10 @@ void MH_chain::add_state(state newstate,double log_like,double log_post){
     if(log_post==999)current_lpost=lprior->evaluate_log(newstate)+invtemp*current_llike;
     current_state=newstate;
     //cout<<"testing:"<<Nhist<<"%"<<add_every_N<<"="<<Nhist%add_every_N<<endl;
+    if(current_lpost>MAPlpost){
+      MAPlpost=current_lpost;
+      MAPstate=current_state;
+    }
     if(Nhist%add_every_N==0){//save state info every add_every_N
       //cout<<" ADDED state "<<Nsize<<":"<<newstate.get_string()<<endl;
       //cout<<"adding state "<<Nsize<<":"<<newstate.get_string()<<endl;
@@ -982,7 +987,7 @@ state MH_chain::getState(int elem,bool raw_indexing){//defaults (-1,false)
 };
 
 double MH_chain::getLogPost(int elem,bool raw_indexing){//defaults (-1,false)  
-  if(elem<0||elem>=Nsize||(!raw_indexing&&elem>=Nhist))
+  if(elem<0||(raw_indexing&&elem>=Nsize)||(!raw_indexing&&elem>=Nhist))
     return current_lpost;//Current state by default
   else if (raw_indexing) 
     return lposts[elem];
@@ -991,7 +996,7 @@ double MH_chain::getLogPost(int elem,bool raw_indexing){//defaults (-1,false)
 };
 
 double MH_chain::getLogLike(int elem,bool raw_indexing){
-  if(elem<0||elem>=Nsize||(!raw_indexing&&elem>=Nhist))
+  if(elem<0||(raw_indexing&&elem>=Nsize)||(!raw_indexing&&elem>=Nhist))
       return current_llike;
   else if (raw_indexing)
       return llikes[elem];
@@ -1480,6 +1485,8 @@ void parallel_tempering_chains::step(){
   //MPI Not clear whether/what this Nsize is needed for. If anything.
   //MPI FIXME
   Nsize=c0().size();
+  MAPlpost=c0().getMAPlpost();
+  MAPstate=c0().getMAPstate();
   //cout<<status()<<endl;
   
   //diagnostics and steering:
@@ -2006,11 +2013,15 @@ string parallel_tempering_chains::status(){
  
 string parallel_tempering_chains::report_prop(int style){//Not yet MPI aware
   ostringstream result("");
-  for(auto i: mychains)
-    result<<" T="<<temps[i]<<"; "<<props[i]->report(style)<<endl;//"; "<<chains[i].show();
+  if(reporting){
+    for(auto i: mychains)
+      result<<" T="<<temps[i]<<"; "<<props[i]->report(style)<<endl;//"; "<<chains[i].show();
+    return result.str();
+  }
   return result.str();
 };
 
 
   
     
+

@@ -40,6 +40,8 @@ protected:
   int Nfrozen;
   int dim;
   bool reporting;
+  double MAPlpost;
+  state MAPstate;
   shared_ptr<Random> rng; //Random number generator for this chain. Each chain has its own so that the results can be threading invariant
   //This function is defined for just for sorting below
   //static bool AgtB(const pair<double,double> & A,const pair<double,double>&B){return A.second>B.second;};
@@ -111,6 +113,9 @@ public:
     cout<<"chain::step: No base-class dumpChain() operation defined!"<<endl;
     exit(1);
   };
+  virtual double getMAPlpost()const{return MAPlpost;}; 
+  virtual state getMAPstate()const{return MAPstate;}; 
+  
   //Interface for optional features of derived clases.
   ///This function should be overloaded to indicate the number of subchains in a hierarchical chain;
   virtual int multiplicity(){return 1;};
