@@ -27,6 +27,7 @@ def get_par_names(fname):
         names=names[par0col:]
     return names
 
+
 def read_samples(Npar,sample_file,code="bambi",burnfrac=0,keeplen=-1,iskip=1,maxsamps=30000):
     if(code=="bambi"):
         print ("Reading BAMBI samples")
@@ -35,6 +36,7 @@ def read_samples(Npar,sample_file,code="bambi",burnfrac=0,keeplen=-1,iskip=1,max
         print ("Reading PTMCMC samples")
         par0col=5
         if("resampled.dat" in sample_file):par0col=2
+        if("resampled_phi.dat" in sample_file):par0col=1
         data=np.loadtxt(sample_file,usecols=[0]+[par0col+x for x in selectedPars])
         if(iskip>1):
             print("data[-1]=",data[-1],"data[-2]=",data[-2][0])
@@ -79,7 +81,8 @@ def read_samples(Npar,sample_file,code="bambi",burnfrac=0,keeplen=-1,iskip=1,max
         
     return data
 
-def cornerFisher(Npar,pars,samples,in_cov,cred_levs,iparmin=0,iparend=9,sample_labels=None):
+def cornerFisher(Npar,pars,samples,in_cov,cred_levs,iparmin=0,iparend=None,sample_labels=None):
+    if iparend is None: iparend=Npar
     data=[]
     for datum in samples:
     #Sylvain:Here crop down to a limited parameter set for a smaller plot
@@ -87,6 +90,7 @@ def cornerFisher(Npar,pars,samples,in_cov,cred_levs,iparmin=0,iparend=9,sample_l
         #print ("data shape=",datum.shape)
         istart=iparmin;
         iend=iparend
+        print('appending: istart=',istart,' iend=',iend)
         data.append(datum[:,istart:iend])
     if(pars is not None):
         pars=pars[istart:iend]
@@ -113,6 +117,7 @@ def cornerFisher(Npar,pars,samples,in_cov,cred_levs,iparmin=0,iparend=9,sample_l
         q = [0.5 - 0.5*corner_range_cut, 0.5 + 0.5*corner_range_cut]
         datum=data[0]
         for i in range(Npar):
+            #print('datum shape',datum.shape)
             rangelimits[i] = list(corner.quantile(datum[:,i], q))
         for datum in data[1:]:
             for i in range(Npar):
@@ -217,6 +222,7 @@ if(True):
     print("sp:",selectedPars)
     parnames=[parnames[i] for i in selectedPars]
     Npar=len(parnames)
+    print("parnames:",parnames)
     #run=re.search("Run\d*",chainfile).group(0)
     run=os.path.basename(chainfile)
     #run=os.path.basename(fishfile)
@@ -294,7 +300,7 @@ if(True):
             code="bambi"
             burnfrac=0
             iskip=1
-        elif("_resampled.dat" in chainfile): #resampled ptmcmc data
+        elif("_resampled" in chainfile): #resampled ptmcmc data
             code="ptmcmc"
             burnfrac=0
             iskip=1
@@ -312,6 +318,7 @@ if(True):
         if(len(args.lens)>0):lkeep=lens[i]
         samples.append(read_samples(Npar,chainfile,code=code,burnfrac=burnfrac,keeplen=lkeep,iskip=iskip))
         i+=1
+        print("calling cornerFisher: Npar=",Npar," pars=",pars," len(samples)",len(samples),samples[0].shape)
         cornerFisher(Npar,pars,samples,cov,cred_levs,sample_labels=sample_labels)
 
     rs=[ math.sqrt(s[1]**2+s[2]**2) for s in samples[0]]

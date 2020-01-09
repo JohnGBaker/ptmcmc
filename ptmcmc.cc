@@ -92,7 +92,7 @@ void ptmcmc_sampler::select_proposal(){
 void ptmcmc_sampler::test_prop(){
     //Perform propopsal testing if called for
     string indexstring;(*optValue("prop_test_index"))>>indexstring;
-    cout<<"indexstring='"<<indexstring<<"'"<<endl;
+    //cout<<"indexstring='"<<indexstring<<"'"<<endl;
     if(indexstring.length()==0)return;
     //Look for "+" at the end to to potentially increase rigor of the testing
     int rigor=0;
@@ -607,7 +607,7 @@ int ptmcmc_sampler::initialize(){
 };
 
 int ptmcmc_sampler::run(const string & base, int ic){
-  cout<<"ptmcmc_sampler:running with omp_num_threads="<<omp_get_num_threads()<<endl;
+  if(reporting())cout<<"ptmcmc_sampler:running with omp_num_threads="<<omp_get_num_threads()<<endl;
   
   if(!have_cc&&chain_Nstep>0){
     cout<<"ptmcmc_sampler::run.  Must call initialize() before running!"<<endl;
