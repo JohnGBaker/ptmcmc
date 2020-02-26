@@ -20,7 +20,7 @@ void ptmcmc_sampler::select_proposal(){
     if(reporting())cout<<"Selecting proposal for stateSpace:\n"<<chain_prior->get_space()->show()<<endl;
     int Npar=chain_prior->get_space()->size();
     int proposal_option,SpecNinit;
-    double tmixfac,reduce_gamma_by,de_g1_frac,de_eps,gauss_1d_frac,prior_draw_frac,prior_draw_Tpow,gauss_draw_frac,gauss_step_fac,cov_draw_frac,sym_prop_frac;
+    double tmixfac,reduce_gamma_by,de_g1_frac,de_eps,gauss_1d_frac,prior_draw_frac,prior_draw_Tpow,gauss_draw_frac,gauss_step_fac,cov_draw_frac,sym_prop_frac,unlikely_alpha;
     bool de_mixing=false;
     bool gauss_temp_scaled=false;
     string covariance_file;
@@ -56,6 +56,7 @@ void ptmcmc_sampler::select_proposal(){
     (*optValue("de_reduce_gamma"))>>reduce_gamma_by;
     (*optValue("de_g1_frac"))>>de_g1_frac;
     (*optValue("de_Tmix"))>>tmixfac;
+    (*optValue("de_unlikely_alpha"))>>unlikely_alpha;
     gauss_temp_scaled=optSet("gauss_temp_scaled");
     de_mixing=optSet("de_mixing");
 
@@ -76,8 +77,7 @@ void ptmcmc_sampler::select_proposal(){
     double gshare=gauss_draw_frac;
 
     //Differential_evolution component    
-    //c.f. differential_evolution(double snooker=0.0, double gamma_one_frac=0.1,double b_small=0.0001,double ignore_frac=0.3);    vector<proposal_distribution*>props(2);
-    differential_evolution *de=new differential_evolution(0.1,de_g1_frac,de_eps,0.0);
+    differential_evolution *de=new differential_evolution(0.1,de_g1_frac,de_eps,0.0,unlikely_alpha);
     //differential_evolution *de=new differential_evolution(0.1,0.3,0.0);
     de->reduce_gamma(reduce_gamma_by);
     if(de_mixing)de->support_mixing(true);
@@ -383,6 +383,8 @@ void ptmcmc_sampler::addOptions(Options &opt,const string &prefix){
   addOption("de_g1_frac","Differential Evolution reduce fraction of times gamma parameter set to 1. Default=0.3.","0.3");
   addOption("de_mixing","Differential-Evolution support mixing of parallel chains.");
   addOption("de_Tmix","Differential-Evolution degree to encourage mixing info from different temps.(default=300)","300");
+  addOption("de_unlikely_alpha","Scaling power for rejecting unlikely past states in differential evolution draws.(Default 0, ie none)","0");
+  
   addOption("prop_test_index","String providing (multi-)index value indicating proposal to test. Append L to loop and +s for more rigor. (eg '.' for all, '0-1L+' for rigorous test looping over sub-proposals below second member of first member of nested set, Default: no test)","");
   addOption("chain_init_file","Specify chain file from which to draw initializtion points, rather than from prior.","");  
   addOption("chain_ess_stop","Stop MCMC sampling the first time the specified effective sample size is reached. (default never)","-1.0");

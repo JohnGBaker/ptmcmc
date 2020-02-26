@@ -18,7 +18,6 @@ import ess as esspy
 
 #from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.widgets import Slider, Button, RadioButtons
-nparmax=12
 filestyle=0
 
 useLikeDefault=False
@@ -101,19 +100,9 @@ class chainData:
 
     def get_par_names(self,fname,startcol=5):
         with open(fname) as f:
-            line1=f.readline()
-            if(line1[0]=='#'):
-                line2=f.readline()
-                if(line2[0]=='#'):
-                    names=line2.split()
-                    names=names[startcol:]
-                    return names
-                else:
-                    names=line1.split()
-                    names=names[startcol:]
-                    return names
-            else:
-                names=['p'+str(i) for i in range(len(line1.split()))]
+            names = read_par_names(f,startcol)
+        if names is None:
+            names=['p'+str(i) for i in range(len(line1.split()))]
         return names
 
     def getSteps(self):
@@ -131,6 +120,34 @@ class chainData:
         i0=self.names.index('post')+1
         if self.useLike: i0+=1
         return self.data[rows,i0:]
+
+    def readCovar(self,filename=None):
+        if filename is None:
+            filename=self.basename+"_covar.dat"
+        pars=[]
+        done=False
+        with open(filename,'r') as f:
+            names=read_par_names(f)
+            idxs=[]
+            try:
+                for name in names:
+                    tryname=name
+                    idxs.append(self.parnames.index(name))
+            except:
+                if names[0]!='p0': print("Failed to find '"+tryname+"' among chain's parnames.")
+                print("Assuming params align with chain params")
+                idxs=range(len(names))
+                idxs=[self.ipar0+idx for idx in idxs]
+            line=f.readline()
+            while(not "#Covariance" in line): line=f.readline() #Skip until the good stuff
+            covar=np.zeros((self.npar,self.npar))
+            for iidx in idxs:
+                line=f.readline()
+                print(i,":",line)
+                elems=np.array(line.split())
+                for j,val in elems:
+                    covar[iidx,idxs[j]]=val
+        return covar
 
     def estimate_ess(self,esslimit=10000):
         if not self.have_ess: 
@@ -172,6 +189,27 @@ class chainData:
         
 #####################################
 #general functions
+                                       
+def read_par_names(f,startcol=0):
+    pos=f.tell()
+    line1=f.readline()
+    if(line1[0]=='#'):
+        pos=f.tell()
+        line2=f.readline()
+        if(line2[0]=='#'):
+            names=line2.split()
+            names=names[startcol:]
+            return names
+        else:
+            f.seek(pos)
+            names=line1.split()
+            names=names[startcol:]
+            return names
+    else:
+        f.seek(pos)
+        names=['p'+str(i) for i in range(len(line1.split()))]
+    return names
+
 
 def KL_divergence(samplesP, samplesQ):
     '''

@@ -526,21 +526,28 @@ int  differential_evolution::draw_i_from_chain(chain *caller,chain *c){
   int mins=get_min_start_size();
   int minc=get_min_cut_size();
   if((size-minc)*(1-ignore_frac)>mins)start=(size-minc)*ignore_frac;
-  double xrnd=rng.Next();
-  //rngout<<xrnd<<" 6"<<endl;
-  //#pragma omp critical
-  //cout<<" :"<<xrnd<<" 6 rng="<<&rng<<endl;
-  int index = start+(size-start)*xrnd;
-  //cout<<"drew "<<index<<" from ["<<start<<","<<start+size<<")"<<endl;
-  //#pragma omp critical (gleamout2)
-  //{
-  //cout<<"draw_i_from_chain("<<caller->get_id()<<","<<c->get_id()<<"): index="<<index<<",size="<<size<<endl;
-  //}
-  return index;
+
+  //If unlikely_alpha>0, we reduce the probability of drawing samples from excessively unlikely
+  //regions of the chain history.  As a starting place we take the maximum (log) posterior value
+  //so far, then subtract the space dimension.  Above this value we take everything. Below this
+  //we accept some, we probability p=exp(alpha*(lpost-lpost0)))
+  double lpost0=ch->getMAPlpost()-ch->getDim();
+  while(true){
+    double xrnd=rng.Next();
+    int index = start+(size-start)*xrnd;
+    double lpost=ch->getLogPost(index,true);
+    if(unlikely_alpha>0 and lpost0>lpost){
+      double p=exp(unlikely_alpha*(lpost-lpost0));
+      xrnd=rng.Next();
+      //cout<<"lp0,lp,p,x:"<<lpost0<<" "<<lpost<<" "<<p<<" "<<xrnd<<endl;
+      if(xrnd<p)return index;
+    } else return index;
+  }
+  //return index;
 };
 
 
-differential_evolution::differential_evolution(double snooker, double gamma_one_frac,double b_small,double ignore_frac):gamma_one_frac(gamma_one_frac),b_small(b_small),ignore_frac(ignore_frac),snooker(snooker){
+differential_evolution::differential_evolution(double snooker, double gamma_one_frac,double b_small,double ignore_frac,double unlikely_alpha):gamma_one_frac(gamma_one_frac),b_small(b_small),ignore_frac(ignore_frac),snooker(snooker),unlikely_alpha(unlikely_alpha){
   reduce_gamma_fac=1;
   have_chain=false;
   do_support_mixing=false;

@@ -906,7 +906,7 @@ void MH_chain::step(proposal_distribution &prop,void *data){
     }
     //Now the test: 
     double log_hastings_ratio=prop.log_hastings_ratio();
-    if(isnan(log_hastings_ratio)){
+    if(std::isnan(log_hastings_ratio)){
       accept=false;//It is not clear how best to play this
       cout<<"Warning prop.log_hastings is NAN!"<<endl;
     }

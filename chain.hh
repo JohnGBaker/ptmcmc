@@ -66,7 +66,7 @@ public:
     //Each chain has its own pseudo (newran) random number generator seeded with a seed drawn from the master PRNG
     //As long as the chains are created in a fixed order, this should allow threading independence of the result.
     Nfrozen=-1;
-    
+    MAPlpost=-1e200;
   };
   virtual void checkpoint(string path)override;
   virtual void restart(string path)override;

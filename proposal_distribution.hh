@@ -262,6 +262,8 @@ class differential_evolution: public proposal_distribution {
   double b_small; 
   ///We ignore the first Mcount*ignore_frac entries in the history;
   double ignore_frac;
+  ///Discount low-probability history
+  double unlikely_alpha;
   //Comment:Citing that work terBraak also comments that (retaining)  the "full [sampled] past is required to guarantee ergodicity of the chain."  In HaaioEA, however, it seems clear that retaining a fixed recent fraction of the past (they give 1/2 as an example) would also be sufficient for their theorem.  I haven't carefully studied it, but this also seems to be supported by Roberts+Rosenthal2007, perhaps satisfying their "diminishing adaptation" condition.
   double snooker;
   //SampsonEA don't use it, but terBraakEA seem to prefer a variant on DE where the scaling is set by a separate drawing of states;  I guess this propotes variety.
@@ -286,7 +288,7 @@ class differential_evolution: public proposal_distribution {
 public:
   void reduce_gamma(double factor){reduce_gamma_fac=factor;};
   void mix_temperatures_more(double factor){temperature_mixing_factor=factor;};
-  differential_evolution(double snooker=0.0, double gamma_one_frac=0.1,double b_small=0.0001,double ignore_frac=0.3);
+  differential_evolution(double snooker=0.0, double gamma_one_frac=0.1,double b_small=0.0001,double ignore_frac=0.3,double unlikely_alpha=0);
   void set_chain(chain *c){ch=c;have_chain=true;dim=ch->getDim();};
   ///Verify that the chain is set and that the chain has some minimum length of 10*dim.
   bool is_ready(){return(have_chain&&ch->size()>=get_min_start_size());};
