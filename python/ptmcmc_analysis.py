@@ -15,6 +15,8 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as colors
 import matplotlib.cm as cm
 import ess as esspy
+#import matplotlib
+#matplotlib.use('TkAgg')
 
 #from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.widgets import Slider, Button, RadioButtons
@@ -491,7 +493,7 @@ class viewer:
             self.radioY = RadioButtons(rYax, allparnames, active=cy0)
             parnameswidth=max([len(x) for x in allparnames])
             fontsize=self.radioX.labels[0].get_fontsize()/max([1,parnameswidth/5.])
-            print("fontsize=",fontsize)
+            #print("fontsize=",fontsize)
             for label in self.radioX.labels:
                 label.set_fontsize(fontsize)
             for label in self.radioY.labels:
@@ -500,11 +502,12 @@ class viewer:
                 circle.set_radius(0.03)
             self.radioX.on_clicked(self.update)
             self.haveX=True
+            #print('set radio')
         else:
             self.radioY = RadioButtons(rYax, allparnames, active=0)
             parnameswidth=max([len(x) for x in allparnames])
             fontsize=self.radioY.labels[0].get_fontsize()/max([1,parnameswidth/5.])
-            print("fontsize=",fontsize)
+            #print("fontsize=",fontsize)
             for label in self.radioY.labels:
                 label.set_fontsize(fontsize)
             self.haveX=False
@@ -516,8 +519,13 @@ class viewer:
         self.button = Button(resetax, 'Reset', color=axcolor, hovercolor='0.975')
         self.button.on_clicked(self.reset)
 
+        #print('calling update')
         self.update()
+        #print('save fig')
+        #plt.savefig('junk.png')
+        #print('calling show')
         plt.show()
+        #print('finished init')
     
     
     def update(self,val=0): #argument is not used
