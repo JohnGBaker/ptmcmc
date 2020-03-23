@@ -49,6 +49,7 @@ class chainData:
         elif(fname.endswith(".dat")):
             basename=fname.replace(".dat","")
             filestyle=1 #general style (post,like, pars,...) by default
+            print('general style detected')
         print ("basename="+basename)
         return basename,fname,filestyle
 
@@ -80,14 +81,24 @@ class chainData:
                 parnames=["samp"]+self.get_par_names(chainfilepath,startcol=0)
                 self.ipar0=1
             else: #post, like, pars
+                havelike=False
+                varparnames=self.get_par_names(chainfilepath,startcol=0)
+                if 'like' in varparnames: 
+                    varparnames=varparnames[varparnames.index('like')+1:]
+                    havelike=True
+                if 'post' in varparnames: 
+                    varparnames=varparnames[varparnames.index('post')+1:]
                 parnames=["samp","post",]
-                if self.useLike:
-                    parnames+=['like']
-                    self.ipar0=3
-                else:
-                    data=np.delete(data,[1],1)
+                if havelike:
+                    if self.useLike:
+                        parnames+=['like']
+                        self.ipar0=3
+                    else:
+                        data=np.delete(data,[1],1)
+                        self.ipar0=2
+                else: 
                     self.ipar0=2
-                parnames+=self.get_par_names(chainfilepath)
+                parnames+=varparnames
         self.npar=len(parnames)-self.ipar0
         self.names=parnames
         self.N=len(data)

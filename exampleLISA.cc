@@ -259,7 +259,7 @@ double dist_inc_scale_symmetry_jac(void *object, const state &s, const vector<do
   double fac=cosnew/cosold;
   //double fac=(cosnew*cosnew+1)/(cosold*cosold+1);
   fac*=(M_PI-newinc)*newinc/(M_PI-oldinc)/oldinc;
-  if(isnan(fac)){
+  if(std::isnan(fac)){
     cout<<"fac is nan:"<<oldf<<"->"<<newf<<" "<<oldinc<<"->"<<newinc<<" --> fac="<<fac<<endl;
     cout<<"state: "<<s.get_string()<<endl;
   }

@@ -218,6 +218,7 @@ class parallel_tempering_chains: public chain{
   //Mainly based on KatzenbergerEA06, but for now we don't implement any temperature
   //tuning.  For now we use aspects of Katzenberger's tuning algorithm for diagnostics.
   //Thus we say "replicas" move between chains/temps.
+  const stateSpace *sp;
   const int Ntemps;
   const int add_every_N;
   ///swap rate per chain.  Effective max of 1/(Ntemps-1), ie 1 swap per step total.
