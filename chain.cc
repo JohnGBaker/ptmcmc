@@ -1079,7 +1079,7 @@ string MH_chain::report_prop(int style){
 // A parallel tempering set of markov (or non-Markovian) chain
 // May add "burn-in" distinction later.
 
-parallel_tempering_chains::parallel_tempering_chains(int Ntemps,double Tmax,double swap_rate,int add_every_N,bool do_evid_in,bool verbose_evid,double dpriormin):Ntemps(Ntemps),swap_rate(swap_rate),add_every_N(add_every_N),do_evid(do_evid_in),verbose_evid(verbose_evid),dpriormin(dpriormin){
+parallel_tempering_chains::parallel_tempering_chains(int Ntemps,double Tmax,double swap_rate,int add_every_N,bool do_evid_in,bool verbose_evid,double dpriormin):sp(nullptr),Ntemps(Ntemps),swap_rate(swap_rate),add_every_N(add_every_N),do_evid(do_evid_in),verbose_evid(verbose_evid),dpriormin(dpriormin){
     props.resize(Ntemps);
     directions.resize(Ntemps,0);
     instances.resize(Ntemps,-1);
@@ -1200,7 +1200,7 @@ void parallel_tempering_chains::restart(string path){
 void parallel_tempering_chains::initialize( probability_function *log_likelihood, const sampleable_probability_function *log_prior,int n,string initialization_file){
   Ninit=n;
   dim=log_prior->getDim();
-
+  sp=log_prior->get_space();
   //MPI This is the starting place where MPI distribution is determined
   //Need a global indexing of chains, and maps to and from the local indices.
   mychains.clear();//probably don't need this
@@ -1808,7 +1808,7 @@ vector<state> parallel_tempering_chains::gather_states(){
     //We assume the state-space is the same
     //We need to know the size of each state (number of pars), should not evolve.
     //For transdimensional (not yet supported) this should be the max size.
-    const stateSpace *sp=chains[mychains[0]].getState().getSpace();
+    //const stateSpace *sp=chains[mychains[0]].getState().getSpace();
     int statesize=sp->size();
     int stride=interproc_stride*statesize;
     double sendbuf[stride];
