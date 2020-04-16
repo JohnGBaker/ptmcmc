@@ -537,7 +537,7 @@ int ptmcmc_sampler::run(const string & base, int ic){
 	//some procs reach this point at different times so we have to
 	//make sure that all procs try to checkpoint at the same step.
 	bool checkpoint_now_this_proc=checkpoint_now;
-	MPI_Allreduce(&checkpoint_now_this_proc,&checkpoint_now,1,MPI::BOOL,MPI::LOR,MPI_COMM_WORLD);
+	MPI_Allreduce(&checkpoint_now_this_proc,&checkpoint_now,1,MPI_C_BOOL,MPI_LOR,MPI_COMM_WORLD);
       }
 #endif   
     }   
@@ -594,7 +594,7 @@ int ptmcmc_sampler::run(const string & base, int ic){
     int nproc;
     MPI_Comm_size(MPI_COMM_WORLD, &nproc);
     if(nproc>1){
-      MPI_Bcast(&stop,1,MPI::BOOL,0,MPI_COMM_WORLD);
+      MPI_Bcast(&stop,1,MPI_C_BOOL,0,MPI_COMM_WORLD);
     }
 #endif
     if(stop)break;
