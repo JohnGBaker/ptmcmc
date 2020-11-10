@@ -190,6 +190,140 @@ public:
     ostringstream ss; ss<<"StepBy"<<(identity_trans?"":"Covar")<<"["<<(dist?dist->show():"<null>")<<"](1Dfrac="<<oneDfrac<<",scaleWithTemp="<<scaleWithTemp<<")";return ss.str();};
 };
 
+///This class implements a user-defined multidimensional gaussian step proposal distribution.
+///
+///This generalizes the general-covariance variant of the multidimensional Gaussian (gaussian_prop)
+///
+///but we allow that and additional parameter vector transformation is performed.
+///The matrix M for this transformation is computed to diagonalize a covariance matrix
+///passed in initially.
+class user_gaussian_prop: public proposal_distribution{
+  Eigen::MatrixXd diagTransform;
+  valarray<double>sigmas;
+  gaussian_dist_product *dist;
+  int ndim;
+  string label;
+  bool (*user_check_update)(void *object, const state &s, const vector<double> &randoms, vector<double> &covarvec);
+  void * user_object;
+  bool check_update_registered;
+  vector<int>idx_map;
+  int nrand;
+protected:
+  stateSpace domainSpace; //Note the Transform can be applied as long as this can be identified as a subspace.
+public:
+  user_gaussian_prop(const stateSpace &sp,const vector<double> &covarvec=vector<double>(), int nrand=0, const string label=""):nrand(nrand),label(label){
+    check_update_registered=false;
+    user_object=nullptr;
+    domainSpace=sp;
+    ndim=sp.size();
+    cout<<" Constructing user_gaussian_prop["+label+"]"<<endl;
+    dist=nullptr;    
+    reset_dist(covarvec);
+  };
+  user_gaussian_prop(void *object, bool (*function)(void *object, const state &, const vector<double> &randoms, vector<double> &covarvec),const stateSpace &sp,const vector<double> &covarvec=vector<double>(), int nrand=0, const string label=""):user_gaussian_prop(sp,covarvec,nrand,label){
+    register_reference_object(object);
+    register_check_update(function);
+  };
+  virtual ~user_gaussian_prop(){if(dist){
+      //cout<<"deleting this="<<this<<" deleting dist="<<dist<<endl;
+      delete dist;}};
+  user_gaussian_prop* clone()const{
+    user_gaussian_prop *clone = new user_gaussian_prop(*this);
+    valarray<double> zeros(0.0,ndim);
+    clone->dist=new gaussian_dist_product(nullptr,zeros, sigmas);
+    return clone;
+  };
+  string get_label()const {return label;};
+  void register_reference_object(void *object){
+    user_object=object;};    
+  void register_check_update(bool (*function)(void *object, const state &, const vector<double> &randoms, vector<double> &covarvec)){
+    user_check_update=function;
+    check_update_registered=true;
+  };  
+  state draw(state &s,chain *caller){
+    //first restrict to the relevant subspace for this step distribution
+    if(idx_map.size()==0){
+      idx_map=s.projection_indices_by_name(&domainSpace);
+      for(int i=0;i<s.size();i++)
+	if(i<0)cout<<"use_gaussian_prop['"+label+"']:draw: Param '"+domainSpace.get_name(i)+"' not found in stateSpace! Will ignore."<<endl;
+    }
+    vector<double> sparams(domainSpace.size());
+    for(int i=0;i<ndim;i++)if(idx_map[i]>=0)sparams[i]=s.get_param(idx_map[i]);
+    state ss=state(&domainSpace,sparams);
+    last_type=check_update(ss,caller);
+    state offset=dist->drawSample(*(caller->getPRNG()));;
+    double x=1;
+    valarray<double> data;
+    offset.get_params_array(data);
+    Eigen::Map<Eigen::VectorXd> vec(&data[0],offset.size());
+    vec=diagTransform*vec;
+    state newstate=s.scalar_mult(0);
+    for(int i=0;i<ndim;i++)if(idx_map[i]>=0)newstate.set_param(idx_map[i],vec(i));
+    newstate=s.add(newstate);
+    return newstate;
+  };
+  string show(){
+    ostringstream ss; ss<<"StepBy"<<"UserCovar["+label+"]";return ss.str();};
+protected:
+  void reset_dist(const vector<double> &covarvec){
+    Eigen::MatrixXd cov(ndim,ndim);
+    if(covarvec.size()==ndim){ //covarvec is understood as diag of diagonal matrix
+      for(int i=0;i<ndim;i++)cov(i,i)=covarvec[i];
+    } else if(covarvec.size()==(ndim*(ndim+1))/2){ //covarvec is concatenated UL side of covariance.  E.g. 3D identify is {1,0,0,1,0,1}
+      //Convert vector-form covariance to Eigen symmetric matrix
+      int ic=0;
+      for(int i=0;i<ndim;i++){
+	for(int j=i;j<ndim;j++){
+	  cov(i,j)=covarvec[ic];
+	  cov(j,i)=cov(i,j);
+	  ic++;
+	}
+      }
+    } else {
+      cout<<"gaussian_prop:reset_dist Covar vector has unexpeced size,";
+      cout<<"ndim="<<ndim<<" UL-size="<<covarvec.size()<<" "<<endl;
+      if(dist){
+	cout<<" Skipping update!"<<endl;
+	return;
+      } else {
+	cout<<" Setting to identity matrix!"<<endl;
+	for(int i=0;i<ndim;i++)cov(i,i)=1;
+      }
+    }
+    //Now perform the update
+    sigmas.resize(ndim);
+    Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> eigenSolver(cov);
+    diagTransform=eigenSolver.eigenvectors();
+    Eigen::VectorXd evalues = eigenSolver.eigenvalues();
+    for(int i=0;i<ndim;i++){
+      if(evalues[i]<0){
+	cout<<"user_gaussian_prop["+label+"]: Warning. Negative covariance eigenvalue set to zero."<<endl;
+	evalues[i]=0;
+      }
+      sigmas[i]=sqrt(evalues(i));
+    }
+    valarray<double> zeros(0.0,ndim);
+    if(dist){//cout<<"this="<<this<<" deleting dist="<<dist<<endl;
+      delete dist;}
+    dist = new gaussian_dist_product(nullptr,zeros, sigmas);
+    //cout<<"this="<<this<<" created dist="<<dist<<endl;
+  };    
+  ///This function updates the proposal if user has provided an update callback function
+  bool check_update(const state &s, chain *caller){
+    if(!check_update_registered)return false;
+    //Generate random values
+    vector<double>randoms(nrand);
+    for(auto & x : randoms)x=(caller->getPRNG()->Next());
+    //Call user function
+    vector<double> covarvec;
+    bool renewing=user_check_update(user_object, s, randoms, covarvec);
+    if(!renewing)return false;
+    reset_dist(covarvec);
+    return true;
+  };
+
+};
+
 
 //Typically you want to draw from a set of various proposal distributions.
 class proposal_distribution_set: public proposal_distribution{
@@ -218,7 +352,7 @@ public:
 	if(prop)delete prop;
       }}};//delete proposals
   virtual proposal_distribution_set* clone()const;
-  proposal_distribution_set(vector<proposal_distribution*> &props,vector<double> &shares,double adapt_rate=0,double Tpow=0,vector<double> hot_shares=vector<double>(),bool take_pointers=true);
+  proposal_distribution_set(const vector<proposal_distribution*> &props,const vector<double> &shares,double adapt_rate=0,double Tpow=0,vector<double> hot_shares=vector<double>(),bool take_pointers=true);
   ///For proposals which draw from a chain, we need to know which chain
   void set_chain(chain *c){ch=c;for(int i=0;i<Nsize;i++)proposals[i]->set_chain(c);};
   ///Randomly select from proposals i in 0..n and draw.

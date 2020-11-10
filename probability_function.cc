@@ -18,7 +18,8 @@ gaussian_dist_product::gaussian_dist_product(const stateSpace *space, const vala
   dim=x0s.size();
   if(dim!=sigmas.size()){
     cout<<"gaussian_dist_product(constructor): Array sizes mismatch.\n";
-    exit(1);
+    cout<<"x0s.size,sigms.size:"<<x0s.size()<<","<<sigmas.size()<<endl;
+    terminate();
   }
   dists.resize(dim);
   for(size_t i=0;i<dim;i++){

@@ -55,7 +55,7 @@ void proposal_distribution_set::reset_bins(){
   }
 };
 
-proposal_distribution_set::proposal_distribution_set(vector<proposal_distribution*> &props,vector<double> &shares_,double adapt_rate,double Tpow, vector<double> hot_shares_,bool take_pointers):shares(shares_),adapt_rate(adapt_rate),Tpow(Tpow),hot_shares(hot_shares_),own_pointers(take_pointers){
+proposal_distribution_set::proposal_distribution_set(const vector<proposal_distribution*> &props,const vector<double> &shares_,double adapt_rate,double Tpow, vector<double> hot_shares_,bool take_pointers):shares(shares_),adapt_rate(adapt_rate),Tpow(Tpow),hot_shares(hot_shares_),own_pointers(take_pointers){
   //if Tpow>0 do temperature-based weighting
   //shares[i](T) = shares[i]*(1/T**Tpow) + hot_shares[i]*(1-1/T**Tpow)
   //so shares[i](T=1) = shares[i]
