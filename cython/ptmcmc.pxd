@@ -8,6 +8,7 @@ from libcpp cimport bool
 cimport states 
 cimport bayesian
 cimport options
+cimport proposal_distribution
 cimport numpy as np
 
 cdef extern from "../ptmcmc.cc":
@@ -68,5 +69,14 @@ cdef class involution:
     cdef states.state call_transformState(self, const states.state &s, const vector[double] &randoms)with gil
     cdef double call_jacobian(self, const states.state &s, const vector[double] &randoms)with gil
     
+cdef class proposal:
+    cdef proposal_distribution.proposal_distribution *cproposal
+    
+cdef class gaussian_prop(proposal):
+#cdef class gaussian_prop:
+    cdef proposal_distribution.user_gaussian_prop *cuser_gaussian_prop
+    cdef int ndim
+    cdef object check_update_func
+    cdef bool call_check_update(self, const states.state &s, const vector[double] &randoms, vector[double] &covarvec) with gil
 
 

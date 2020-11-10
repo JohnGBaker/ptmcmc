@@ -61,6 +61,10 @@ def funcse(d, phi, inc, lambd, beta, psi):
   e2m2 = 0.5/d * np.sqrt(5/PI) * pow(np.sin(inc/2), 4) * np.exp(2.*I*(-phi+psi)) * 0.5*(Deplus - I*Decross)
   return e22 + e2m2
 
+def dummy_Fisher_cov():
+  cov=np.array([1,0,-0.25,3e-5,0,0.09]);
+  return cov;
+  
 
 def simpleCalculateLogLCAmpPhase(d, phiL, inc, lambdL, betaL, psiL):
   #Simple likelihood for runcan 22 mode, frozen LISA, lowf, snr 200
@@ -350,10 +354,11 @@ def trivial_transf(s, randoms):
     return s
 
 class simple_likelihood(ptmcmc.likelihood):
-    def __init__(self):
+    def __init__(self,opt):
 
         #Set up  stateSpace
         npar=6;
+        self.opt=opt
         space=ptmcmc.stateSpace(dim=npar);
         names=["d","phi","inc","lambda","beta","psi"];
         space.set_names(names);
@@ -390,6 +395,27 @@ class simple_likelihood(ptmcmc.likelihood):
         #self.basic_setup(space, types, centers, scales, lscales);
         self.basic_setup(space, types, centers, scales, scales);
 
+        #Fisher options
+        self.opt.add("fisher_update_len","Mean number of steps before drawing an update of the Fisher-matrix based proposal. Default 0 (Never update)","0");
+        self.opt.add("fisher_nmax","Max number of Fisher covariance options to hold for proposal draw. Default 0 (No Fisher Proposal)","0");
+
+      
+        
+    def setup(self):
+      #Evertyhing but Fisher options has been done in constructor
+      #istringstream(opt->value("fisher_update_len"))>>fisher_update_len;
+      #istringstream(opt->value("fisher_nmax"))>>fisher_nmax;
+      self.fisher_update_len=int(self.opt.value("fisher_update_len"))
+      self.fisher_nmax=int(self.opt.value("fisher_nmax"))
+      if self.fisher_nmax>0:
+        self.fisher_counter=0;
+        self.fisher_names=["d","phi","inc"];
+        propspace=ptmcmc.stateSpace(dim=3)
+        propspace.set_names(["d","phi","inc"])
+        proposal=ptmcmc.gaussian_prop(self,self.fisher_check_update,propspace,np.zeros(0), 2, "dummy_fisher")
+        self.addProposal(proposal)
+
+
     def evaluate_log(self,s):
         params=s.get_params()
         d=params[0]
@@ -407,6 +433,30 @@ class simple_likelihood(ptmcmc.likelihood):
         #  print("state:",s.get_string())
         #  print("  logL={0:.13g}".format(result))
         return result
+
+    def fisher_check_update(self, s, randoms, covarvec):
+        #Note: requires nrand==2 for evolving fisher
+        fisher_covars=self.fisher_covars
+        nfish=len(fisher_covars);
+        if(nfish>0 and (len(randoms)>0 and randoms[-1]*self.fisher_update_len<1)):return false
+        if(len(randoms)>0):randoms=randoms[:-1]
+        add_every=nfish*2;#how long to go before adding a new Fisher covariance to the stack
+        #cout<<"check_update: nfish,count: "<<nfish<<" ,"<<fisher_counter<<"/"<<add_every<<endl;
+        if(nfish==0 or self.fisher_counter>add_every):
+            #Here we construct a new fisher matrix and add it to the stack
+            self.fisher_counter=0;
+            params=s.get_params()
+            if(nfish>=fisher_nmax):fisher_covars=fisher_covars[1:]
+            fisher_covars.append(dummy_Fisher_cov());
+
+        #Draw one of the fisher covariances from the stack.  Could make this likelihood weighted, etc...
+        ifish=randoms[-1]*len(fisher_covars);
+        #cout<<"ifish,size:"<<ifish<<","<<fisher_covars.size()<<endl;
+        randoms=randoms[:-1]
+        covarvec=fisher_covars[ifish]
+        self.fisher_counter+=1
+        return true
+
 
 count=0
 
@@ -437,7 +487,7 @@ def main(argv):
     #ptmcmc_sampler mcmc;
     s0=ptmcmc.sampler(opt)
     #//Create the likelihood
-    like=simple_likelihood()  
+    like=simple_likelihood(opt)  
 
 
     print('calling opt.parse')
@@ -455,7 +505,7 @@ def main(argv):
     #//Setup likelihood
     #//data->setup();  
     #//signal->setup();  
-    #like->setup();
+    like.setup();
     
     #double seed;
     #int Nchain,output_precision;
