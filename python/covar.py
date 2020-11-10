@@ -170,23 +170,16 @@ def corner(xs, bins=20, range=None, weights=None, cov=None, color="k",
         except AttributeError:
             pass
 
-    # Deal with 1D sample lists and cov-only calls.
-    covcolor='r'
-    if xs is not None:
-        xs = np.atleast_1d(xs)
-        if len(xs.shape) == 1:
-            xs = np.atleast_2d(xs)
-        else:
-            assert len(xs.shape) == 2, "The input sample array must be 1- or 2-D."
-            xs = xs.T
-        assert xs.shape[0] <= xs.shape[1], "I don't believe that you want more " \
-                                           "dimensions than samples!"
+    # Deal with 1D sample lists.
+    xs = np.atleast_1d(xs)
+    if len(xs.shape) == 1:
+        xs = np.atleast_2d(xs)
     else:
-        if cov is not None:
-            xs=np.array([None for x in cov])
-            covcolor=color
-    K = len(xs)
-        
+        assert len(xs.shape) == 2, "The input sample array must be 1- or 2-D."
+        xs = xs.T
+    assert xs.shape[0] <= xs.shape[1], "I don't believe that you want more " \
+                                       "dimensions than samples!"
+
     # Parse the weight array.
     if weights is not None:
         weights = np.asarray(weights)
@@ -202,19 +195,15 @@ def corner(xs, bins=20, range=None, weights=None, cov=None, color="k",
                          "Use 'range' instead.")
             range = hist2d_kwargs.pop("extents")
         else:
-            if xs[0] is not None:
-                range = [[x.min(), x.max()] for x in xs]
-                # Check for parameters that never change.
-                m = np.array([e[0] == e[1] for e in range], dtype=bool)
-                if np.any(m):
-                    raise ValueError(("It looks like the parameter(s) in "
-                                      "column(s) {0} have no dynamic range. "
-                                      "Please provide a `range` argument.")
-                                     .format(", ".join(map(
-                                         "{0}".format, np.arange(len(m))[m]))))
-            else: #infer range from covar
-                print("Inferring range from cov (beta). Perhaps provide a 'range' argument.")
-                range = [ [truths[i]-3*cov[i,i],truths[i]+3*cov[i,i]] for i in range(K)]
+            range = [[x.min(), x.max()] for x in xs]
+            # Check for parameters that never change.
+            m = np.array([e[0] == e[1] for e in range], dtype=bool)
+            if np.any(m):
+                raise ValueError(("It looks like the parameter(s) in "
+                                  "column(s) {0} have no dynamic range. "
+                                  "Please provide a `range` argument.")
+                                 .format(", ".join(map(
+                                     "{0}".format, np.arange(len(m))[m]))))
 
     else:
         # If any of the extents are percentiles, convert them to ranges.
@@ -238,6 +227,7 @@ def corner(xs, bins=20, range=None, weights=None, cov=None, color="k",
             raise ValueError("Dimension mismatch between bins and range")
 
     # Some magic numbers for pretty axis layout.
+    K = len(xs)
     factor = 2.0           # size of one side of one panel
     lbdim = 0.5 * factor   # size of left/bottom margin
     trdim = 0.2 * factor   # size of top/right margin
@@ -264,7 +254,8 @@ def corner(xs, bins=20, range=None, weights=None, cov=None, color="k",
             q_16, q_50, q_84 = quantile(xs[k], [0.16, 0.5, 0.84],weights=weights)
             deltax=(q_84-q_16)/2.0
             cov[k,k]=deltax**2
-    #print("cov=",cov)
+    print("cov=",cov)
+    print("covdiag=",np.diag(cov))
 
     # Format the figure.
     lb = lbdim / dim
@@ -280,7 +271,6 @@ def corner(xs, bins=20, range=None, weights=None, cov=None, color="k",
         hist_kwargs["histtype"] = hist_kwargs.get("histtype", "step")
 
     for i, x in enumerate(xs):
-
         # Deal with masked arrays.
         if hasattr(x, "compressed"):
             x = x.compressed()
@@ -289,75 +279,71 @@ def corner(xs, bins=20, range=None, weights=None, cov=None, color="k",
             ax = axes
         else:
             ax = axes[i, i]
+        #This is to normalize the histogram so that different data can be compared
+        if(weights is None):
+            hist1d_wts=[1.0/len(x) for w in x]
+        else:
+            hist1d_wts=[w*1.0/len(x) for w in weights]
+        # Plot the histograms.
+        if smooth1d is None:
+            n, _, _ = ax.hist(x, bins=bins[i], weights=hist1d_wts,
+                              range=np.sort(range[i]), **hist_kwargs)
+        else:
+            if gaussian_filter is None:
+                raise ImportError("Please install scipy for smoothing")
+            n, b = np.histogram(x, bins=bins[i], weights=hist1d_wts,
+                                range=np.sort(range[i]))
+            n = gaussian_filter(n, smooth1d)
+            x0 = np.array(list(zip(b[:-1], b[1:]))).flatten()
+            y0 = np.array(list(zip(n, n))).flatten()
+            ax.plot(x0, y0, **hist_kwargs)
 
-        
-        if x is not None:
-            #This is to normalize the histogram so that different data can be compared
-            if(weights is None):
-                hist1d_wts=[1.0/len(x) for w in x]
-            else:
-                hist1d_wts=[w*1.0/len(x) for w in weights]
+        if truths is not None and truths[i] is not None:
+            ax.axvline(truths[i], color=truth_color)
 
-            # Plot the histograms.
-            if smooth1d is None:
-                n, _, _ = ax.hist(x, bins=bins[i], weights=hist1d_wts,
-                                  range=np.sort(range[i]), **hist_kwargs)
-            else:
-                if gaussian_filter is None:
-                    raise ImportError("Please install scipy for smoothing")
-                n, b = np.histogram(x, bins=bins[i], weights=hist1d_wts,
-                                    range=np.sort(range[i]))
-                n = gaussian_filter(n, smooth1d)
-                x0 = np.array(list(zip(b[:-1], b[1:]))).flatten()
-                y0 = np.array(list(zip(n, n))).flatten()
-                ax.plot(x0, y0, **hist_kwargs)
+        # Plot quantiles if wanted.
+        if len(quantiles) > 0:
+            qvalues = quantile(x, quantiles, weights=weights)
+            for q in qvalues:
+                ax.axvline(q, ls="dashed", color=color)
 
-            if truths is not None and truths[i] is not None:
-                ax.axvline(truths[i], color=truth_color)
+            if verbose:
+                print("Quantiles:")
+                print([item for item in zip(quantiles, qvalues)])
 
-            # Plot quantiles if wanted.
-            if len(quantiles) > 0:
-                qvalues = quantile(x, quantiles, weights=weights)
-                for q in qvalues:
-                    ax.axvline(q, ls="dashed", color=color)
+        if show_titles:
+            title = None
+            if title_fmt is not None:
+                # Compute the quantiles for the title. This might redo
+                # unneeded computation but who cares.
+                q_16, q_50, q_84 = quantile(x, [0.16, 0.5, 0.84],
+                                            weights=weights)
+                q_m, q_p = q_50-q_16, q_84-q_50
 
-                if verbose:
-                    print("Quantiles:")
-                    print([item for item in zip(quantiles, qvalues)])
+                # Format the quantile display.
+                fmt = "{{0:{0}}}".format(title_fmt).format
+                title = r"${{{0}}}_{{-{1}}}^{{+{2}}}$"
+                title = title.format(fmt(q_50), fmt(q_m), fmt(q_p))
 
-            if show_titles:
-                title = None
-                if title_fmt is not None:
-                    # Compute the quantiles for the title. This might redo
-                    # unneeded computation but who cares.
-                    q_16, q_50, q_84 = quantile(x, [0.16, 0.5, 0.84],
-                                                weights=weights)
-                    q_m, q_p = q_50-q_16, q_84-q_50
+                # Add in the column name if it's given.
+                if labels is not None:
+                    title = "{0} = {1}".format(labels[i], title)
 
-                    # Format the quantile display.
-                    fmt = "{{0:{0}}}".format(title_fmt).format
-                    title = r"${{{0}}}_{{-{1}}}^{{+{2}}}$"
-                    title = title.format(fmt(q_50), fmt(q_m), fmt(q_p))
+            elif labels is not None:
+                title = "{0}".format(labels[i])
 
-                    # Add in the column name if it's given.
-                    if labels is not None:
-                        title = "{0} = {1}".format(labels[i], title)
+            if title is not None:
+                ax.set_title(title, **title_kwargs)
 
-                elif labels is not None:
-                    title = "{0}".format(labels[i])
-
-                if title is not None:
-                    ax.set_title(title, **title_kwargs)
-
-            # Set up the axes.
-            ax.set_xlim(range[i])
-            if scale_hist:
-                maxn = np.max(n)
-                ax.set_ylim(-0.1 * maxn, 1.1 * maxn)
-            else:
-                ax.set_ylim(0, 1.1 * np.max(n))
-            ax.set_yticklabels([])
-            ax.xaxis.set_major_locator(MaxNLocator(max_n_ticks, prune="lower"))
+        # Set up the axes.
+        ax.set_xlim(range[i])
+        if scale_hist:
+            maxn = np.max(n)
+            ax.set_ylim(-0.1 * maxn, 1.1 * maxn)
+        else:
+            ax.set_ylim(0, 1.1 * np.max(n))
+        ax.set_yticklabels([])
+        ax.xaxis.set_major_locator(MaxNLocator(max_n_ticks, prune="lower"))
 
         if i < K - 1:
             if top_ticks:
@@ -402,14 +388,13 @@ def corner(xs, bins=20, range=None, weights=None, cov=None, color="k",
             elif j == i:
                 continue
 
-            if x is not None and y is not None:
-                # Deal with masked arrays.
-                if hasattr(y, "compressed"):
-                    y = y.compressed()
+            # Deal with masked arrays.
+            if hasattr(y, "compressed"):
+                y = y.compressed()
 
-                hist2d(y, x, ax=ax, range=[range[j], range[i]], weights=weights,
-                       color=color, smooth=smooth, bins=[bins[j], bins[i]],
-                       **hist2d_kwargs)
+            hist2d(y, x, ax=ax, range=[range[j], range[i]], weights=weights,
+                   color=color, smooth=smooth, bins=[bins[j], bins[i]],
+                   **hist2d_kwargs)
 
             #add covariance ellipses
             if(cov is not None):
@@ -451,7 +436,7 @@ def corner(xs, bins=20, range=None, weights=None, cov=None, color="k",
                 #print ("scales for quantile level = ",xlev," -> ",lev_fac,": (",xcoeff*lev_fac,",",ycoeff*lev_fac,")")
                     elxs=[cx+lev_fac*xcoeff*(acoeff*math.cos(th)*math.cos(ang)-bcoeff*math.sin(th)*math.sin(ang)) for th in thetas] 
                     elys=[cy+lev_fac*ycoeff*(acoeff*math.cos(th)*math.sin(ang)+bcoeff*math.sin(th)*math.cos(ang)) for th in thetas] 
-                    ax.plot(elxs,elys,color=covcolor)
+                    ax.plot(elxs,elys,color='r')
 
             ax.grid()
             if truths is not None:

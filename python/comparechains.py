@@ -17,10 +17,34 @@ import math
 import random
 import argparse
 
-def get_par_names(fname):
-    with open(fname) as f:
+def readCovar(filename=None):
+    with open(filename,'r') as f:
+        line=f.readline()
+        while(not "State" in line):
+            print('skipped line',line)
+            line=f.readline() #Skip until the good stuff
+        
+        pars=[float(x) for x in line.split()[1:]]
+        print('State pars:',pars)
+        while(not "#Covariance" in line): line=f.readline() #Skip until the good stuff
+        line=f.readline()
+        npar=len(line.split())
+        covar=np.zeros((npar,npar))
+        for iidx in range(npar):
+            if(iidx>0):line=f.readline()
+            print(iidx,":",line)
+            elems=np.array(line.split())
+            print('elems',elems)
+            for j,val in enumerate(elems):
+                covar[iidx,j]=val               
+    return pars,covar
+
+def get_par_names(fname,par0col=None):
+    if par0col is None:
         par0col=5
         if("resampled.dat" in fname):par0col=2
+        
+    with open(fname) as f:
         line=f.readline()
         line=f.readline()
         names=line.split()
@@ -100,9 +124,9 @@ def cornerFisher(Npar,pars,samples,in_cov,cred_levs,iparmin=0,iparend=None,sampl
         for ic in in_cov:
             cov.append(ic[istart:iend,istart:iend])
     elif in_cov is not None:
-        cov=in_cov[istart:iend,istart:iend]
+        cov=[in_cov[istart:iend,istart:iend]]
     else:
-        cov=None
+        cov=[]
     fontscale=0.1+Npar/9.0
     #print "cov=",cov
     # Plot it.
@@ -130,19 +154,29 @@ def cornerFisher(Npar,pars,samples,in_cov,cred_levs,iparmin=0,iparend=None,sampl
         rangelimits=[[xmin-0.1*(xmax-xmin),xmax+0.1*(xmax-xmin)] for xmin,xmax in rangelimits ]
     print("rangelimits=",rangelimits)
 
-    figure = corner.corner(data[0], bins=50,labels=names,levels=levels,cov=cov,
+    figure = corner.corner(data[0], bins=50,labels=names,levels=levels,cov=None,
                              truths=pars,quantiles=[0.159, 0.5, 0.841],show_titles=True,range=rangelimits,use_math_text=True,
-                             title_args={"fontsize": 35},title_fmt='.2e',smooth1d=None,smooth=1,label_kwargs={"fontsize":30},hist_kwargs={"normed":True})
+                             #title_args={"fontsize": 35},title_fmt='.2e',smooth1d=None,smooth=1,label_kwargs={"fontsize":30},hist_kwargs={"normed":True})
+                             title_args={"fontsize": 35},title_fmt='.2e',smooth1d=None,smooth=1,label_kwargs={"fontsize":30},hist_kwargs={"density":True})
     count=0
     print ("nsamp[0] = ",len(data[0]))
-    colors=["k","r","b","g","m","c","y"]
+    colors=["k","r","b","g","m","c","y"]*2
+    #Plot samples from additional files
     for datum in data[1:]:
         count+=1
         print ("nsamp[i] ",len(datum))
-        figure = corner.corner(datum, bins=50,labels=names,fig=figure,color=colors[count],levels=levels,cov=cov, plot_density=False,
+        figure = corner.corner(datum, bins=50,labels=names,fig=figure,color=colors[count],levels=levels,cov=None, plot_density=False,
                                truths=pars,quantiles=[0.159, 0.5, 0.841],show_titles=True,range=rangelimits,use_math_text=True,
-                               title_args={"fontsize": 35},title_fmt='.2e',smooth1d=None,smooth=1,label_kwargs={"fontsize":30},hist_kwargs={"normed":True})
-    
+                               #title_args={"fontsize": 35},title_fmt='.2e',smooth1d=None,smooth=1,label_kwargs={"fontsize":30},hist_kwargs={"normed":True})
+                               title_args={"fontsize": 35},title_fmt='.2e',smooth1d=None,smooth=1,label_kwargs={"fontsize":30},hist_kwargs={"density":True})
+    #Plot covariance ellipses
+    for acov in cov:
+        count+=1
+        figure = corner.corner(None, bins=50,labels=names,fig=figure,color=colors[count],levels=levels,cov=acov, plot_density=False,
+                               truths=pars,quantiles=[0.159, 0.5, 0.841],show_titles=True,range=rangelimits,use_math_text=True,
+                               #title_args={"fontsize": 35},title_fmt='.2e',smooth1d=None,smooth=1,label_kwargs={"fontsize":30},hist_kwargs={"normed":True})
+                               title_args={"fontsize": 35},title_fmt='.2e',smooth1d=None,smooth=1,label_kwargs={"fontsize":30},hist_kwargs={"density":True})
+
     if( sample_labels is None or len(sample_labels)<count+1 ):
         sample_labels=[ "Set "+str(i) for i in range(count+1)]
     for i in range(count+1):
@@ -211,6 +245,7 @@ testing=False
 
 pars=None
 
+
 if(True):
     chainfile=chainfiles[0]
     print ("Processing posterior in ",chainfile)
@@ -257,15 +292,26 @@ if(True):
                 print ("reading covariance from ",newfish)
                 cov.append(readCovar(newfish))
     elif(fishfile is not None):
-        print ("reading covariance from ",fishfile)
-        cov=readCovar(fishfile)
+        fishfiles=None
+        import glob
+        fishfiles=glob.glob(fishfile)
+        fishfiles.sort()
+        allpars=[]
+        cov=[]
+        for fishfile in fishfiles:
+            print ("reading covariance from ",fishfile)
+            pars,acov=readCovar(fishfile)
+            allpars+=[pars]
+            cov+=[acov]
     else:
+        allcov=None
         cov=None
     samples=[]
     i=0
 
     #make sample names from the most relevant part of the filenames
     longnames=[os.path.basename(chainfile) for chainfile in chainfiles]
+    if fishfiles is not None: longnames +=[os.path.basename(path) for path in fishfiles]
     if(len(set(longnames))<len(longnames)):
         longnames=[os.path.basename(os.path.dirname(os.path.abspath(chainfile))) for chainfile in chainfiles]
     si=0;ei=1
@@ -319,7 +365,7 @@ if(True):
         samples.append(read_samples(Npar,chainfile,code=code,burnfrac=burnfrac,keeplen=lkeep,iskip=iskip))
         i+=1
         print("calling cornerFisher: Npar=",Npar," pars=",pars," len(samples)",len(samples),samples[0].shape)
-        cornerFisher(Npar,pars,samples,cov,cred_levs,sample_labels=sample_labels)
+    cornerFisher(Npar,pars,samples,cov,cred_levs,sample_labels=sample_labels)
 
     rs=[ math.sqrt(s[1]**2+s[2]**2) for s in samples[0]]
     rs.sort()
