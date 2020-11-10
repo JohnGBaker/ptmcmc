@@ -67,6 +67,66 @@ static complex<double> funcse(double d, double phi, double inc, double lambd, do
   return e22 + e2m2;
 }
 
+vector<double> dummy_Fisher_cov(){
+  vector<double> cov={1,0,-0.25,3e-5,0,0.09};
+  return cov;
+}
+  
+vector<double> partial_simple_Fisher_cov(double d, double inc, double dscale,double phiscale,double incscale){
+  //Here we compute the simple likelihood partial Fisher matrix for just the common cofactor of a/e parts/
+  //This is surely not useful, and likely not even correct, but meant to allow an example implementation.
+  //cofactor: f = 0.5/d * sqrt(5/PI) * pow(cos(inc/2), 4) * exp(2.*I*(-phi))
+  //The raw fisher matrix then is:
+  //                  [ a^2  ab   acX ] 
+  // F_raw  =  rho^2  [ ab   b^2  bcX ]
+  //                  [ acX  bcX  c^2 ]
+  //where:
+  // a = dlnf/dd, b = dlnf/dinc, c = dlnf/d(I*phi)
+  // The X factor comes in where there is a real and imaginary derivatives
+  //The raw F is signular, so we add to it scale matrix diag(1/La^2,1/Lb^2,1/Lc^2) to ensure reasonable finite eigenvalues.
+  //For this small matrix we can analytically compute the covariance.  We write it in terms of
+  //alphavec=[alpha,beta,gamma]=rho*[La*a, Lb*b, Lc*c]
+  //Note hereafter we swap the order of the last two rows/columns
+  double factor = 216147.866077;
+  complex<double> sainj = 0.33687296665053773 + I*0.087978055005482114;
+  complex<double> seinj = -0.12737105239204741 + I*0.21820079314765678;
+  double rho2 = factor * (pow(abs(sainj), 2) + pow(abs(seinj), 2));
+  double rho=sqrt(rho2);
+  double Xcoeff = factor * imag(pow(sainj, 2) + pow(seinj, 2))/rho2;
+  double X2=Xcoeff*Xcoeff;
+  double dlogfac_d_R   = -1/d;
+  double dlogfac_inc_R = -4*tan(inc/2);
+  double dlogfac_phi_I = -2;
+  double alpha=dlogfac_d_R*dscale*rho;
+  double beta=dlogfac_inc_R*dscale*rho;
+  double gamma=dlogfac_phi_I*dscale*rho;
+  vector<double> alphavec={alpha,gamma,beta};
+  vector<double> scales={dscale,phiscale,incscale};
+  double ab2=alpha*alpha+beta*beta;
+  double g2=gamma*gamma;
+  double det=1+ab2+g2+ab2*g2*(1-X2);
+  double RRfac=(1+g2*(1-X2))/det;
+  double IIfac=(1+ab2*(1-X2))/det;
+  double RIfac=Xcoeff/det;
+  vector<double> cov(6);
+  int icov=0;
+  for(int i=0;i<3;i++){
+    for(int j=i;j<3;j++){
+      double coeff=-alphavec[i]*alphavec[j];
+      int nI=(i==1)+(j==1);//This essentially counts the number of times one index is for phi, to work out which sector
+      if(nI==0)coeff*=RRfac;
+      else if(nI==1)coeff*=RIfac;
+      else coeff*=IIfac;
+      if(i==j)coeff+=1;
+      coeff*=scales[i]*scales[j];
+      cov[icov]=coeff;
+      icov++;
+    }
+  }
+  return cov;
+};
+
+
 double simpleCalculateLogLCAmpPhase(double d, double phiL, double inc, double lambdL, double betaL, double psiL) 
 {
   //Simple likelihood for runcan 22 mode, frozen LISA, lowf, snr 200
@@ -80,6 +140,8 @@ double simpleCalculateLogLCAmpPhase(double d, double phiL, double inc, double la
   double simplelogL = -1./2 * factor * (pow(abs(sa - sainj), 2) + pow(abs(se - seinj), 2));
   return simplelogL;
 }
+
+
 
 ///Functions implementing potential parameter space symmetries
 ///This functions are of a standard form needed for specifying (potential)
@@ -440,14 +502,21 @@ timing_data qrperf;
 class simple_likelihood_ni {
   int idx_phi,idx_d,idx_inc,idx_lambda,idx_beta,idx_psi;
   bayes_likelihood *blike;
+  Options *opt;
   vector<stateSpaceInvolution> symmetries;
-
+  //Stuff for Fisher
+  int fisher_update_len,fisher_nmax,fisher_counter;
+  vector< vector<double> > fisher_covars;
+  
 public:
   //simple_likelihood():bayes_likelihood(nullptr,nullptr,nullptr){};
-  simple_likelihood_ni(bayes_likelihood *blike):blike(blike){
+  simple_likelihood_ni(bayes_likelihood *blike,Options &opt):blike(blike),opt(&opt){
     blike->register_reference_object(this);
     blike->register_evaluate_log(simple_likelihood_ni::evaluate_log);
     blike->register_defWorkingStateSpace(simple_likelihood_ni::defWorkingStateSpace);
+    //Add options for fisher
+    this->opt->add(Option("fisher_update_len","Mean number of steps before drawing an update of the Fisher-matrix based proposal. Default 0 (Never update)","0"));
+    this->opt->add(Option("fisher_nmax","Max number of Fisher covariance options to hold for proposal draw. Default 0 (No Fisher Proposal)","0"));
   };
   virtual void setup(){    
     ///Set up the output stateSpace for this object
@@ -515,7 +584,15 @@ public:
     vector<double>likelyscales=scales;
     for( auto & scale:likelyscales)scale=1;
     blike->basic_setup(&space, types, centers, scales, likelyscales);
-    
+
+    //If needed, construct Fisher-based user_gaussian_prop
+    istringstream(opt->value("fisher_update_len"))>>fisher_update_len;
+    istringstream(opt->value("fisher_nmax"))>>fisher_nmax;
+    if(fisher_nmax>0){
+      fisher_counter=0;
+      vector<string>fisher_names={"d","phi","inc"};
+      blike->addProposal(user_gaussian_prop(this,fisher_check_update,space.subspace_by_name(fisher_names),vector<double>(), 2, "simple_fisher"));
+    }
   };
   
   
@@ -549,6 +626,48 @@ public:
     //cout<<"  logL="<<result<<endl;
     return result;
   };
+  static bool fisher_check_update(void *object, const state &s, const vector<double> &rands, vector<double> &covarvec){
+    //Note: requires nrand==2 for evolving fisher
+    simple_likelihood_ni *mythis = static_cast<simple_likelihood_ni*>(object);
+    int nfish=mythis->fisher_covars.size();
+    vector<double>randoms=rands;
+    if(nfish>0 and (randoms.size()>0 and randoms.back()*mythis->fisher_update_len<1))return false;
+    if(randoms.size()>0)randoms.pop_back();
+    int add_every=nfish*2;//how long to go before adding a new Fisher covariance to the stack
+    //cout<<"check_update: nfish,count: "<<nfish<<" ,"<<mythis->fisher_counter<<"/"<<add_every<<endl;
+    if(nfish==0 or mythis->fisher_counter>add_every){
+      //Here we construct a new fisher matrix and add it to the stack
+      mythis->fisher_counter=0;
+      valarray<double>params=s.get_params();
+      double d=params[mythis->idx_d];
+      double inc=params[mythis->idx_inc];
+      valarray<double> scales;mythis->blike->getObjectPrior()->getScales(scales);
+      double dscale=scales[mythis->idx_d];
+      double incscale=scales[mythis->idx_inc];
+      double phiscale=scales[mythis->idx_phi];
+      if(nfish>=mythis->fisher_nmax)mythis->fisher_covars.erase(mythis->fisher_covars.begin());
+      //mythis->fisher_covars.push_back(partial_simple_Fisher_cov(d, inc, dscale, phiscale, incscale));
+      mythis->fisher_covars.push_back(dummy_Fisher_cov());
+      ostringstream ss("");
+      if(false){
+	ss<<"Adding Fisher Covariance ["<<mythis->fisher_covars.size()<<"] ="<<endl;
+	vector<double>cov=mythis->fisher_covars.back();
+	ss<<"  "<<setw(20)<<cov[0]<<" "<<setw(20)<<cov[1]<<" "<<setw(20)<<cov[2]<<endl;
+	ss<<"  "<<setw(20)<<cov[1]<<" "<<setw(20)<<cov[3]<<" "<<setw(20)<<cov[4]<<endl;
+	ss<<"  "<<setw(20)<<cov[2]<<" "<<setw(20)<<cov[4]<<" "<<setw(20)<<cov[5]<<endl;
+	cout<<ss.str()<<endl;
+      }
+	
+
+    }
+    //Draw one of the fisher covariances from the stack.  Could make this likelihood weighted, etc...
+    int ifish=randoms.back()*mythis->fisher_covars.size();
+    //cout<<"ifish,size:"<<ifish<<","<<mythis->fisher_covars.size()<<endl;
+    randoms.pop_back();
+    covarvec=mythis->fisher_covars[ifish];
+    mythis->fisher_counter+=1;
+    return true;
+  };
 };
 
 shared_ptr<Random> globalRNG;//used for some debugging... 
@@ -574,7 +693,7 @@ int main(int argc, char*argv[]){
     if(use_inheritance_interface)like=new simple_likelihood();
     else{
       like=new bayes_likelihood();
-      slike=new simple_likelihood_ni(like);
+      slike=new simple_likelihood_ni(like,opt);
     }
   }
   
@@ -583,6 +702,7 @@ int main(int argc, char*argv[]){
   //data->addOptions(opt);
   //signal->addOptions(opt);
   like->addOptions(opt);
+
 
   //Add some command more line options
   opt.add(Option("nchains","Number of consequtive chain runs. Default 1","1"));

@@ -15,6 +15,7 @@
 #include "options.hh"
 #include "states.hh"
 #include "probability_function.hh"
+#include "proposal_distribution.hh"
 
 using namespace std;
 
@@ -312,6 +313,8 @@ protected:
   state best;
   vector<double>likelyScales;
   bool have_scales;
+  vector<proposal_distribution *> proposals;
+  vector<double>prop_shares;
   
 public:
   bayes_likelihood(stateSpace *sp=nullptr,bayes_data *data=nullptr,bayes_signal *signal=nullptr):probability_function(sp),like0(0),signal(signal),have_scales(false){
@@ -325,6 +328,9 @@ public:
     reset();
 };
 
+  ~bayes_likelihood(){
+    for(auto prop : proposals)if(prop)delete prop;
+  };
   //The latter is just a hack for testing should be removed.
   //bayes_likelihood(stateSpace *sp):probability_function(sp),like0(0){};
   ///Hard check that the signal and data are non-null
@@ -766,6 +772,15 @@ public:
     data->fill_data(values);
     set_like0_chi_squared();
   };
+
+
+  ///This section supports likelihood-associated proposals
+  void addProposal(const proposal_distribution  &proposal, double share=1){
+    proposals.push_back(proposal.clone());
+    prop_shares.push_back(share);
+  };
+  vector< proposal_distribution* >get_proposals()const{return proposals;};
+  vector< double > get_prop_shares()const{return prop_shares;};
 };
 
 ///Base class for defining a Bayesian sampler object

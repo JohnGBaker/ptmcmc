@@ -20,7 +20,7 @@ void ptmcmc_sampler::select_proposal(){
     if(reporting())cout<<"Selecting proposal for stateSpace:\n"<<chain_prior->get_space()->show()<<endl;
     int Npar=chain_prior->get_space()->size();
     int proposal_option,SpecNinit;
-    double tmixfac,reduce_gamma_by,de_g1_frac,de_eps,gauss_1d_frac,prior_draw_frac,prior_draw_Tpow,gauss_draw_frac,gauss_step_fac,cov_draw_frac,sym_prop_frac,unlikely_alpha;
+    double tmixfac,reduce_gamma_by,de_g1_frac,de_eps,gauss_1d_frac,prior_draw_frac,prior_draw_Tpow,gauss_draw_frac,gauss_step_fac,cov_draw_frac,sym_prop_frac,like_prop_frac,unlikely_alpha;
     bool de_mixing=false;
     bool gauss_temp_scaled=false;
     string covariance_file;
@@ -32,6 +32,7 @@ void ptmcmc_sampler::select_proposal(){
     (*optValue("gauss_step_fac"))>>gauss_step_fac;
     (*optValue("cov_draw_frac"))>>cov_draw_frac;
     (*optValue("sym_prop_frac"))>>sym_prop_frac;
+    (*optValue("like_prop_frac"))>>like_prop_frac;
     (*optValue("covariance_file"))>>covariance_file;
     bool adapt_more=optSet("prop_adapt_more");
     //Do some sanity checking/fixing
@@ -142,16 +143,34 @@ void ptmcmc_sampler::select_proposal(){
       cprop=new proposal_distribution_set(set,shares,0,Tpow,hot_shares);
     
     //TODO: Incorporate this into the existing top-level set above
-    if(reporting())cout<<"sym_prop_frac="<<sym_prop_frac<<" nsym="<<chain_prior->get_space()->get_potentialSyms().size()<<endl;
+    //if(reporting())cout<<"sym_prop_frac="<<sym_prop_frac<<" nsym="<<chain_prior->get_space()->get_potentialSyms().size()<<endl;
     
+    bool add_on=false;
+    vector<proposal_distribution*> add_on_props={cprop};
+    vector<double> add_on_shares={1};
     if(sym_prop_frac>0 and chain_prior->get_space()->get_potentialSyms().size()>0){
+      if(reporting())cout<<"Adding stateSpace potential symmetries to proposal."<<endl;
       double rate=0;
       if(adapt_more)rate=prop_adapt_rate;
-      if(reporting())cout<<"Adding stateSpace potential symmetries to proposal."<<endl;
       proposal_distribution_set *symprops=involution_proposal_set(*chain_prior->get_space(),rate).clone();
-      vector<proposal_distribution*> props={cprop,symprops};
-      vector<double> shares={1-sym_prop_frac,sym_prop_frac};
-      cprop=new proposal_distribution_set(props,shares,rate);
+      add_on_props.push_back(symprops);
+      add_on_shares.push_back(sym_prop_frac);
+      add_on_shares[0]-=sym_prop_frac;
+      add_on=true;
+    }
+    if(like_prop_frac>0 and chain_llike->get_proposals().size()>0){
+      if(reporting())cout<<"Adding likelihood-based elements to proposal."<<endl;
+      double rate=0;
+      if(adapt_more)rate=prop_adapt_rate;
+      proposal_distribution_set *likeprops=new proposal_distribution_set(chain_llike->get_proposals(),chain_llike->get_prop_shares(),rate);
+      add_on_props.push_back(likeprops);
+      add_on_shares.push_back(like_prop_frac);
+      add_on_shares[0]-=like_prop_frac;
+      add_on=true;
+    }
+    if(add_on){
+      if(add_on_shares[0]<0)add_on_shares[0]=0;
+      cprop=new proposal_distribution_set(add_on_props,add_on_shares,prop_adapt_rate);
     }
     //cprop=new_proposal_distribution(Npar, chain_Ninit, opt, chain_prior, scales);
     if(reporting())cout<<"Proposal distribution is:\n"<<cprop->show()<<endl;
@@ -377,6 +396,7 @@ void ptmcmc_sampler::addOptions(Options &opt,const string &prefix){
   addOption("prop_adapt_rate","Specify a scaling rate (eg 1e-3) for adaptation of sub-proposal fractions, Default=0","0");
   addOption("prop_adapt_more","Adapt more broadly, not just Gaussian mixtures");
   addOption("sym_prop_frac","Fractional rate at which to apply and stateSpace symmetries as proposals. (Default=0)","0"); 
+  addOption("like_prop_frac","Fractional rate at which to apply proposal defined by likelihood. (Default=0)","0"); 
   addOption("de_ni","Differential-Evolution number of initialization elements per dimension. Default=50.","50");
   addOption("de_eps","Differential-Evolution gaussian scale. Default=1e-4.","1e-4");
   addOption("de_reduce_gamma","Differential Evolution reduce gamma parameter by some factor from nominal value. Default=4.","4");
