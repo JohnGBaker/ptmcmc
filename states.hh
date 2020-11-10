@@ -80,7 +80,7 @@ public:
     }
     return bounds[i];
   };      
-  void set_names(string stringnames[]){
+  void set_names(const string stringnames[]){
     names.resize(dim,"");
     for(uint i=0;i<dim;i++){
       names[i]=stringnames[i];
@@ -88,7 +88,7 @@ public:
     }
     have_names=true;
   };
-  void set_names(vector<string> &stringnames){
+  void set_names(const vector<string> &stringnames){
     if(stringnames.size()<dim){
       cout<<"stateSpace::set_names: Vector of param names is too short. Quitting."<<endl;
       exit(-1);
@@ -103,7 +103,7 @@ public:
   string get_name(int i)const {
     if(have_names&&i<dim)return names[i];
     else return "[unnamed]";
-  };      
+  };
   int get_index(const string &name)const{
     //cout<<"get_index: name="<<name<<endl;
     //cout<<"index.size="<<index.size()<<endl;
@@ -145,6 +145,9 @@ public:
   ///join this space to another space
   void attach(const stateSpace &other);
   
+  ///Construct a subspace based on a vector of parameter names.  Not that potential symmetries are dropped.
+  stateSpace subspace_by_name(const vector<string>subspace_names)const;
+
   ///Support for optional additional list of PotentialSymmetries
   ///These are understood to be useful involutions on the space which may interesting in certain applications, like proposals
   ///It is not assumed that the map provides an actual isomorphism of the space.
@@ -223,6 +226,8 @@ public:
   double get_param(const string name)const{if(space)return params[space->requireIndex(name)];else{cout<<"state::get_param(name):Need a stateSpace to get param by name."<<endl;exit(1);};};
   void set_param(const int i,const double v){params[i]=v;};
   const stateSpace * getSpace()const{return space;};
+  ///Get indicies for projection down to a subspace
+  vector<int> projection_indices_by_name(const stateSpace *subspace)const;
   ///Show param info
   string show()const;
   bool invalid()const{return !valid;};

@@ -229,9 +229,7 @@ double state::dist2(const state &other)const{
     result+=diff*diff;
   }
   return result;
-}
-      
-      
+};
 
 state state::scalar_mult(double x)const{
     //we only require that the result is valid
@@ -251,6 +249,32 @@ double state::innerprod(state other,bool constrained)const{
     }
     for(uint i=0;i<size();i++)result+=params[i]*other.params[i];
     return result;
+};
+
+///Get indicies for projection down to a subspace
+vector<int> state::projection_indices_by_name(const stateSpace *subspace)const{
+  vector<int> idx;
+  for(int isub=0;isub<subspace->size();isub++){
+    string name=subspace->get_name(isub);
+    idx.push_back(space->get_index(name));
+  }
+  return idx;
+};
+
+///Construct a subspace names on a vector of parameter names
+stateSpace stateSpace::subspace_by_name(const vector<string>subspace_names)const{
+  if(!have_names){
+    cout<<"stateSpace::subspace_by_name: Cannot apply transform to a space for which names are not defined."<<endl;
+    exit(1);
+  }
+  stateSpace subspace(subspace_names.size());
+  subspace.set_names(subspace_names);
+  for(int i=0;i<subspace_names.size();i++){
+    string name=subspace_names[i];
+    int idx=get_index(name);
+    subspace.bounds[i]=bounds[idx];
+  };
+  return subspace;
 };
 
 string state::get_string(int prec)const{
