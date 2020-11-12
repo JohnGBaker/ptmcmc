@@ -17,8 +17,24 @@ using namespace std;
 //************** PROPOSAL DISTRIBUTION classes ******************************
 
 
-///A class for defining proposal distributions.
-///Useful proposal distributions often reference a chain.
+///Base class for defining proposal distributions.
+///
+///Useful proposal distributions often reference a chain.  Support for chain-referencing is provided here.
+///Added more recently is support for user-defined proposals.  These must, at least reference a user_parent_object
+///so support for that is also now included here.  Furthermore, if the user-proposal needs access to any
+///instance-specific history, then support for managing that is provided as well.
+///
+///Copies and clones:
+///
+///When a new copy of the proposal is needed, as for new/parallel chains, the copy should generally be constructed by the
+///clone function.  This will also ensure that (for user-defined functionality) the user parent object can be made aware
+///of the new instance.  Note that we do not generally expect that the caller of the clone function can have access to the
+///user parent object, and we do not constrain the nature of the parent object, so it cannot be owned by the proposal_distribution
+///or its cloning object.  This means that we cannot arrange for the parent_object to be copied during a cloning operation.
+///Instead the parent object is fixed and the parent_object must provide, by its own means, a new object for instance specific
+///data each time a clone is constructed.  The new_user_instance_object_function is provided to allow the parent object to
+///provide that.  If no new_user_instance_object_function is provided, then the user_instance_object will remain NULL and the
+///user proposal will not be able to access any instance specific information.
 class proposal_distribution: public restartable{
   static int idcount;
 protected:
@@ -28,9 +44,24 @@ protected:
   int accept_count;
   int reject_count;
   chain *ch;
+  void *user_parent_object;
+  void *user_instance_object;
+  void * (*new_user_instance_object_function)(void *object,int id);
+  void set_instance(){
+    if(user_parent_object and new_user_instance_object_function){
+      //ostringstream ss;ss<<"proposal_distribution::set_instance: this="<<this<<" Calling new_user_instance_object_function="<<(void*)new_user_instance_object_function<<" user_parent_object="<<user_parent_object;cout<<ss.str()<<endl;
+      user_instance_object=new_user_instance_object_function(user_parent_object,id);
+    }else user_instance_object=nullptr;
+    //ostringstream ss;ss<<"proposal_distribution::set_instance: this="<<this<<" user_parent_object="<<user_parent_object<<" new_user_instance_object_function="<<(void*)new_user_instance_object_function<<" user_instance_object="<<user_instance_object;cout<<ss.str()<<endl;
+  }
 public:
   virtual ~proposal_distribution(){};
-  proposal_distribution(){id=idcount;idcount++;log_hastings=0;last_type=0;accept_count=0;reject_count=0;ch=nullptr;};
+  proposal_distribution(void *user_parent_object=nullptr,void * (*new_user_instance_object_function)(void *object,int id)=nullptr):
+    user_parent_object(user_parent_object),new_user_instance_object_function(new_user_instance_object_function){
+    id=idcount;idcount++;log_hastings=0;last_type=0;accept_count=0;reject_count=0;ch=nullptr;
+    //ostringstream ss;ss<<"proposal_distribution::constructor: this="<<this<<" user_parent_object="<<user_parent_object<<" new_user_instance_object_function="<<(void*)new_user_instance_object_function;cout<<ss.str()<<endl;
+    set_instance();
+  };
   virtual double log_hastings_ratio(){return log_hastings;};//(proposal part of Hasting ratio for most recent draw;
   virtual void set_chain(chain *c){ch=c;};//Not always needed.
   //virtual state draw(state &s,Random &rng){return s;};//The base class won't be useful.
@@ -154,7 +185,7 @@ public:
     cout<<" transform=\n"<<diagTransform<<endl;
     cout<<" test=\n"<<diagTransform*Evalues.asDiagonal()*diagTransform.inverse()<<endl;
   };
-  virtual ~gaussian_prop(){if(dist)delete dist;};
+  virtual ~gaussian_prop(){delete dist;};
   //state draw(state &s,Random &rng){
     //Umm is this Markovian. Do we need to set log_hastings for...
     //state offset=dist->drawSample(rng);
@@ -185,7 +216,12 @@ public:
     if(scaleWithTemp)s.scalar_mult(1.0/sqrt(caller->invTemp()));
     return s.add(offset);
   };
-  gaussian_prop* clone()const{return new gaussian_prop(*this);};
+  gaussian_prop* clone()const{
+    gaussian_prop* clone =new gaussian_prop(*this);
+    valarray<double> zeros(0.0,sigmas.size());
+    clone->dist=new gaussian_dist_product(nullptr,zeros, sigmas);
+    return clone;
+  }; 
   string show(){
     ostringstream ss; ss<<"StepBy"<<(identity_trans?"":"Covar")<<"["<<(dist?dist->show():"<null>")<<"](1Dfrac="<<oneDfrac<<",scaleWithTemp="<<scaleWithTemp<<")";return ss.str();};
 };
@@ -203,45 +239,34 @@ class user_gaussian_prop: public proposal_distribution{
   gaussian_dist_product *dist;
   int ndim;
   string label;
-  bool (*user_check_update)(void *object, const state &s, const vector<double> &randoms, vector<double> &covarvec);
-  void * user_object;
+  bool (*user_check_update)(const void *parent_object, void* instance_object, const state &s, const vector<double> &randoms, vector<double> &covarvec);
   bool check_update_registered;
   vector<int>idx_map;
   int nrand;
+  bool first_draw;
 protected:
   stateSpace domainSpace; //Note the Transform can be applied as long as this can be identified as a subspace.
 public:
-  user_gaussian_prop(const stateSpace &sp,const vector<double> &covarvec=vector<double>(), int nrand=0, const string label=""):nrand(nrand),label(label){
-    check_update_registered=false;
-    user_object=nullptr;
-    domainSpace=sp;
-    ndim=sp.size();
-    cout<<" Constructing user_gaussian_prop["+label+"]"<<endl;
-    dist=nullptr;    
-    reset_dist(covarvec);
-  };
-  user_gaussian_prop(void *object, bool (*function)(void *object, const state &, const vector<double> &randoms, vector<double> &covarvec),const stateSpace &sp,const vector<double> &covarvec=vector<double>(), int nrand=0, const string label=""):user_gaussian_prop(sp,covarvec,nrand,label){
-    register_reference_object(object);
-    register_check_update(function);
-  };
-  virtual ~user_gaussian_prop(){if(dist){
-      //cout<<"deleting this="<<this<<" deleting dist="<<dist<<endl;
-      delete dist;}};
-  user_gaussian_prop* clone()const{
-    user_gaussian_prop *clone = new user_gaussian_prop(*this);
-    valarray<double> zeros(0.0,ndim);
-    clone->dist=new gaussian_dist_product(nullptr,zeros, sigmas);
-    return clone;
-  };
+  user_gaussian_prop(const stateSpace &sp,const vector<double> &covarvec=vector<double>(), int nrand=0, const string label="",void *user_parent_object=nullptr,void * (*new_user_instance_object_function)(void*object,int id)=nullptr);
+  user_gaussian_prop(void *user_parent_object, bool (*function)(const void *parent_object, void* instance_object, const state &, const vector<double> &randoms, vector<double> &covarvec),const stateSpace &sp,const vector<double> &covarvec=vector<double>(), int nrand=0, const string label="",void * (*new_user_instance_object_function)(void*object,int id)=nullptr);
+  virtual ~user_gaussian_prop(){delete dist;};
+  user_gaussian_prop* clone()const;
   string get_label()const {return label;};
-  void register_reference_object(void *object){
-    user_object=object;};    
-  void register_check_update(bool (*function)(void *object, const state &, const vector<double> &randoms, vector<double> &covarvec)){
+  //void register_reference_object(void *object){
+  //  ostringstream ss;ss<<"this="<<this<<" registering reference_object="<<object<<", thread="<<omp_get_thread_num()<<endl;cout<<ss.str()<<endl;
+  //   user_object=object;};    
+  void register_check_update(bool (*function)(const void *parent_object, void* instance_object, const state &, const vector<double> &randoms, vector<double> &covarvec)){
     user_check_update=function;
     check_update_registered=true;
-  };  
+  };
   state draw(state &s,chain *caller){
+    //print some debugging info
+    if(first_draw){
+      //ostringstream ss;ss<<"this="<<this<<" drawing for chainID="<<caller->get_id()<<" on thread="<<omp_get_thread_num()<<endl;cout<<ss.str()<<endl;
+      first_draw=false;
+    }
     //first restrict to the relevant subspace for this step distribution
+
     if(idx_map.size()==0){
       idx_map=s.projection_indices_by_name(&domainSpace);
       for(int i=0;i<s.size();i++)
@@ -281,7 +306,7 @@ protected:
       }
     } else {
       cout<<"gaussian_prop:reset_dist Covar vector has unexpeced size,";
-      cout<<"ndim="<<ndim<<" UL-size="<<covarvec.size()<<" "<<endl;
+      cout<<"ndim="<<ndim<<", UL size="<<(ndim*(ndim+1))/2<<" but got "<<covarvec.size()<<" "<<endl;
       if(dist){
 	cout<<" Skipping update!"<<endl;
 	return;
@@ -303,8 +328,7 @@ protected:
       sigmas[i]=sqrt(evalues(i));
     }
     valarray<double> zeros(0.0,ndim);
-    if(dist){//cout<<"this="<<this<<" deleting dist="<<dist<<endl;
-      delete dist;}
+    delete dist;
     dist = new gaussian_dist_product(nullptr,zeros, sigmas);
     //cout<<"this="<<this<<" created dist="<<dist<<endl;
   };    
@@ -316,7 +340,7 @@ protected:
     for(auto & x : randoms)x=(caller->getPRNG()->Next());
     //Call user function
     vector<double> covarvec;
-    bool renewing=user_check_update(user_object, s, randoms, covarvec);
+    bool renewing=user_check_update(user_parent_object, user_instance_object, s, randoms, covarvec);
     if(!renewing)return false;
     reset_dist(covarvec);
     return true;

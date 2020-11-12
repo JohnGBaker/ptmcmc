@@ -412,7 +412,14 @@ class simple_likelihood(ptmcmc.likelihood):
         self.fisher_names=["d","phi","inc"];
         propspace=ptmcmc.stateSpace(dim=3)
         propspace.set_names(["d","phi","inc"])
-        proposal=ptmcmc.gaussian_prop(self,self.fisher_check_update,propspace,np.zeros(0), 2, "dummy_fisher")
+        print("creating dummy_fisher proposal self=",self)
+        if False:
+            default_data={}
+            default_data['covars']=[]
+            default_data['counter']=0
+            proposal=ptmcmc.gaussian_prop(self,fisher_check_update,propspace,np.zeros(0), 2, "dummy_fisher",default_instance_data=default_data)
+        else:
+            proposal=ptmcmc.gaussian_prop(self,frozen_fisher_check_update,propspace,np.zeros(0), 1, "frozen_dummy_fisher")
         self.addProposal(proposal)
 
 
@@ -434,28 +441,43 @@ class simple_likelihood(ptmcmc.likelihood):
         #  print("  logL={0:.13g}".format(result))
         return result
 
-    def fisher_check_update(self, s, randoms, covarvec):
+
+#This will be the callback for a gaussian_prop, so it must be declared outside the class
+def frozen_fisher_check_update(likelihood, s, randoms, covarvec):
+        #Note: need nrand>=1
+        if(randoms[-1]*likelihood.fisher_update_len<1):return False
+        if(len(randoms)>0):randoms=randoms[:-1]
+        covarvec=dummy_Fisher_cov();
+        return True
+
+#This will be the callback for a gaussian_prop, so it must be declared outside the class
+def fisher_check_update(likelihood, instance, s, randoms, covarvec):
         #Note: requires nrand==2 for evolving fisher
-        fisher_covars=self.fisher_covars
+        fisher_covars=instance['covars']
+        counter=instance['counter']
         nfish=len(fisher_covars);
-        if(nfish>0 and (len(randoms)>0 and randoms[-1]*self.fisher_update_len<1)):return false
+        if(nfish>0 and (len(randoms)>0 and randoms[-1]*likelihood.fisher_update_len<1)):return False
         if(len(randoms)>0):randoms=randoms[:-1]
         add_every=nfish*2;#how long to go before adding a new Fisher covariance to the stack
-        #cout<<"check_update: nfish,count: "<<nfish<<" ,"<<fisher_counter<<"/"<<add_every<<endl;
-        if(nfish==0 or self.fisher_counter>add_every):
+        #print("check_update: nfish,count: ",nfish," ,",counter,"/",add_every)
+        if(nfish==0 or counter>add_every):
             #Here we construct a new fisher matrix and add it to the stack
-            self.fisher_counter=0;
+            counter=0;
             params=s.get_params()
-            if(nfish>=fisher_nmax):fisher_covars=fisher_covars[1:]
-            fisher_covars.append(dummy_Fisher_cov());
-
+            if(nfish>=likelihood.fisher_nmax):fisher_covars=fisher_covars[1:]
+            print("Adding Fisher Covariance [",len(fisher_covars),"] =")
+            cov=dummy_Fisher_cov();
+            fisher_covars.append(cov)
+            print("  ","%15f"%cov[0],"%15f"%cov[1],"%15f"%cov[2])
+            print("  ","%15f"%cov[1],"%15f"%cov[3],"%15f"%cov[4])
+            print("  ","%15f"%cov[2],"%15f"%cov[4],"%15f"%cov[5])
         #Draw one of the fisher covariances from the stack.  Could make this likelihood weighted, etc...
-        ifish=randoms[-1]*len(fisher_covars);
+        ifish=int(randoms[-1]*len(fisher_covars));
         #cout<<"ifish,size:"<<ifish<<","<<fisher_covars.size()<<endl;
         randoms=randoms[:-1]
         covarvec=fisher_covars[ifish]
-        self.fisher_counter+=1
-        return true
+        counter+=1
+        return True
 
 
 count=0

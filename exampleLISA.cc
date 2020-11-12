@@ -493,7 +493,13 @@ public:
 
 timing_data qrperf;
 
-			       
+//holder for instance specific information for fisher proposal
+typedef struct {
+  int id;
+  int counter;
+  vector< vector<double> > covars;
+} fisher_instance;
+
 // Next alternative interface for Simplified LISA likelihood not relying on class inheritance
 // In this case we still implement as a class for maximum similarity to the original inheritance
 // interface, but no class is needed, as demonstrated with the no_class _nc option
@@ -506,7 +512,7 @@ class simple_likelihood_ni {
   vector<stateSpaceInvolution> symmetries;
   //Stuff for Fisher
   int fisher_update_len,fisher_nmax,fisher_counter;
-  vector< vector<double> > fisher_covars;
+  vector< fisher_instance* > fisher_instances;
   
 public:
   //simple_likelihood():bayes_likelihood(nullptr,nullptr,nullptr){};
@@ -518,6 +524,7 @@ public:
     this->opt->add(Option("fisher_update_len","Mean number of steps before drawing an update of the Fisher-matrix based proposal. Default 0 (Never update)","0"));
     this->opt->add(Option("fisher_nmax","Max number of Fisher covariance options to hold for proposal draw. Default 0 (No Fisher Proposal)","0"));
   };
+  ~simple_likelihood_ni(){for(auto instance : fisher_instances)delete instance;};
   virtual void setup(){    
     ///Set up the output stateSpace for this object
 
@@ -589,9 +596,10 @@ public:
     istringstream(opt->value("fisher_update_len"))>>fisher_update_len;
     istringstream(opt->value("fisher_nmax"))>>fisher_nmax;
     if(fisher_nmax>0){
-      fisher_counter=0;
       vector<string>fisher_names={"d","phi","inc"};
-      blike->addProposal(user_gaussian_prop(this,fisher_check_update,space.subspace_by_name(fisher_names),vector<double>(), 2, "simple_fisher"));
+      //ostringstream ss;ss<<"this="<<this<<" is about to create new user_gaussian_prop. new_fisher_instance="<<new_fisher_instance;cout<<ss.str()<<endl;			 
+      user_gaussian_prop prop(this,fisher_check_update,space.subspace_by_name(fisher_names),vector<double>(), 2, "simple_fisher",new_fisher_instance);
+      blike->addProposal(&prop);
     }
   };
   
@@ -626,18 +634,30 @@ public:
     //cout<<"  logL="<<result<<endl;
     return result;
   };
-  static bool fisher_check_update(void *object, const state &s, const vector<double> &rands, vector<double> &covarvec){
-    //Note: requires nrand==2 for evolving fisher
+  
+  static void * new_fisher_instance(void *object,int id){
     simple_likelihood_ni *mythis = static_cast<simple_likelihood_ni*>(object);
-    int nfish=mythis->fisher_covars.size();
+    fisher_instance * instance= new fisher_instance;
+    mythis->fisher_instances.push_back(instance);
+    instance->id=id;
+    instance->counter=0;
+    //ostringstream ss;ss<<"this="<<mythis<<" new fisher instance="<<instance<<" id="<<id<<". Now there are "<< mythis->fisher_instances.size();cout<<ss.str()<<endl;    
+    return instance;
+  };
+    
+  static bool fisher_check_update(const void *object, void *instance_object, const state &s, const vector<double> &rands, vector<double> &covarvec){
+    //Note: requires nrand==2 for evolving fisher
+    const simple_likelihood_ni *mythis = static_cast<const simple_likelihood_ni*>(object);
+    fisher_instance *instance = static_cast<fisher_instance*>(instance_object);
+    int nfish=instance->covars.size();
     vector<double>randoms=rands;
     if(nfish>0 and (randoms.size()>0 and randoms.back()*mythis->fisher_update_len<1))return false;
     if(randoms.size()>0)randoms.pop_back();
     int add_every=nfish*2;//how long to go before adding a new Fisher covariance to the stack
-    //cout<<"check_update: nfish,count: "<<nfish<<" ,"<<mythis->fisher_counter<<"/"<<add_every<<endl;
-    if(nfish==0 or mythis->fisher_counter>add_every){
+    //cout<<"check_update: nfish,count: "<<nfish<<" ,"<<instance->counter<<"/"<<add_every<<endl;
+    if(nfish==0 or instance->counter>add_every){
       //Here we construct a new fisher matrix and add it to the stack
-      mythis->fisher_counter=0;
+      instance->counter=0;
       valarray<double>params=s.get_params();
       double d=params[mythis->idx_d];
       double inc=params[mythis->idx_inc];
@@ -645,13 +665,14 @@ public:
       double dscale=scales[mythis->idx_d];
       double incscale=scales[mythis->idx_inc];
       double phiscale=scales[mythis->idx_phi];
-      if(nfish>=mythis->fisher_nmax)mythis->fisher_covars.erase(mythis->fisher_covars.begin());
-      //mythis->fisher_covars.push_back(partial_simple_Fisher_cov(d, inc, dscale, phiscale, incscale));
-      mythis->fisher_covars.push_back(dummy_Fisher_cov());
+      if(nfish>=mythis->fisher_nmax)instance->covars.erase(instance->covars.begin());
+      //instance->covars.push_back(partial_simple_cov(d, inc, dscale, phiscale, incscale));
+      instance->covars.push_back(dummy_Fisher_cov());
       ostringstream ss("");
-      if(false){
-	ss<<"Adding Fisher Covariance ["<<mythis->fisher_covars.size()<<"] ="<<endl;
-	vector<double>cov=mythis->fisher_covars.back();
+      if(nfish==0){
+	ss<<"Adding Fisher Covariance ["<<instance->covars.size()<<"] ="<<endl;
+	//ss<<"mythis="<<mythis<<" instance="<<instance<<endl;
+	vector<double>cov=instance->covars.back();
 	ss<<"  "<<setw(20)<<cov[0]<<" "<<setw(20)<<cov[1]<<" "<<setw(20)<<cov[2]<<endl;
 	ss<<"  "<<setw(20)<<cov[1]<<" "<<setw(20)<<cov[3]<<" "<<setw(20)<<cov[4]<<endl;
 	ss<<"  "<<setw(20)<<cov[2]<<" "<<setw(20)<<cov[4]<<" "<<setw(20)<<cov[5]<<endl;
@@ -661,11 +682,11 @@ public:
 
     }
     //Draw one of the fisher covariances from the stack.  Could make this likelihood weighted, etc...
-    int ifish=randoms.back()*mythis->fisher_covars.size();
-    //cout<<"ifish,size:"<<ifish<<","<<mythis->fisher_covars.size()<<endl;
+    int ifish=randoms.back()*instance->covars.size();
+    //cout<<"ifish,size:"<<ifish<<","<<instance->covars.size()<<endl;
     randoms.pop_back();
-    covarvec=mythis->fisher_covars[ifish];
-    mythis->fisher_counter+=1;
+    covarvec=instance->covars[ifish];
+    instance->counter+=1;
     return true;
   };
 };
@@ -748,7 +769,7 @@ int main(int argc, char*argv[]){
   cout.precision(output_precision);
   cout<<"\noutname = '"<<outname<<"'"<<endl;
   cout<<"seed="<<seed<<endl; 
-  cout<<"Running on "<<omp_get_max_threads()<<" thread"<<(omp_get_max_threads()>1?"s":"")<<"."<<endl;
+  cout<<"Running on "<<omp_get_num_threads()<<" thread"<<(omp_get_num_threads()>1?"s":"")<<"."<<endl;
 
   //Should probably move this to ptmcmc/bayesian
   ProbabilityDist::setSeed(seed);

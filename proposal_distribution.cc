@@ -245,7 +245,41 @@ string proposal_distribution_set::show(){
   return s.str();
 };
 
-    
+//user_gaussian_prop
+///This class implements a user-defined multidimensional gaussian step proposal distribution.
+///
+///This generalizes the general-covariance variant of the multidimensional Gaussian (gaussian_prop)
+///
+///but we allow that and additional parameter vector transformation is performed.
+///The matrix M for this transformation is computed to diagonalize a covariance matrix
+///passed in initially.
+user_gaussian_prop::user_gaussian_prop(const stateSpace &sp,const vector<double> &covarvec, int nrand, const string label,void *user_parent_object,void * (*new_user_instance_object_function)(void*object,int id)):proposal_distribution(user_parent_object,new_user_instance_object_function),nrand(nrand),label(label){
+  check_update_registered=false;
+  domainSpace=sp;
+  ndim=sp.size();
+  //ostringstream ss; ss<<" Constructing user_gaussian_prop["+label+"]"<<" this="<<this<<" parent_object="<<user_parent_object<<" new_func="<<(void*)new_user_instance_object_function;cout<<ss.str()<<endl;
+  dist=nullptr;    
+  reset_dist(covarvec);
+  first_draw=true;
+};
+
+user_gaussian_prop::user_gaussian_prop(void *user_parent_object, bool (*function)(const void *parent_object, void* instance_object, const state &, const vector<double> &randoms, vector<double> &covarvec),const stateSpace &sp,const vector<double> &covarvec, int nrand, const string label,void * (*new_user_instance_object_function)(void*object,int id)):user_gaussian_prop(sp,covarvec,nrand,label,user_parent_object,new_user_instance_object_function){    
+  register_check_update(function);
+};
+
+user_gaussian_prop* user_gaussian_prop::clone()const{
+  //{ostringstream ss;ss<<"this="<<this<<" making user_gaussian_prop clone.";cout<<ss.str()<<endl;}
+  user_gaussian_prop *clone = new user_gaussian_prop(*this);
+  clone->new_user_instance_object_function=new_user_instance_object_function;
+  clone->user_parent_object=user_parent_object;
+  valarray<double> zeros(0.0,ndim);
+  clone->dist=new gaussian_dist_product(nullptr,zeros, sigmas);
+  clone->set_instance();
+  //ostringstream ss;ss<<"this="<<this<<" made clone="<<clone<<", parent_object="<<clone->user_parent_object<<", instance_object="<<clone->user_instance_object;cout<<ss.str()<<endl;
+  return clone;
+};
+
+
 //DifferentialEvolution
 //Based mainly on (ter Braak and Vrugt 08, Stat Comput (2008) 18: 435–446)
 //Also SampsonEA2011 ArXiV:1105.2088

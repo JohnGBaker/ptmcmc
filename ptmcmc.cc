@@ -162,7 +162,7 @@ void ptmcmc_sampler::select_proposal(){
       if(reporting())cout<<"Adding likelihood-based elements to proposal."<<endl;
       double rate=0;
       if(adapt_more)rate=prop_adapt_rate;
-      proposal_distribution_set *likeprops=new proposal_distribution_set(chain_llike->get_proposals(),chain_llike->get_prop_shares(),rate);
+      proposal_distribution_set *likeprops=new proposal_distribution_set(chain_llike->get_proposals(),chain_llike->get_prop_shares(),rate,0,vector<double>(),false);//likelihood retains possession of these pointers
       add_on_props.push_back(likeprops);
       add_on_shares.push_back(like_prop_frac);
       add_on_shares[0]-=like_prop_frac;

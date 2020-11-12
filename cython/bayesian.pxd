@@ -77,7 +77,7 @@ cdef extern from '../bayesian.hh' :
          void defWorkingStateSpace(const stateSpace &sp)  
          double evaluate_log(state &s)           
          state draw_from_prior()
-         void addProposal(const proposal_distribution & proposal, double share)
+         void addProposal(const proposal_distribution *proposal, double share)
 
          const stateSpace* getObjectStateSpace()const
          void reset()

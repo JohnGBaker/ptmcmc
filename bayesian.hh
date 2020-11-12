@@ -775,8 +775,8 @@ public:
 
 
   ///This section supports likelihood-associated proposals
-  void addProposal(const proposal_distribution  &proposal, double share=1){
-    proposals.push_back(proposal.clone());
+  void addProposal(const proposal_distribution  *proposal, double share=1){
+    proposals.push_back(proposal->clone());
     prop_shares.push_back(share);
   };
   vector< proposal_distribution* >get_proposals()const{return proposals;};

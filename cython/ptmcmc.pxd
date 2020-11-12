@@ -71,12 +71,20 @@ cdef class involution:
     
 cdef class proposal:
     cdef proposal_distribution.proposal_distribution *cproposal
-    
+    cdef object user_parent_object
+    cdef object user_new_instance_func
+    cdef bool using_instance_data
+    cdef list instance_dicts
+    cdef dict default_instance_data
+    cdef void* (*new_instance_func)(void*, int id)
+    cdef void* call_user_new_instance_func(self, int id) with gil
+    cdef void* generic_new_instance_func(self, int id) with gil
+
 cdef class gaussian_prop(proposal):
 #cdef class gaussian_prop:
     cdef proposal_distribution.user_gaussian_prop *cuser_gaussian_prop
     cdef int ndim
-    cdef object check_update_func
-    cdef bool call_check_update(self, const states.state &s, const vector[double] &randoms, vector[double] &covarvec) with gil
+    cdef object user_check_update_func
+    cdef bool call_check_update(self, void *instance_pointer, const states.state &s, const vector[double] &randoms, vector[double] &covarvec) with gil
 
 
