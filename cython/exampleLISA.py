@@ -393,7 +393,7 @@ class simple_likelihood(ptmcmc.likelihood):
         #print("simple_likelihood::setup: space="+space.show())
         #lscales=[0.1 for x in scales]
         #self.basic_setup(space, types, centers, scales, lscales);
-        self.basic_setup(space, types, centers, scales, scales);
+        self.basic_setup(space, types, centers, scales, scales, check_posterior=False);
 
         #Fisher options
         self.opt.add("fisher_update_len","Mean number of steps before drawing an update of the Fisher-matrix based proposal. Default 0 (Never update)","0");
@@ -451,34 +451,42 @@ def frozen_fisher_check_update(likelihood, s, randoms, covarvec):
         return True
 
 #This will be the callback for a gaussian_prop, so it must be declared outside the class
-def fisher_check_update(likelihood, instance, s, randoms, covarvec):
-        #Note: requires nrand==2 for evolving fisher
-        fisher_covars=instance['covars']
-        counter=instance['counter']
-        nfish=len(fisher_covars);
-        if(nfish>0 and (len(randoms)>0 and randoms[-1]*likelihood.fisher_update_len<1)):return False
-        if(len(randoms)>0):randoms=randoms[:-1]
-        add_every=nfish*2;#how long to go before adding a new Fisher covariance to the stack
-        #print("check_update: nfish,count: ",nfish," ,",counter,"/",add_every)
-        if(nfish==0 or counter>add_every):
-            #Here we construct a new fisher matrix and add it to the stack
-            counter=0;
-            params=s.get_params()
-            if(nfish>=likelihood.fisher_nmax):fisher_covars=fisher_covars[1:]
-            print("Adding Fisher Covariance [",len(fisher_covars),"] =")
-            cov=dummy_Fisher_cov();
-            fisher_covars.append(cov)
-            print("  ","%15f"%cov[0],"%15f"%cov[1],"%15f"%cov[2])
-            print("  ","%15f"%cov[1],"%15f"%cov[3],"%15f"%cov[4])
-            print("  ","%15f"%cov[2],"%15f"%cov[4],"%15f"%cov[5])
-        #Draw one of the fisher covariances from the stack.  Could make this likelihood weighted, etc...
-        ifish=int(randoms[-1]*len(fisher_covars));
-        #cout<<"ifish,size:"<<ifish<<","<<fisher_covars.size()<<endl;
-        randoms=randoms[:-1]
-        covarvec=fisher_covars[ifish]
-        counter+=1
-        return True
-
+def fisher_check_update(likelihood, instance, s, randoms, covarray):
+    #Note: requires nrand==2 for evolving fisher
+    fisher_covars=instance['covars']
+    nfish=len(fisher_covars);
+    if(nfish>0 and (len(randoms)>0 and randoms[-1]*likelihood.fisher_update_len<1)):return False
+    if(len(randoms)>0):randoms=randoms[:-1]
+    everyfac=1
+    add_every=nfish*everyfac;#how long to go before adding a new Fisher covariance to the stack
+    #print("check_update: nfish,count: ",nfish," ,",counter,"/",add_every)
+    if(nfish==0 or instance['counter']>add_every):
+      if nfish==0 and likelihood.reporting:
+        print("Fisher replenishment scale is ",likelihood.fisher_nmax**2*everyfac*likelihood.fisher_update_len,"draws. Consider increasing nmax or update_len if this is not greater than autocorrelation length.")
+            
+      #Here we construct a new fisher matrix and add it to the stack
+      instance['counter']=0;
+      params=s.get_params()
+      if(nfish>=likelihood.fisher_nmax):fisher_covars=fisher_covars[1:]
+      cov=dummy_Fisher_cov();
+      #cov=cov/likelihood.fisher_reduce_fac
+      fisher_covars.append(cov)
+      verbose=((randoms[0]<1/likelihood.fisher_nmax) or (nfish<likelihood.fisher_nmax) ) and likelihood.reporting
+      if verbose:
+        print("evalFisherCov time:",end-start)#, "\ns=",s.get_params())
+        print("Fisher Covariance [",len(fisher_covars),"] ")
+        #print(cov)
+        sigs=np.sqrt(np.diag(cov))
+        print("New Fisher, sigmas:",sigs)
+        n=len(sigs)
+        print("Corr:\n"+"\n".join( ('{:6.2f}'*n).format(*[cov[i,j]/sigs[i]/sigs[j] for j in range(n)]) for i in range(n)),'\n') 
+    #Draw one of the fisher covariances from the stack.  Could make this likelihood weighted, etc...
+    ifish=int(randoms[-1]*len(fisher_covars));
+    #cout<<"ifish,size:"<<ifish<<","<<fisher_covars.size()<<endl;
+    randoms=randoms[:-1]
+    np.copyto(covarray,fisher_covars[ifish])
+    instance['counter']+=1
+    return True
 
 count=0
 
@@ -528,7 +536,7 @@ def main(argv):
     #//data->setup();  
     #//signal->setup();  
     like.setup();
-    
+       
     #double seed;
     #int Nchain,output_precision;
     #int Nsigma=1;

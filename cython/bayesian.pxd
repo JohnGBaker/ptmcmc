@@ -78,7 +78,8 @@ cdef extern from '../bayesian.hh' :
          double evaluate_log(state &s)           
          state draw_from_prior()
          void addProposal(const proposal_distribution *proposal, double share)
-
+         bool check_posterior
+         double lprior_cut
          const stateSpace* getObjectStateSpace()const
          void reset()
          double bestPost()

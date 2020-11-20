@@ -318,7 +318,7 @@ cdef class likelihood:
         self.like.evaluate_log(s.cstate)
         return self.like.bestPost()
         
-    cpdef void basic_setup( self, stateSpace space, list types, list centers, list priorScales, list reScales=None):
+    cpdef void basic_setup( self, stateSpace space, list types, list centers, list priorScales, list reScales=None,bool check_posterior=True,double lprior_cut=0):
         cdef int n=space.size()
         self.space=space #We hold on to this so it doesn't go out of scope
         cdef vector[string] typesvec
@@ -339,6 +339,8 @@ cdef class likelihood:
                 rescalesvec[i]=1.0
         if self.like==NULL: raise UnboundLocalError
         else: self.like.basic_setup(space.spaceptr, typesvec, centersvec, scalesvec, rescalesvec)
+        self.like.check_posterior=check_posterior
+        self.like.lprior_cut=lprior_cut
         #else: self.like.basic_setup(space.spaceptr, typesvec, centersvec, scalesvec)
     cpdef state draw_from_prior(self):
         if self.like==NULL: raise UnboundLocalError
@@ -489,6 +491,8 @@ cdef class gaussian_prop(proposal):
         print("Constructing '"+label+"' proposal with reference=",reference_object)
         cdef string clabel=label.encode('UTF-8')
         self.ndim=sp.size()
+        #print("got ndim=",self.ndim,"for space=",sp.show())
+        
         cdef int length=(self.ndim*(self.ndim+1))//2
         cdef vector[double] covarvec
         covarvec.resize(length)
@@ -501,9 +505,12 @@ cdef class gaussian_prop(proposal):
         else:
             print("gaussian_prop: Unexpected covarray shape ",covarray.shape,". Setting to identity matrix.")
             print("... of length",length)
+            ic=0
             for i in range(self.ndim):
                 for j in range(i,self.ndim):
-                    covarvec[i*self.ndim+j]=int(i==j)
+                    #print("set covarvec["+str(ic)+"]="+str(int(i==j)))
+                    covarvec[ic]=int(i==j)
+                    ic+=1
         self.user_check_update_func=check_update_func
         self.cuser_gaussian_prop=new proposal_distribution.user_gaussian_prop(
             <void*>self,
@@ -525,17 +532,22 @@ cdef class gaussian_prop(proposal):
         try:
             st=state()
             st.cstate=states.state(s)
-            covarray=np.array([])
+            covarray=np.empty((self.ndim,self.ndim),dtype=np.float64)
             check_update=self.user_check_update_func
             if self.using_instance_data:
-                check_update(self.user_parent_object,<object>instance_pointer,st,get_vector(randoms),covarray)
+                update=check_update(self.user_parent_object,<object>instance_pointer,st,get_vector(randoms),covarray)
             else:
-                check_update(self.user_parent_object,st,get_vector(randoms),covarray)
+                update=check_update(self.user_parent_object,st,get_vector(randoms),covarray)
             if update:
-                covarvec.resize((self.ndim*self.ndim+1)/(int(2)))
+                vsize=(self.ndim*(self.ndim+1))//(int(2))
+                #print("got covarray shape:",covarray.shape)
+                covarvec.resize(vsize)
+                ic=0
                 for i in range(self.ndim):
                     for j in range(i,self.ndim):
-                        covarvec[i*self.ndim+j]=covarray[i,j]
+                        covarvec[ic]=covarray[i,j]
+                        ic+=1
+                #print("updated Fisher: covarvec=",[covarvec[i] for i in range(vsize)])
         except:
             exc_type, exc_value, exc_traceback = sys.exc_info()
             print("*******")
