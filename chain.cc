@@ -759,8 +759,16 @@ void MH_chain::initialize(uint n, string initialization_file){
     double slike;
     while(s.invalid() or (slike=llikelihood->evaluate_log(s))<-1e100){
       icnt++;
-      if(icnt>=icntmax)
-	cout<<"MH_chain::initialize: Having trouble drawing a valid state.  Latest state:"<<s.show()<<"...was invalid in space:"<<s.getSpace()->show()<<endl;
+      if(icnt>=icntmax){ 
+	#pragma omp critical    
+	{
+	  cout<<"MH_chain::initialize: Having trouble drawing a valid state.  Latest state:"<<s.show();
+	  if(s.invalid())cout<<"...was invalid in space:"<<s.getSpace()->show()<<endl;
+	  cout<<"...failed with log_prior="<<lprior->evaluate_log(s)<<" and log_likelihood="<<slike<<endl;
+	  s.enforce(true);
+	  lprior->verbose_evaluate(s);
+	}
+      }
       s=lprior->drawSample(*rng);
     }
     //cout <<"starting with Nsize="<<Nsize<<endl;//debug
@@ -785,7 +793,14 @@ void MH_chain::initialize(uint n){
       //cout<<"invalid state: like="<<slike<<" pars:"<<s.get_string()<<endl;
       icnt++;
       if(icnt>=icntmax)
-	cout<<"MH_chain::initialize: Having trouble drawing a valid state.  Latest state:"<<s.show()<<"...was invalid in space:"<<s.getSpace()->show()<<endl;
+	#pragma omp critical    
+	{
+	  cout<<"MH_chain::initialize: Having trouble drawing a valid state.  Latest state:"<<s.show();
+	  if(s.invalid())cout<<"...was invalid in space:"<<s.getSpace()->show()<<endl;
+	  cout<<"...failed with log_prior="<<lprior->evaluate_log(s)<<" and log_likelihood="<<slike<<endl;
+	  s.enforce(true);
+	  lprior->verbose_evaluate(s);
+	}
       s=lprior->drawSample(*rng);
     }
     //cout <<"starting with Nsize="<<Nsize<<endl;//debug
