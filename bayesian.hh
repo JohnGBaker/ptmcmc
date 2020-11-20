@@ -323,7 +323,8 @@ public:
     user_object=nullptr;
     evaluate_log_registered=defWorkingStateSpace_registered=false;
     check_posterior=true;
-
+    lprior_cut=0;
+    
     if(sp)best=state(sp,sp->size());
     reset();
 };
@@ -539,6 +540,7 @@ private:
   bool evaluate_log_registered,defWorkingStateSpace_registered;
 public:
   bool check_posterior;  //User can set to false to skip checks for unreasonable posterior values
+  double lprior_cut; //User can set a limit to skip likelihood eval.
   void register_reference_object(void *object){user_object=object;};    
   void register_evaluate_log(double (*function)(void *object, const state &s)){
     user_evaluate_log=function;
@@ -551,12 +553,16 @@ public:
   virtual double evaluate_log(state &s)override{
     if(evaluate_log_registered){
       //cout<<"bayesian_likelihood::evaluate_log:Calling user_evaluate_log."<<endl;
-      double result =(*user_evaluate_log)(user_object,s);
+      double lprior;
+      if(lprior_cut!=0 or check_posterior)lprior=nativePrior->evaluate_log(s);//May need a mechanism to check that prior is set
+
+      double result = -INFINITY;
+      if(lprior_cut==0 or not (lprior<lprior_cut))result=(*user_evaluate_log)(user_object,s);
       if(check_posterior){
-	double post=result+nativePrior->evaluate_log(s);//May need a mechanism to check that prior is set
+	double post=result+lprior;
         #pragma omp critical 
 	{     
-	  if(post>best_post){
+	  if(not (post<=best_post)){
 	    best_post=post;
 	    best=state(s);
 	  }
@@ -565,7 +571,7 @@ public:
 	    cout<<"  params="<<s.get_string()<<endl;
 	    cout<<"  like="<<result<<"  post="<<post<<endl; 
 	    result=-INFINITY;
-	    exit(1);
+	    //exit(1);
 	  }
 	}
       }
