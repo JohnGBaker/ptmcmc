@@ -259,92 +259,13 @@ public:
     user_check_update=function;
     check_update_registered=true;
   };
-  state draw(state &s,chain *caller){
-    //print some debugging info
-    if(first_draw){
-      //ostringstream ss;ss<<"this="<<this<<" drawing for chainID="<<caller->get_id()<<" on thread="<<omp_get_thread_num()<<endl;cout<<ss.str()<<endl;
-      first_draw=false;
-    }
-    //first restrict to the relevant subspace for this step distribution
-
-    if(idx_map.size()==0){
-      idx_map=s.projection_indices_by_name(&domainSpace);
-      for(int i=0;i<s.size();i++)
-	if(i<0)cout<<"use_gaussian_prop['"+label+"']:draw: Param '"+domainSpace.get_name(i)+"' not found in stateSpace! Will ignore."<<endl;
-    }
-    vector<double> sparams(domainSpace.size());
-    for(int i=0;i<ndim;i++)if(idx_map[i]>=0)sparams[i]=s.get_param(idx_map[i]);
-    state ss=state(&domainSpace,sparams);
-    last_type=check_update(ss,caller);
-    state offset=dist->drawSample(*(caller->getPRNG()));;
-    double x=1;
-    valarray<double> data;
-    offset.get_params_array(data);
-    Eigen::Map<Eigen::VectorXd> vec(&data[0],offset.size());
-    vec=diagTransform*vec;
-    state newstate=s.scalar_mult(0);
-    for(int i=0;i<ndim;i++)if(idx_map[i]>=0)newstate.set_param(idx_map[i],vec(i));
-    newstate=s.add(newstate);
-    return newstate;
-  };
+  state draw(state &s,chain *caller);
   string show(){
     ostringstream ss; ss<<"StepBy"<<"UserCovar["+label+"]";return ss.str();};
 protected:
-  void reset_dist(const vector<double> &covarvec){
-    Eigen::MatrixXd cov(ndim,ndim);
-    if(covarvec.size()==ndim){ //covarvec is understood as diag of diagonal matrix
-      for(int i=0;i<ndim;i++)cov(i,i)=covarvec[i];
-    } else if(covarvec.size()==(ndim*(ndim+1))/2){ //covarvec is concatenated UL side of covariance.  E.g. 3D identify is {1,0,0,1,0,1}
-      //Convert vector-form covariance to Eigen symmetric matrix
-      int ic=0;
-      for(int i=0;i<ndim;i++){
-	for(int j=i;j<ndim;j++){
-	  cov(i,j)=covarvec[ic];
-	  cov(j,i)=cov(i,j);
-	  ic++;
-	}
-      }
-    } else {
-      cout<<"gaussian_prop:reset_dist Covar vector has unexpeced size,";
-      cout<<"ndim="<<ndim<<", UL size="<<(ndim*(ndim+1))/2<<" but got "<<covarvec.size()<<" "<<endl;
-      if(dist){
-	cout<<" Skipping update!"<<endl;
-	return;
-      } else {
-	cout<<" Setting to identity matrix!"<<endl;
-	for(int i=0;i<ndim;i++)cov(i,i)=1;
-      }
-    }
-    //Now perform the update
-    sigmas.resize(ndim);
-    Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> eigenSolver(cov);
-    diagTransform=eigenSolver.eigenvectors();
-    Eigen::VectorXd evalues = eigenSolver.eigenvalues();
-    for(int i=0;i<ndim;i++){
-      if(evalues[i]<0){
-	cout<<"user_gaussian_prop["+label+"]: Warning. Negative covariance eigenvalue set to zero."<<endl;
-	evalues[i]=0;
-      }
-      sigmas[i]=sqrt(evalues(i));
-    }
-    valarray<double> zeros(0.0,ndim);
-    delete dist;
-    dist = new gaussian_dist_product(nullptr,zeros, sigmas);
-    //cout<<"this="<<this<<" created dist="<<dist<<endl;
-  };    
+  void reset_dist(const vector<double> &covarvec);
   ///This function updates the proposal if user has provided an update callback function
-  bool check_update(const state &s, chain *caller){
-    if(!check_update_registered)return false;
-    //Generate random values
-    vector<double>randoms(nrand);
-    for(auto & x : randoms)x=(caller->getPRNG()->Next());
-    //Call user function
-    vector<double> covarvec;
-    bool renewing=user_check_update(user_parent_object, user_instance_object, s, randoms, covarvec);
-    if(!renewing)return false;
-    reset_dist(covarvec);
-    return true;
-  };
+  bool check_update(const state &s, chain *caller);
 
 };
 
