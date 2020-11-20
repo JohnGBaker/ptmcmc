@@ -83,7 +83,7 @@ string boundary::show()const{
 /// is probably best, but will probably not be backward compatible. If such chages are to be made, then
 /// we might want to move innerproduct (at minimum) to stateSpace and make some improvements with the
 /// wrap dimensions (so that |A-B| = |B-A|, for eg).
-bool stateSpace::enforce(valarray<double> &params)const{
+bool stateSpace::enforce(valarray<double> &params, bool verbose)const{
     if(params.size()!=dim){
       cout<<"stateSpace::enforce:  Dimension error.  Expected "<<dim<<" params, but given "<<params.size()<<" for stateSpace="<<show()<<"."<<endl;
       exit(1);
@@ -93,6 +93,7 @@ bool stateSpace::enforce(valarray<double> &params)const{
       if(!bounds[i].enforce(params[i])){
 	//cout<<"stateSpace::enforce: testing parameter "<<i<<" = "<<params[i]<<endl;//debug
 	//cout<<"        FAILED."<<endl;
+	if(verbose)cout<<"stateSpace::enforce: parameter "<<i<<" "<<get_name(i)<<" = "<<params[i]<<" exceeded boundary "<<bounds[i].show()<<endl; 
 	return false;
       }
     }
@@ -157,10 +158,10 @@ bool stateSpace::addSymmetry(stateSpaceInvolution &involution){
 
 
       
-void state::enforce(){
+void state::enforce(bool verbose){
   if(!space)valid=false;
   if(!valid)return;
-  valid=space->enforce(params);
+  valid=space->enforce(params,verbose);
   //cout<<"state::enforce:State was "<<(valid?"":"not ")<<"valid."<<endl;//debug
 };
 

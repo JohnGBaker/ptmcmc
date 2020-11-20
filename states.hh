@@ -128,7 +128,7 @@ public:
   };
   ///Test whether another space is a subspace of this one.
   bool contains(const stateSpace &other);
-  bool enforce(valarray<double> &params)const;
+  bool enforce(valarray<double> &params,bool verbose=false)const;
   ///Show structural info
   string show()const;
   ///replace a parameter in one space dimension
@@ -205,7 +205,7 @@ public:
     for(int i=0;i<params.size();i++)readDouble(iss,params[i]);
   };
   int size()const{return params.size();}
-  void enforce();
+  void enforce(bool verbose=false);
   //some algorithms rely on using the states as a vector space
   virtual state add(const state &other)const;
   virtual state scalar_mult(double x)const;
