@@ -16,6 +16,7 @@ import astropy.units as units
 import math
 import random
 import argparse
+import ptmcmc_analysis
 
 def readCovar(filename=None):
     with open(filename,'r') as f:
@@ -219,7 +220,8 @@ ncases=1
 
 chainfiles=args.chainfile
 fishfile=None
-if args.fishfile is not None: fishfile=args.fishfile
+fishfiles=None
+if  args.fishfile is not None: fishfile=args.fishfile
 
 
 cred_levs=[0.68268949213709,#1-sigma
@@ -342,6 +344,7 @@ if(True):
         
     #loop over chains for processing samples
     for chainfile in chainfiles:
+        do_ess=False
         if("post_equal_weights.dat" in chainfile):
             code="bambi"
             burnfrac=0
@@ -352,20 +355,24 @@ if(True):
             iskip=1
         elif("_t0.dat" in chainfile):
             code="ptmcmc"
-            burnfrac=0.75
-            iskip=50
-            print("ACLS=",args.acls)
-            if(len(args.acls)>0):iskip=int(50+acls[i]/100.0)
-        elif("fishcov.dat" in fishfile):
-            code="ptmcmc"
-            burnfrac=0
-            iskip
+            do_ess=True
         lkeep=args.l
         if(len(args.lens)>0):lkeep=lens[i]
-        samples.append(read_samples(Npar,chainfile,code=code,burnfrac=burnfrac,keeplen=lkeep,iskip=iskip))
+        nextch=ptmcmc_analysis.chainData(chainfile)
+        if do_ess:
+            upsample_fac=15
+            ess,aclength=nextch.estimate_ess(3000)
+            nsamp=int(ess*upsample_fac)
+            length=ess*aclength
+            print("nsamp,length:",nsamp,length)
+            nextsamp=nextch.get_samples(nsamp,length)
+        else:
+            nextsamp=nextch.data
+        print("nextsamp shape",nextsamp.shape)
+        samples.append(nextsamp)
         i+=1
         print("calling cornerFisher: Npar=",Npar," pars=",pars," len(samples)",len(samples),samples[0].shape)
-    cornerFisher(Npar,pars,samples,cov,cred_levs,sample_labels=sample_labels)
+        cornerFisher(Npar,pars,samples,cov,cred_levs,sample_labels=sample_labels)
 
     rs=[ math.sqrt(s[1]**2+s[2]**2) for s in samples[0]]
     rs.sort()
