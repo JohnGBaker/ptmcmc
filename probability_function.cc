@@ -18,7 +18,8 @@ gaussian_dist_product::gaussian_dist_product(const stateSpace *space, const vala
   dim=x0s.size();
   if(dim!=sigmas.size()){
     cout<<"gaussian_dist_product(constructor): Array sizes mismatch.\n";
-    exit(1);
+    cout<<"x0s.size,sigms.size:"<<x0s.size()<<","<<sigmas.size()<<endl;
+    terminate();
   }
   dists.resize(dim);
   for(size_t i=0;i<dim;i++){
@@ -101,7 +102,7 @@ string gaussian_dist_product::show(int ii)const{
   //cout<<"Entering GDP: ii="<<ii<<endl;
   ostringstream s;
   if(ii<0){
-    s<<"SampleableDistProduct(\n";
+    s<<"GaussianDistProduct(\n";
     for( int i=0;i<dim;i++)
       s<<"  "<<(space?space->get_name(i):"[???]")<<" from "<<dists[i]->show()<<"\n";
     s<<")\n";
@@ -186,7 +187,7 @@ string uniform_dist_product::show(int ii)const{
   //cout<<"Entering UDP: ii="<<ii<<endl;
   ostringstream s;
   if(ii<0){
-    s<<"SampleableDistProduct(\n";
+    s<<"UniformDistProduct(\n";
     for( int i=0;i<dim;i++)
       s<<"  "<<(space?space->get_name(i):"[???]")<<" from "<<dists[i]->show()<<"\n";
     s<<")\n";
@@ -272,7 +273,7 @@ state mixed_dist_product::drawSample(Random &rng)const{
   return s; 
 };
 
-double mixed_dist_product::evaluate(state &s)const{
+double mixed_dist_product::evaluate_vb(state &s, bool vb)const{
   if(s.invalid())return 0;
   if(dim!=s.size()){
     cout<<"mixed_dist_product:evaluate: State size mismatch.\n";
@@ -282,14 +283,14 @@ double mixed_dist_product::evaluate(state &s)const{
   vector<double> pars=s.get_params_vector();
   for(uint i=0;i<dim;i++){
     double pdfi=dists[i]->pdf(pars[i]);
-    if(verbose){
+    if(verbose or vb){
       ostringstream ss;
       ss<<"subspace prior for "<<s.getSpace()->get_name(i)<<"="<<pars[i]<<" -> "<<pdfi<<"\n";
       cout<<ss.str();
     }
       result*=pdfi;
   }
-  if(verbose){
+  if(verbose or vb){
     ostringstream ss;
     ss<<"prior result = "<<result<<"\n";
     cout<<ss.str();
@@ -319,7 +320,7 @@ string mixed_dist_product::show(int ii)const{
   //cout<<"Entering MDP: ii="<<ii<<endl;
   ostringstream s;
   if(ii<0){
-    s<<"SampleableDistProduct(\n";
+    s<<"MixedDistProduct(\n";
     for( int i=0;i<dim;i++)
       s<<"  "<<(space?space->get_name(i):"[???]")<<" from "<<dists[i]->show()<<"\n";
     s<<")\n";

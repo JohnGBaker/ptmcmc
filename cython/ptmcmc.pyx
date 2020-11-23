@@ -7,6 +7,7 @@ from libcpp cimport bool
 from typing import List
 from libcpp.string cimport string
 from libcpp.vector cimport vector
+from libc.stdint cimport uintptr_t
 cimport numpy as np
 import numpy as np
 import random
@@ -15,6 +16,8 @@ cimport ptmcmc
 cimport options
 import copy
 cimport openmp
+import traceback
+import sys
 #cimport cython.parallel
 
 from libc.stdio cimport printf
@@ -290,7 +293,8 @@ cdef class likelihood:
         self.like.register_reference_object(<void*>self)
         #self.like.register_evaluate_log(nada)
         self.like.register_evaluate_log(<double (*)(void *object, const states.state &s)>self.call_evaluate_log)
-            #register_defWorkingStateSpace(<void (*)(void *object, const stateSpace &sp)>self.call_defWorkingStateSpace)
+        #register_defWorkingStateSpace(<void (*)(void *object, const stateSpace &sp)>self.call_defWorkingStateSpace)
+        self.proposals=[]    
     def __dealloc__(self):
         del self.like
     cdef double call_evaluate_log(self, const states.state &s) with gil:
@@ -314,7 +318,7 @@ cdef class likelihood:
         self.like.evaluate_log(s.cstate)
         return self.like.bestPost()
         
-    cpdef void basic_setup( self, stateSpace space, list types, list centers, list priorScales, list reScales=None):
+    cpdef void basic_setup( self, stateSpace space, list types, list centers, list priorScales, list reScales=None,bool check_posterior=True,double lprior_cut=0):
         cdef int n=space.size()
         self.space=space #We hold on to this so it doesn't go out of scope
         cdef vector[string] typesvec
@@ -335,6 +339,8 @@ cdef class likelihood:
                 rescalesvec[i]=1.0
         if self.like==NULL: raise UnboundLocalError
         else: self.like.basic_setup(space.spaceptr, typesvec, centersvec, scalesvec, rescalesvec)
+        self.like.check_posterior=check_posterior
+        self.like.lprior_cut=lprior_cut
         #else: self.like.basic_setup(space.spaceptr, typesvec, centersvec, scalesvec)
     cpdef state draw_from_prior(self):
         if self.like==NULL: raise UnboundLocalError
@@ -342,6 +348,10 @@ cdef class likelihood:
         st=state()
         st.cstate=states.state(s)
         return st
+    cpdef void addProposal(self, proposal prop, double share=1):
+        self.proposals.append(prop)#we need to reserve reference to these for callback
+        self.like.addProposal(<proposal_distribution.proposal_distribution *> prop.cproposal,share)
+
     cpdef stateSpace getObjectStateSpace(self):
        sp=stateSpace()
        sp.point(self.like.getObjectStateSpace())
@@ -413,6 +423,140 @@ cdef class Options:
                 result+="\n "+name+":"+str(self.argsdict[name])
         return  result
 
+cdef class proposal:
+    """
+    Base class for proposal distributions.
+    For proposals which reference some history, it is essential that there is a way to distinguish which
+    (cloned) copy of the c++ proposal object is being referenced.  Toward that a "new_instance" function
+    is provided which will be called whenever a new copy of the proposal is made in c++.  The user may
+    provide their own version of this function, or use the "generic" one included here.
+    """
+    #cdef proposal_distribution.proposal_distribution *cproposal
+    def __cinit__(self,reference_object,*args,**kwargs):
+        self.user_parent_object=reference_object
+        #Figure out which kind of instance information is needed
+        if "new_instance_func" in kwargs:
+            new_instance_func=kwargs["new_instance_func"]
+            if callable(kwargs["new_instance_func"]):  #User has provided a function, we use it          
+                self.user_new_instance_func=kwargs["new_instance_func"]
+                self.new_instance_func=<void* (*)(void *object, int id)>self.call_user_new_instance_func
+                self.using_instance_data=True
+                #print("self=",self," New proposal class object. User's function will define new instances: self.new_instance_func=",hex(<uintptr_t>self.new_instance_func))
+        elif 'default_instance_data' in kwargs: #generic case
+            self.new_instance_func=<void* (*)(void *object, int id)>self.generic_new_instance_func
+            self.using_instance_data=True
+            self.default_instance_data=kwargs['default_instance_data'].copy()
+            #print("self=",self," New proposal class object with generic instance management. self.new_instance_func=",hex(<uintptr_t>self.new_instance_func)," self.default_instance_data=",self.default_instance_data,"at",hex(id(self.default_instance_data)))
+        else: #User has specified None (don't pass any instance info to user)         
+            self.user_new_instance_func=None
+            self.using_instance_data=False
+            #print("self=",self," New proposal class object. No instance data.")
+        self.instance_dicts=[]
+
+    cdef void* call_user_new_instance_func(self, int id) with gil:
+        if self.user_new_instance_func is not None:
+            return <void*><uintptr_t>self.user_new_instance_func(self, id)
+        return NULL
+    
+    cdef void * generic_new_instance_func(self ,int id_) with gil:
+        #print('proposal::generic_new_instance_func: self=',self," new instance id=",id_)
+        loc=hex(id(self.default_instance_data))
+        #print("default_data=",self.default_instance_data,"at",loc)
+        instance = self.default_instance_data.copy()
+        instance['id']=id_
+        self.instance_dicts.append(instance)
+        instance=self.instance_dicts[-1]
+        #print("instance=",instance,"at",hex(id(instance)))
+        #print("self=",self," new proposal instance=",instance," id=",id_,". Now there",("is" if len(self.instance_dicts)==1 else "are"), len(self.instance_dicts))    
+        return <void*>instance
+  
+ 
+cdef class gaussian_prop(proposal):
+    """
+    Provides a multivariate Gaussian step proposal.  User provides a stateSpace object which defines the 
+    subspace on which the proposal operates.  The user may provide the initial Gaussian step covariance
+    or may provide a vector with just the diagonal values. Note that the proposal step should be asymptotically 
+    independent of state and state history (otherwise you need to/from hasings ratio for balance equation).  
+    The user check update function will also be passed a set of nrand random values generated by the caller's
+    PRNG. This can ensure clean reproducibility where a user-provided PRNG may not.
+    
+    """
+
+    #cdef proposal_distribution.user_gaussian_prop *cuser_gaussian_prop
+    #cdef int ndim
+    #cdef object check_update_func
+
+    def __cinit__(self, reference_object, check_update_func, stateSpace sp, covarray, nrand=0, str label="", **kwargs):
+        #self.label=label
+        print("Constructing '"+label+"' proposal with reference=",reference_object)
+        cdef string clabel=label.encode('UTF-8')
+        self.ndim=sp.size()
+        #print("got ndim=",self.ndim,"for space=",sp.show())
+        
+        cdef int length=(self.ndim*(self.ndim+1))//2
+        cdef vector[double] covarvec
+        covarvec.resize(length)
+        if covarray.shape==(self.ndim,self.ndim,):
+            for i in range(self.ndim):
+                for j in range(i,self.ndim):
+                    covarvec[i*self.ndim+j]=covarray[i,j]
+        elif covarray.shape==(length,):
+            for i in range(length):covarvec[i]=covarray[i]
+        else:
+            print("gaussian_prop: Unexpected covarray shape ",covarray.shape,". Setting to identity matrix.")
+            print("... of length",length)
+            ic=0
+            for i in range(self.ndim):
+                for j in range(i,self.ndim):
+                    #print("set covarvec["+str(ic)+"]="+str(int(i==j)))
+                    covarvec[ic]=int(i==j)
+                    ic+=1
+        self.user_check_update_func=check_update_func
+        self.cuser_gaussian_prop=new proposal_distribution.user_gaussian_prop(
+            <void*>self,
+            <bool (*)(const void *object, void *instance, const states.state &, const vector[double] &randoms, vector[double] &covarvec)>self.call_check_update,
+            sp.space,
+            covarvec,
+            <int>nrand,
+            clabel,
+            self.new_instance_func
+            )
+        self.cproposal=self.cuser_gaussian_prop
+        
+    def __dealloc__(self):
+        #print("deallocating involution '"+self.label+"' = "+str(self))
+        del self.cuser_gaussian_prop
+        
+    cdef bool call_check_update(self, void *instance_pointer, const states.state &s, const vector[double] &randoms, vector[double] &covarvec) with gil:
+        cdef bool update
+        try:
+            st=state()
+            st.cstate=states.state(s)
+            covarray=np.empty((self.ndim,self.ndim),dtype=np.float64)
+            check_update=self.user_check_update_func
+            if self.using_instance_data:
+                update=check_update(self.user_parent_object,<object>instance_pointer,st,get_vector(randoms),covarray)
+            else:
+                update=check_update(self.user_parent_object,st,get_vector(randoms),covarray)
+            if update:
+                vsize=(self.ndim*(self.ndim+1))//(int(2))
+                #print("got covarray shape:",covarray.shape)
+                covarvec.resize(vsize)
+                ic=0
+                for i in range(self.ndim):
+                    for j in range(i,self.ndim):
+                        covarvec[ic]=covarray[i,j]
+                        ic+=1
+                #print("updated Fisher: covarvec=",[covarvec[i] for i in range(vsize)])
+        except:
+            exc_type, exc_value, exc_traceback = sys.exc_info()
+            print("*******")
+            traceback.print_exception(exc_type, exc_value, exc_traceback,
+                                      limit=2, file=sys.stdout)
+            print("*******")
+            sys.exit()
+        return update
+    
 #######
 cdef class sampler:
     cdef ptmcmc_sampler *mcmcsampler

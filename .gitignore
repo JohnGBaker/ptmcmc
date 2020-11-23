@@ -8,3 +8,4 @@ doc
 *.o
 ProbabilityDist/testProbDist
 ProbabilityDist/*.dat
+python/__pycache__

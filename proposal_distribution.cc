@@ -6,6 +6,7 @@
 
 #include "proposal_distribution.hh"
 #include <algorithm>
+#include <ctime>
 
 using namespace std;
 
@@ -55,7 +56,7 @@ void proposal_distribution_set::reset_bins(){
   }
 };
 
-proposal_distribution_set::proposal_distribution_set(vector<proposal_distribution*> &props,vector<double> &shares_,double adapt_rate,double Tpow, vector<double> hot_shares_,bool take_pointers):shares(shares_),adapt_rate(adapt_rate),Tpow(Tpow),hot_shares(hot_shares_),own_pointers(take_pointers){
+proposal_distribution_set::proposal_distribution_set(const vector<proposal_distribution*> &props,const vector<double> &shares_,double adapt_rate,double Tpow, vector<double> hot_shares_,bool take_pointers):shares(shares_),adapt_rate(adapt_rate),Tpow(Tpow),hot_shares(hot_shares_),own_pointers(take_pointers){
   //if Tpow>0 do temperature-based weighting
   //shares[i](T) = shares[i]*(1/T**Tpow) + hot_shares[i]*(1-1/T**Tpow)
   //so shares[i](T=1) = shares[i]
@@ -245,7 +246,187 @@ string proposal_distribution_set::show(){
   return s.str();
 };
 
+//user_gaussian_prop
+///This class implements a user-defined multidimensional gaussian step proposal distribution.
+///
+///This generalizes the general-covariance variant of the multidimensional Gaussian (gaussian_prop)
+///
+///but we allow that and additional parameter vector transformation is performed.
+///The matrix M for this transformation is computed to diagonalize a covariance matrix
+///passed in initially.
+user_gaussian_prop::user_gaussian_prop(const stateSpace &sp,const vector<double> &covarvec, int nrand, const string label,void *user_parent_object,void * (*new_user_instance_object_function)(void*object,int id)):proposal_distribution(user_parent_object,new_user_instance_object_function),nrand(nrand),label(label){
+  check_update_registered=false;
+  domainSpace=sp;
+  ndim=sp.size();
+  //ostringstream ss; ss<<" Constructing user_gaussian_prop["+label+"]"<<" this="<<this<<" parent_object="<<user_parent_object<<" new_func="<<(void*)new_user_instance_object_function;cout<<ss.str()<<endl;
+  dist=nullptr;    
+  reset_dist(covarvec);
+  first_draw=true;
+};
+
+user_gaussian_prop::user_gaussian_prop(void *user_parent_object, bool (*function)(const void *parent_object, void* instance_object, const state &, const vector<double> &randoms, vector<double> &covarvec),const stateSpace &sp,const vector<double> &covarvec, int nrand, const string label,void * (*new_user_instance_object_function)(void*object,int id)):user_gaussian_prop(sp,covarvec,nrand,label,user_parent_object,new_user_instance_object_function){    
+  register_check_update(function);
+};
+
+user_gaussian_prop* user_gaussian_prop::clone()const{
+  //{ostringstream ss;ss<<"this="<<this<<" making user_gaussian_prop clone.";cout<<ss.str()<<endl;}
+  user_gaussian_prop *clone = new user_gaussian_prop(*this);
+  clone->new_user_instance_object_function=new_user_instance_object_function;
+  clone->user_parent_object=user_parent_object;
+  valarray<double> zeros(0.0,ndim);
+  clone->dist=new gaussian_dist_product(nullptr,zeros, sigmas);
+  clone->set_instance();
+  //ostringstream ss;ss<<"this="<<this<<" made clone="<<clone<<", parent_object="<<clone->user_parent_object<<", instance_object="<<clone->user_instance_object;cout<<ss.str()<<endl;
+  return clone;
+};
+
+state user_gaussian_prop::draw(state &s,chain *caller){
+  //print some debugging info
+  if(first_draw){
+    //ostringstream ss;ss<<"this="<<this<<" drawing for chainID="<<caller->get_id()<<" on thread="<<omp_get_thread_num()<<endl;cout<<ss.str()<<endl;
+    first_draw=false;
+  }
+  //first restrict to the relevant subspace for this step distribution
+  
+  if(idx_map.size()==0){
+    idx_map=s.projection_indices_by_name(&domainSpace);
+    for(int i=0;i<s.size();i++)
+      if(i<0)cout<<"user_gaussian_prop['"+label+"']:draw: Param '"+domainSpace.get_name(i)+"' not found in stateSpace! Will ignore."<<endl;
+  }
+  vector<double> sparams(domainSpace.size());
+  for(int i=0;i<ndim;i++)if(idx_map[i]>=0)sparams[i]=s.get_param(idx_map[i]);
+  state ss=state(&domainSpace,sparams);
+  clock_t start = clock();
+  last_type=check_update(ss,caller);
+  if(false and last_type){
+    clock_t end = clock();
+    double time = (double) (end-start) / CLOCKS_PER_SEC * 1000.0;
+    start=end;
+    ostringstream ss;
+    ss<<"check_update time:"<<time;
+    cout<<ss.str()<<endl;
+  }
+  state offset=dist->drawSample(*(caller->getPRNG()));;
+  double x=1;
+  valarray<double> data;
+  offset.get_params_array(data);
+  Eigen::Map<Eigen::VectorXd> vec(&data[0],offset.size());
+  vec=diagTransform*vec;
+  state newstate=s.scalar_mult(0);
+  for(int i=0;i<ndim;i++)if(idx_map[i]>=0)newstate.set_param(idx_map[i],vec(i));
+  if(false and last_type){
+    ostringstream ss;
+    ss<<"drew step:"<<newstate.get_string();
+    cout<<ss.str()<<endl;
+  }      
+  newstate=s.add(newstate);
+  if(false and last_type){
+    clock_t end = clock();
+    double time = (double) (end-start) / CLOCKS_PER_SEC * 1000.0;
+    ostringstream ss;
+    ss<<"draw time:"<<time;
+    cout<<ss.str()<<endl;
+  }
+
+  return newstate;
+};
+
+void user_gaussian_prop::reset_dist(const vector<double> &covarvec){
+  Eigen::MatrixXd cov(ndim,ndim);
+  int ULsize=(ndim*(ndim+1))/2;
+  if(covarvec.size()==ndim){ //covarvec is understood as diag of diagonal matrix
+    for(int i=0;i<ndim;i++)cov(i,i)=covarvec[i];
+  } else if(covarvec.size()==ULsize){ //covarvec is concatenated UL side of covariance.  E.g. 3D identify is {1,0,0,1,0,1}
+    //Convert vector-form covariance to Eigen symmetric matrix
+    int ic=0;
+    for(int i=0;i<ndim;i++){
+      for(int j=i;j<ndim;j++){
+	double val=covarvec[ic];
+	//cout<<"("<<i<<","<<j<<")->vec["<<ic<<"] = "<<val<<endl;
+	cov(i,j)=val;
+	cov(j,i)=val;
+	ic++;
+      }
+    }
+  } else {
+    cout<<"gaussian_prop:reset_dist Covar vector has unexpeced size,";
+    cout<<"ndim="<<ndim<<", UL size="<<ULsize<<" but got "<<covarvec.size()<<" "<<endl;
+    if(dist){
+      cout<<" Skipping update!"<<endl;
+      return;
+    } else {
+      cout<<" Setting to identity matrix!"<<endl;
+      for(int i=0;i<ndim;i++)cov(i,i)=1;
+    }
+  }
+  //Now perform the update
+  sigmas.resize(ndim);
+  Eigen::MatrixXd scale=cov.diagonal().array().rsqrt().matrix().asDiagonal();
+  Eigen::MatrixXd invscale=cov.diagonal().array().sqrt().matrix().asDiagonal();
+  Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> eigenSolver(scale*cov*scale);
+  //Eigen::EigenSolver<Eigen::MatrixXd> eigenSolver(cov);
+  diagTransform=invscale*eigenSolver.eigenvectors();
+  Eigen::VectorXd evalues = eigenSolver.eigenvalues();
+  bool neg=false;
+  for(int i=0;i<ndim;i++){
+    if(evalues[i]<0){
+      cout<<"user_gaussian_prop["+label+"]: Warning. Negative covariance eigenvalue["<<i<<"]="<<evalues[i]<<" set to zero."<<endl;
+      cout<<"evec="<<diagTransform.col(i).transpose()<<endl;
+      neg=true;
+      evalues[i]=0;
+    }
+    sigmas[i]=sqrt(evalues(i));
+  }
+  if(true and neg){
+    ostringstream ss;
+    ss<<"Covariance:\n"<<cov;
     
+    ss<<"\nCorrelation:\n"<<scale*cov*scale;
+    cout<<ss.str()<<endl;
+  }
+  valarray<double> zeros(0.0,ndim);
+  delete dist;
+  dist = new gaussian_dist_product(nullptr,zeros, sigmas);
+  //cout<<"this="<<this<<" created dist="<<dist<<endl;
+};
+
+///This function updates the proposal if user has provided an update callback function
+bool user_gaussian_prop::check_update(const state &s, chain *caller){
+  if(!check_update_registered)return false;
+  //Generate random values
+  vector<double>randoms(nrand);
+  for(auto & x : randoms)x=(caller->getPRNG()->Next());
+  //Call user function
+  vector<double> covarvec;
+  clock_t start = clock();
+  bool renewing=user_check_update(user_parent_object, user_instance_object, s, randoms, covarvec);
+  if(false and renewing){
+    clock_t end = clock();
+    double time = (double) (end-start) / CLOCKS_PER_SEC * 1000.0;
+    start=end;
+    ostringstream ss;
+    ss<<"user_check_update time:"<<time;
+    cout<<ss.str()<<endl;
+  }
+  if(!renewing)return false;
+  if(false){
+    ostringstream ss;
+    ss<<"Updated user_gaussian_prop:\ncovarvec=["<<endl;
+    for(int i=0;i<covarvec.size();i++)ss<<covarvec[i]<<" ";
+    cout<<ss.str()<<endl;
+  }
+  reset_dist(covarvec);
+  if(false and renewing){
+    clock_t end = clock();
+    double time = (double) (end-start) / CLOCKS_PER_SEC * 1000.0;
+    ostringstream ss;
+    ss<<"reset_dist time:"<<time;
+    cout<<ss.str()<<endl;
+  }
+  return true;
+};
+
+
 //DifferentialEvolution
 //Based mainly on (ter Braak and Vrugt 08, Stat Comput (2008) 18: 435–446)
 //Also SampsonEA2011 ArXiV:1105.2088

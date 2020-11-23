@@ -55,6 +55,7 @@ public:
   sampleable_probability_function(const stateSpace *space):dim(0),probability_function(space){};
   virtual state drawSample(Random &rng)const{fail("drawSample");return state();}
   virtual double evaluate(state &s)const{fail("evaluate");return -1;};
+  virtual double verbose_evaluate(state &s)const{return exp(evaluate_log(s));};
   virtual double evaluate_log(state &s)const{return log(evaluate(s));};
   virtual int getDim()const{return dim;};
   ///In one dimension invcdf realizes the inverse cumulative probability distribution,
@@ -160,7 +161,9 @@ public:
 
   virtual ~mixed_dist_product();
   state drawSample(Random &rng)const;
-  double evaluate(state &s)const;
+  double evaluate(state &s)const override{return evaluate_vb(s,false);};
+  double evaluate_vb(state &s,bool verbose)const;
+  double verbose_evaluate(state&s)const override{return evaluate_vb(s,true);};
   //double evaluate_log(state &s){return log(evaluate(s));};
   state invcdf(const state &s)const;    
   string show(int i=-1)const;

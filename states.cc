@@ -83,7 +83,7 @@ string boundary::show()const{
 /// is probably best, but will probably not be backward compatible. If such chages are to be made, then
 /// we might want to move innerproduct (at minimum) to stateSpace and make some improvements with the
 /// wrap dimensions (so that |A-B| = |B-A|, for eg).
-bool stateSpace::enforce(valarray<double> &params)const{
+bool stateSpace::enforce(valarray<double> &params, bool verbose)const{
     if(params.size()!=dim){
       cout<<"stateSpace::enforce:  Dimension error.  Expected "<<dim<<" params, but given "<<params.size()<<" for stateSpace="<<show()<<"."<<endl;
       exit(1);
@@ -93,6 +93,7 @@ bool stateSpace::enforce(valarray<double> &params)const{
       if(!bounds[i].enforce(params[i])){
 	//cout<<"stateSpace::enforce: testing parameter "<<i<<" = "<<params[i]<<endl;//debug
 	//cout<<"        FAILED."<<endl;
+	if(verbose)cout<<"stateSpace::enforce: parameter "<<i<<" "<<get_name(i)<<" = "<<params[i]<<" exceeded boundary "<<bounds[i].show()<<endl; 
 	return false;
       }
     }
@@ -157,10 +158,10 @@ bool stateSpace::addSymmetry(stateSpaceInvolution &involution){
 
 
       
-void state::enforce(){
+void state::enforce(bool verbose){
   if(!space)valid=false;
   if(!valid)return;
-  valid=space->enforce(params);
+  valid=space->enforce(params,verbose);
   //cout<<"state::enforce:State was "<<(valid?"":"not ")<<"valid."<<endl;//debug
 };
 
@@ -229,9 +230,7 @@ double state::dist2(const state &other)const{
     result+=diff*diff;
   }
   return result;
-}
-      
-      
+};
 
 state state::scalar_mult(double x)const{
     //we only require that the result is valid
@@ -251,6 +250,32 @@ double state::innerprod(state other,bool constrained)const{
     }
     for(uint i=0;i<size();i++)result+=params[i]*other.params[i];
     return result;
+};
+
+///Get indicies for projection down to a subspace
+vector<int> state::projection_indices_by_name(const stateSpace *subspace)const{
+  vector<int> idx;
+  for(int isub=0;isub<subspace->size();isub++){
+    string name=subspace->get_name(isub);
+    idx.push_back(space->get_index(name));
+  }
+  return idx;
+};
+
+///Construct a subspace names on a vector of parameter names
+stateSpace stateSpace::subspace_by_name(const vector<string>subspace_names)const{
+  if(!have_names){
+    cout<<"stateSpace::subspace_by_name: Cannot apply transform to a space for which names are not defined."<<endl;
+    exit(1);
+  }
+  stateSpace subspace(subspace_names.size());
+  subspace.set_names(subspace_names);
+  for(int i=0;i<subspace_names.size();i++){
+    string name=subspace_names[i];
+    int idx=get_index(name);
+    subspace.bounds[i]=bounds[idx];
+  };
+  return subspace;
 };
 
 string state::get_string(int prec)const{

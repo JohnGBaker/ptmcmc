@@ -15,6 +15,7 @@
 #include "options.hh"
 #include "states.hh"
 #include "probability_function.hh"
+#include "proposal_distribution.hh"
 
 using namespace std;
 
@@ -312,6 +313,8 @@ protected:
   state best;
   vector<double>likelyScales;
   bool have_scales;
+  vector<proposal_distribution *> proposals;
+  vector<double>prop_shares;
   
 public:
   bayes_likelihood(stateSpace *sp=nullptr,bayes_data *data=nullptr,bayes_signal *signal=nullptr):probability_function(sp),like0(0),signal(signal),have_scales(false){
@@ -320,11 +323,15 @@ public:
     user_object=nullptr;
     evaluate_log_registered=defWorkingStateSpace_registered=false;
     check_posterior=true;
-
+    lprior_cut=0;
+    
     if(sp)best=state(sp,sp->size());
     reset();
 };
 
+  ~bayes_likelihood(){
+    for(auto prop : proposals)if(prop)delete prop;
+  };
   //The latter is just a hack for testing should be removed.
   //bayes_likelihood(stateSpace *sp):probability_function(sp),like0(0){};
   ///Hard check that the signal and data are non-null
@@ -533,6 +540,7 @@ private:
   bool evaluate_log_registered,defWorkingStateSpace_registered;
 public:
   bool check_posterior;  //User can set to false to skip checks for unreasonable posterior values
+  double lprior_cut; //User can set a limit to skip likelihood eval.
   void register_reference_object(void *object){user_object=object;};    
   void register_evaluate_log(double (*function)(void *object, const state &s)){
     user_evaluate_log=function;
@@ -545,12 +553,16 @@ public:
   virtual double evaluate_log(state &s)override{
     if(evaluate_log_registered){
       //cout<<"bayesian_likelihood::evaluate_log:Calling user_evaluate_log."<<endl;
-      double result =(*user_evaluate_log)(user_object,s);
+      double lprior;
+      if(lprior_cut!=0 or check_posterior)lprior=nativePrior->evaluate_log(s);//May need a mechanism to check that prior is set
+
+      double result = -INFINITY;
+      if(lprior_cut==0 or not (lprior<lprior_cut))result=(*user_evaluate_log)(user_object,s);
       if(check_posterior){
-	double post=result+nativePrior->evaluate_log(s);//May need a mechanism to check that prior is set
+	double post=result+lprior;
         #pragma omp critical 
 	{     
-	  if(post>best_post){
+	  if(not (post<=best_post)){
 	    best_post=post;
 	    best=state(s);
 	  }
@@ -559,7 +571,7 @@ public:
 	    cout<<"  params="<<s.get_string()<<endl;
 	    cout<<"  like="<<result<<"  post="<<post<<endl; 
 	    result=-INFINITY;
-	    exit(1);
+	    //exit(1);
 	  }
 	}
       }
@@ -766,6 +778,15 @@ public:
     data->fill_data(values);
     set_like0_chi_squared();
   };
+
+
+  ///This section supports likelihood-associated proposals
+  void addProposal(const proposal_distribution  *proposal, double share=1){
+    proposals.push_back(proposal->clone());
+    prop_shares.push_back(share);
+  };
+  vector< proposal_distribution* >get_proposals()const{return proposals;};
+  vector< double > get_prop_shares()const{return prop_shares;};
 };
 
 ///Base class for defining a Bayesian sampler object

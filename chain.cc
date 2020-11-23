@@ -113,7 +113,7 @@ void chain::inNsigma(int Nsigma,vector<int> & indicies,int nburn){
 ///\f]
 ///We define the average symmetrically over the nominal data segment \f$\mathcal{S}\f$ and the lagged segment, specifically
 ///\f[
-  //   \bar f_{\mathcal{S},\tau}=\sum_{i\in\mathcal{S}}(f(x_i)+f(x_(i-\tau__)/2/N_{\mathcal{S}}
+  //   \bar f_{\mathcal{S},\tau}=\sum_{i\in\mathcal{S}}(f(x_i)+f(x_(i-\tau)/2/N_{\mathcal{S}}
 ///\f]
 //                    Sum[ ( f(i)-avg[iwin,lag] )*( f(i-lag)-avg[iwin,lag] ) ]
   // covar[iwin,lag] = ---------------------------------------------------------
@@ -174,7 +174,8 @@ void chain::compute_autocovar_windows(bool (*feature)(const state &, double & va
   //   -this is why denoms may depend on lag
   //   -it will probably be necessary to replace these "feature" functions with
   //    some kind of class objects, probably to be defined in states.hh
-  
+  //   -The basic calculation is generally motivated by the approach to variance
+  //    estimation in Sec 3 of Geyer "Practical Markov Chain Monte Carlo" (1992)  
   if(width<=1)width=2;
   if(nevery<1)nevery=1;
   int swidth=int(width/nevery);
@@ -758,8 +759,16 @@ void MH_chain::initialize(uint n, string initialization_file){
     double slike;
     while(s.invalid() or (slike=llikelihood->evaluate_log(s))<-1e100){
       icnt++;
-      if(icnt>=icntmax)
-	cout<<"MH_chain::initialize: Having trouble drawing a valid state.  Latest state:"<<s.show()<<"...was invalid in space:"<<s.getSpace()->show()<<endl;
+      if(icnt>=icntmax){ 
+	#pragma omp critical    
+	{
+	  cout<<"MH_chain::initialize: Having trouble drawing a valid state.  Latest state:"<<s.show();
+	  if(s.invalid())cout<<"...was invalid in space:"<<s.getSpace()->show()<<endl;
+	  cout<<"...failed with log_prior="<<lprior->evaluate_log(s)<<" and log_likelihood="<<slike<<endl;
+	  s.enforce(true);
+	  lprior->verbose_evaluate(s);
+	}
+      }
       s=lprior->drawSample(*rng);
     }
     //cout <<"starting with Nsize="<<Nsize<<endl;//debug
@@ -784,7 +793,14 @@ void MH_chain::initialize(uint n){
       //cout<<"invalid state: like="<<slike<<" pars:"<<s.get_string()<<endl;
       icnt++;
       if(icnt>=icntmax)
-	cout<<"MH_chain::initialize: Having trouble drawing a valid state.  Latest state:"<<s.show()<<"...was invalid in space:"<<s.getSpace()->show()<<endl;
+	#pragma omp critical    
+	{
+	  cout<<"MH_chain::initialize: Having trouble drawing a valid state.  Latest state:"<<s.show();
+	  if(s.invalid())cout<<"...was invalid in space:"<<s.getSpace()->show()<<endl;
+	  cout<<"...failed with log_prior="<<lprior->evaluate_log(s)<<" and log_likelihood="<<slike<<endl;
+	  s.enforce(true);
+	  lprior->verbose_evaluate(s);
+	}
       s=lprior->drawSample(*rng);
     }
     //cout <<"starting with Nsize="<<Nsize<<endl;//debug
@@ -1244,7 +1260,8 @@ void parallel_tempering_chains::initialize( probability_function *log_likelihood
     chains.push_back(c);
   }
   //#pragma omp parallel for schedule (guided, 1)  ///try big chunks first, then specialize
-#pragma omp parallel for schedule (dynamic, 1) ///take one pass/thread at a time until done.
+  //cout<<"ptc_initialize:OMP parallelization on "<<omp_get_num_threads()<<" threads."<<endl;
+#pragma omp parallel for schedule (dynamic, 1) num_threads(omp_get_num_threads())///take one pass/thread at a time until done.
   for(int iloc=0;iloc<mychains.size();iloc++){
     int i=mychains[iloc];
     //MPI loops like this need to be only over the local chains
@@ -1459,7 +1476,7 @@ void parallel_tempering_chains::step(){
   //Either guided or dynamic scheduling seems to work about the same.
   //#pragma omp parallel for schedule (guided, 1)  
   ///take one pass/thread at a time until done.
-#pragma omp parallel for schedule (dynamic, 1) 
+#pragma omp parallel for schedule (dynamic, 1) num_threads(omp_get_num_threads())
   for(int iloc=0;iloc<mychains.size();iloc++){
     int i=mychains[iloc];
     //PreMPI for(int i=0;i<Ntemps;i++){

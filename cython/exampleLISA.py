@@ -61,6 +61,10 @@ def funcse(d, phi, inc, lambd, beta, psi):
   e2m2 = 0.5/d * np.sqrt(5/PI) * pow(np.sin(inc/2), 4) * np.exp(2.*I*(-phi+psi)) * 0.5*(Deplus - I*Decross)
   return e22 + e2m2
 
+def dummy_Fisher_cov():
+  cov=np.array([1,0,-0.25,3e-5,0,0.09]);
+  return cov;
+  
 
 def simpleCalculateLogLCAmpPhase(d, phiL, inc, lambdL, betaL, psiL):
   #Simple likelihood for runcan 22 mode, frozen LISA, lowf, snr 200
@@ -350,10 +354,11 @@ def trivial_transf(s, randoms):
     return s
 
 class simple_likelihood(ptmcmc.likelihood):
-    def __init__(self):
+    def __init__(self,opt):
 
         #Set up  stateSpace
         npar=6;
+        self.opt=opt
         space=ptmcmc.stateSpace(dim=npar);
         names=["d","phi","inc","lambda","beta","psi"];
         space.set_names(names);
@@ -388,7 +393,35 @@ class simple_likelihood(ptmcmc.likelihood):
         #print("simple_likelihood::setup: space="+space.show())
         #lscales=[0.1 for x in scales]
         #self.basic_setup(space, types, centers, scales, lscales);
-        self.basic_setup(space, types, centers, scales, scales);
+        self.basic_setup(space, types, centers, scales, scales, check_posterior=False);
+
+        #Fisher options
+        self.opt.add("fisher_update_len","Mean number of steps before drawing an update of the Fisher-matrix based proposal. Default 0 (Never update)","0");
+        self.opt.add("fisher_nmax","Max number of Fisher covariance options to hold for proposal draw. Default 0 (No Fisher Proposal)","0");
+
+      
+        
+    def setup(self):
+      #Evertyhing but Fisher options has been done in constructor
+      #istringstream(opt->value("fisher_update_len"))>>fisher_update_len;
+      #istringstream(opt->value("fisher_nmax"))>>fisher_nmax;
+      self.fisher_update_len=int(self.opt.value("fisher_update_len"))
+      self.fisher_nmax=int(self.opt.value("fisher_nmax"))
+      if self.fisher_nmax>0:
+        self.fisher_counter=0;
+        self.fisher_names=["d","phi","inc"];
+        propspace=ptmcmc.stateSpace(dim=3)
+        propspace.set_names(["d","phi","inc"])
+        print("creating dummy_fisher proposal self=",self)
+        if False:
+            default_data={}
+            default_data['covars']=[]
+            default_data['counter']=0
+            proposal=ptmcmc.gaussian_prop(self,fisher_check_update,propspace,np.zeros(0), 2, "dummy_fisher",default_instance_data=default_data)
+        else:
+            proposal=ptmcmc.gaussian_prop(self,frozen_fisher_check_update,propspace,np.zeros(0), 1, "frozen_dummy_fisher")
+        self.addProposal(proposal)
+
 
     def evaluate_log(self,s):
         params=s.get_params()
@@ -407,6 +440,53 @@ class simple_likelihood(ptmcmc.likelihood):
         #  print("state:",s.get_string())
         #  print("  logL={0:.13g}".format(result))
         return result
+
+
+#This will be the callback for a gaussian_prop, so it must be declared outside the class
+def frozen_fisher_check_update(likelihood, s, randoms, covarvec):
+        #Note: need nrand>=1
+        if(randoms[-1]*likelihood.fisher_update_len<1):return False
+        if(len(randoms)>0):randoms=randoms[:-1]
+        covarvec=dummy_Fisher_cov();
+        return True
+
+#This will be the callback for a gaussian_prop, so it must be declared outside the class
+def fisher_check_update(likelihood, instance, s, randoms, covarray):
+    #Note: requires nrand==2 for evolving fisher
+    fisher_covars=instance['covars']
+    nfish=len(fisher_covars);
+    if(nfish>0 and (len(randoms)>0 and randoms[-1]*likelihood.fisher_update_len<1)):return False
+    if(len(randoms)>0):randoms=randoms[:-1]
+    everyfac=1
+    add_every=nfish*everyfac;#how long to go before adding a new Fisher covariance to the stack
+    #print("check_update: nfish,count: ",nfish," ,",counter,"/",add_every)
+    if(nfish==0 or instance['counter']>add_every):
+      if nfish==0 and likelihood.reporting:
+        print("Fisher replenishment scale is ",likelihood.fisher_nmax**2*everyfac*likelihood.fisher_update_len,"draws. Consider increasing nmax or update_len if this is not greater than autocorrelation length.")
+            
+      #Here we construct a new fisher matrix and add it to the stack
+      instance['counter']=0;
+      params=s.get_params()
+      if(nfish>=likelihood.fisher_nmax):fisher_covars=fisher_covars[1:]
+      cov=dummy_Fisher_cov();
+      #cov=cov/likelihood.fisher_reduce_fac
+      fisher_covars.append(cov)
+      verbose=((randoms[0]<1/likelihood.fisher_nmax) or (nfish<likelihood.fisher_nmax) ) and likelihood.reporting
+      if verbose:
+        print("evalFisherCov time:",end-start)#, "\ns=",s.get_params())
+        print("Fisher Covariance [",len(fisher_covars),"] ")
+        #print(cov)
+        sigs=np.sqrt(np.diag(cov))
+        print("New Fisher, sigmas:",sigs)
+        n=len(sigs)
+        print("Corr:\n"+"\n".join( ('{:6.2f}'*n).format(*[cov[i,j]/sigs[i]/sigs[j] for j in range(n)]) for i in range(n)),'\n') 
+    #Draw one of the fisher covariances from the stack.  Could make this likelihood weighted, etc...
+    ifish=int(randoms[-1]*len(fisher_covars));
+    #cout<<"ifish,size:"<<ifish<<","<<fisher_covars.size()<<endl;
+    randoms=randoms[:-1]
+    np.copyto(covarray,fisher_covars[ifish])
+    instance['counter']+=1
+    return True
 
 count=0
 
@@ -437,7 +517,7 @@ def main(argv):
     #ptmcmc_sampler mcmc;
     s0=ptmcmc.sampler(opt)
     #//Create the likelihood
-    like=simple_likelihood()  
+    like=simple_likelihood(opt)  
 
 
     print('calling opt.parse')
@@ -455,8 +535,8 @@ def main(argv):
     #//Setup likelihood
     #//data->setup();  
     #//signal->setup();  
-    #like->setup();
-    
+    like.setup();
+       
     #double seed;
     #int Nchain,output_precision;
     #int Nsigma=1;

@@ -4,6 +4,7 @@ from libcpp.string cimport string
 from libcpp.vector cimport vector
 from libcpp cimport bool
 from states cimport *
+from proposal_distribution cimport *
 
 #cdef extern from "../probability_function.cc":
 #    pass
@@ -76,6 +77,9 @@ cdef extern from '../bayesian.hh' :
          void defWorkingStateSpace(const stateSpace &sp)  
          double evaluate_log(state &s)           
          state draw_from_prior()
+         void addProposal(const proposal_distribution *proposal, double share)
+         bool check_posterior
+         double lprior_cut
          const stateSpace* getObjectStateSpace()const
          void reset()
          double bestPost()
