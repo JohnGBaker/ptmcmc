@@ -532,15 +532,17 @@ int  differential_evolution::draw_i_from_chain(chain *caller,chain *c){
   //so far, then subtract the space dimension.  Above this value we take everything. Below this
   //we accept some, we probability p=exp(alpha*(lpost-lpost0)))
   double lpost0=ch->getMAPlpost()-ch->getDim();
+  double alpha=unlikely_alpha;
   while(true){
     double xrnd=rng.Next();
     int index = start+(size-start)*xrnd;
     double lpost=ch->getLogPost(index,true);
-    if(unlikely_alpha>0 and lpost0>lpost){
-      double p=exp(unlikely_alpha*(lpost-lpost0));
+    if(alpha>0 and lpost0>lpost){
+      double p=exp(alpha*(lpost-lpost0));
       xrnd=rng.Next();
-      //cout<<"lp0,lp,p,x:"<<lpost0<<" "<<lpost<<" "<<p<<" "<<xrnd<<endl;
       if(xrnd<p)return index;
+      //cout<<"lp0,lp,alp,p,x:"<<lpost0<<" "<<lpost<<" "<<alpha<<" "<<p<<" "<<xrnd<<endl;
+      alpha*=0.9;//degrade over repeated failures to avoid failure in extreme cases
     } else return index;
   }
   //return index;
