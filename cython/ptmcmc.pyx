@@ -497,9 +497,11 @@ cdef class gaussian_prop(proposal):
         cdef vector[double] covarvec
         covarvec.resize(length)
         if covarray.shape==(self.ndim,self.ndim,):
+            ic=0
             for i in range(self.ndim):
                 for j in range(i,self.ndim):
-                    covarvec[i*self.ndim+j]=covarray[i,j]
+                    covarvec[ic]=covarray[i,j]
+                    ic+=1
         elif covarray.shape==(length,):
             for i in range(length):covarvec[i]=covarray[i]
         else:
@@ -514,7 +516,7 @@ cdef class gaussian_prop(proposal):
         self.user_check_update_func=check_update_func
         self.cuser_gaussian_prop=new proposal_distribution.user_gaussian_prop(
             <void*>self,
-            <bool (*)(const void *object, void *instance, const states.state &, const vector[double] &randoms, vector[double] &covarvec)>self.call_check_update,
+            <bool (*)(const void *object, void *instance, const states.state &, double invtemp, const vector[double] &randoms, vector[double] &covarvec)>self.call_check_update,
             sp.space,
             covarvec,
             <int>nrand,
@@ -527,7 +529,7 @@ cdef class gaussian_prop(proposal):
         #print("deallocating involution '"+self.label+"' = "+str(self))
         del self.cuser_gaussian_prop
         
-    cdef bool call_check_update(self, void *instance_pointer, const states.state &s, const vector[double] &randoms, vector[double] &covarvec) with gil:
+    cdef bool call_check_update(self, void *instance_pointer, const states.state &s, double invtemp, const vector[double] &randoms, vector[double] &covarvec) with gil:
         cdef bool update
         try:
             st=state()
@@ -535,9 +537,9 @@ cdef class gaussian_prop(proposal):
             covarray=np.empty((self.ndim,self.ndim),dtype=np.float64)
             check_update=self.user_check_update_func
             if self.using_instance_data:
-                update=check_update(self.user_parent_object,<object>instance_pointer,st,get_vector(randoms),covarray)
+                update=check_update(self.user_parent_object,<object>instance_pointer,st,invtemp,get_vector(randoms),covarray)
             else:
-                update=check_update(self.user_parent_object,st,get_vector(randoms),covarray)
+                update=check_update(self.user_parent_object,st,invtemp,get_vector(randoms),covarray)
             if update:
                 vsize=(self.ndim*(self.ndim+1))//(int(2))
                 #print("got covarray shape:",covarray.shape)

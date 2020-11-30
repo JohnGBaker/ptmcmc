@@ -264,7 +264,7 @@ user_gaussian_prop::user_gaussian_prop(const stateSpace &sp,const vector<double>
   first_draw=true;
 };
 
-user_gaussian_prop::user_gaussian_prop(void *user_parent_object, bool (*function)(const void *parent_object, void* instance_object, const state &, const vector<double> &randoms, vector<double> &covarvec),const stateSpace &sp,const vector<double> &covarvec, int nrand, const string label,void * (*new_user_instance_object_function)(void*object,int id)):user_gaussian_prop(sp,covarvec,nrand,label,user_parent_object,new_user_instance_object_function){    
+user_gaussian_prop::user_gaussian_prop(void *user_parent_object, user_gaussian_prop::check_update_prototype function,const stateSpace &sp,const vector<double> &covarvec, int nrand, const string label,void * (*new_user_instance_object_function)(void*object,int id)):user_gaussian_prop(sp,covarvec,nrand,label,user_parent_object,new_user_instance_object_function){    
   register_check_update(function);
 };
 
@@ -377,8 +377,9 @@ void user_gaussian_prop::reset_dist(const vector<double> &covarvec){
     }
     sigmas[i]=sqrt(evalues(i));
   }
-  if(true and neg){
+  if(false or neg){
     ostringstream ss;
+    ss<<"Scale:"<<scale<<endl;
     ss<<"Covariance:\n"<<cov;
     
     ss<<"\nCorrelation:\n"<<scale*cov*scale;
@@ -399,7 +400,8 @@ bool user_gaussian_prop::check_update(const state &s, chain *caller){
   //Call user function
   vector<double> covarvec;
   clock_t start = clock();
-  bool renewing=user_check_update(user_parent_object, user_instance_object, s, randoms, covarvec);
+  double beta=caller->invTemp();
+  bool renewing=user_check_update(user_parent_object, user_instance_object, s, beta, randoms, covarvec);
   if(false and renewing){
     clock_t end = clock();
     double time = (double) (end-start) / CLOCKS_PER_SEC * 1000.0;

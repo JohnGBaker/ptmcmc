@@ -85,6 +85,6 @@ cdef class gaussian_prop(proposal):
     cdef proposal_distribution.user_gaussian_prop *cuser_gaussian_prop
     cdef int ndim
     cdef object user_check_update_func
-    cdef bool call_check_update(self, void *instance_pointer, const states.state &s, const vector[double] &randoms, vector[double] &covarvec) with gil
+    cdef bool call_check_update(self, void *instance_pointer, const states.state &s, double invtemp, const vector[double] &randoms, vector[double] &covarvec) with gil
 
 

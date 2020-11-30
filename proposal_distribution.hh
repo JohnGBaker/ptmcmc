@@ -239,7 +239,8 @@ class user_gaussian_prop: public proposal_distribution{
   gaussian_dist_product *dist;
   int ndim;
   string label;
-  bool (*user_check_update)(const void *parent_object, void* instance_object, const state &s, const vector<double> &randoms, vector<double> &covarvec);
+  typedef bool (*check_update_prototype)(const void *parent_object, void* instance_object, const state &s, double invtemp, const vector<double> &randoms, vector<double> &covarvec);
+  check_update_prototype user_check_update;
   bool check_update_registered;
   vector<int>idx_map;
   int nrand;
@@ -248,14 +249,14 @@ protected:
   stateSpace domainSpace; //Note the Transform can be applied as long as this can be identified as a subspace.
 public:
   user_gaussian_prop(const stateSpace &sp,const vector<double> &covarvec=vector<double>(), int nrand=0, const string label="",void *user_parent_object=nullptr,void * (*new_user_instance_object_function)(void*object,int id)=nullptr);
-  user_gaussian_prop(void *user_parent_object, bool (*function)(const void *parent_object, void* instance_object, const state &, const vector<double> &randoms, vector<double> &covarvec),const stateSpace &sp,const vector<double> &covarvec=vector<double>(), int nrand=0, const string label="",void * (*new_user_instance_object_function)(void*object,int id)=nullptr);
+  user_gaussian_prop(void *user_parent_object, check_update_prototype function, const stateSpace &sp,const vector<double> &covarvec=vector<double>(), int nrand=0, const string label="",void * (*new_user_instance_object_function)(void*object,int id)=nullptr);
   virtual ~user_gaussian_prop(){delete dist;};
   user_gaussian_prop* clone()const;
   string get_label()const {return label;};
   //void register_reference_object(void *object){
   //  ostringstream ss;ss<<"this="<<this<<" registering reference_object="<<object<<", thread="<<omp_get_thread_num()<<endl;cout<<ss.str()<<endl;
   //   user_object=object;};    
-  void register_check_update(bool (*function)(const void *parent_object, void* instance_object, const state &, const vector<double> &randoms, vector<double> &covarvec)){
+  void register_check_update(check_update_prototype function){
     user_check_update=function;
     check_update_registered=true;
   };
