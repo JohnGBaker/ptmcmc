@@ -645,7 +645,7 @@ public:
     return instance;
   };
     
-  static bool fisher_check_update(const void *object, void *instance_object, const state &s, const vector<double> &rands, vector<double> &covarvec){
+  static bool fisher_check_update(const void *object, void *instance_object, const state &s, double invtemp, const vector<double> &rands, vector<double> &covarvec){
     //Note: requires nrand==2 for evolving fisher
     const simple_likelihood_ni *mythis = static_cast<const simple_likelihood_ni*>(object);
     fisher_instance *instance = static_cast<fisher_instance*>(instance_object);
