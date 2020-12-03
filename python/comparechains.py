@@ -276,6 +276,7 @@ if(True):
     if(len(args.tag)>0):
         ibase=basename.find("bambi")
         if(ibase<0):ibase=basename.find("ptmcmc")
+        if(ibase<0):ibase=len(basename)
         outbasename=basename[:ibase]+args.tag
     if(testing):
         outpath=dirname+"/"+basename+"_TEST_corner.png"
