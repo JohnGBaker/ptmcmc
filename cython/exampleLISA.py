@@ -455,7 +455,7 @@ def fisher_check_update(likelihood, instance, s, randoms, covarray):
     #Note: requires nrand==2 for evolving fisher
     fisher_covars=instance['covars']
     nfish=len(fisher_covars);
-    if(nfish>0 and (len(randoms)>0 and randoms[-1]*likelihood.fisher_update_len<1)):return False
+    if(nfish>0 and (len(randoms)>0 and randoms[-1]*likelihood.fisher_update_len>1)):return False
     if(len(randoms)>0):randoms=randoms[:-1]
     everyfac=1
     add_every=nfish*everyfac;#how long to go before adding a new Fisher covariance to the stack

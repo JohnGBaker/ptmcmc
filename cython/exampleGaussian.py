@@ -39,6 +39,7 @@ class gaussian_likelihood(ptmcmc.likelihood):
     opt.add("priorscale","Factor by which the prior is larger than the Gaussian 1-sigma scale. (Default=100)","100")
     opt.add("fisher_cov_rescale","Factor by which 'fisher' proposal is rescaled from nominal value (Default=1,theoretical optimum for Gaussian target dist.)","1")
     opt.add("fisher_basescale_fac","Factor by prior widths are rescaled for addition to fisher_proposal_precision matrix. (Default=0, nothing added)","0")
+    opt.add("fisher_update_len","Mean number of steps before drawing an update of the Fisher-matrix based proposal. Default 0 (Never update)","0");
     
     self.opt=opt
       
@@ -81,16 +82,22 @@ class gaussian_likelihood(ptmcmc.likelihood):
     #See Optimal Proposal Distributions and Adaptive MCMC,Jeffrey S. Rosenthal* [Chapter for MCMC Handbook]
     # ... based on Roberts, G. O., et al, "WEAK CONVERGENCE AND OPTIMAL SCALING OF RANDOM WALK METROPOLIS ALGORITHMS" Ann Appl Prob,Vol. 7, No. 1, 110-120 (1997)
     #Expect optimal convergence for gaussian with large ndim with fisher_cov_rescale=1.
+    self.fisher_update_len=int(self.opt.value("fisher_update_len"))
     self.fisher_cov_rescale=float(self.opt.value("fisher_cov_rescale"))
     self.fisher_basescale_factor=float(self.opt.value("fisher_basescale_fac"))
-    fish_cov_fac=2.38**2/npar*self.fisher_cov_rescale 
+    self.fish_cov_fac=2.38**2/npar*self.fisher_cov_rescale
+    self.basescale_invcov=0
     if self.fisher_basescale_factor>0: #We simulate the effect of the prior, pretending it is Gaussian.
       basescales=self.fisher_basescale_factor*np.array(scales)
-      basescale_invcov=np.diag(basescales**-2)
-      fish_cov=np.linalg.inv(self.invcov+basescale_invcov)*fish_cov_fac
+      self.basescale_invcov=np.diag(basescales**-2)
+      fish_cov=np.linalg.inv(self.invcov+self.basescale_invcov)*self.fish_cov_fac
     else:
-      fish_cov=self.cov*fish_cov_fac          
-    proposal=ptmcmc.gaussian_prop(self,frozen_fisher_check_update,propspace,fish_cov, 0, "Fisher-like")
+      fish_cov=self.cov*self.fish_cov_fac
+    if self.fisher_update_len>0:
+      default_data={}
+      proposal=ptmcmc.gaussian_prop(self,fisher_check_update,propspace,fish_cov, 2, "Evolving Fisher-like proposal",default_instance_data=default_data)
+    else:
+      proposal=ptmcmc.gaussian_prop(self,frozen_fisher_check_update,propspace,fish_cov, 0, "Frozen Fisher-like proposal")
     self.addProposal(proposal)
 
   def evaluate_log(self,s):
@@ -132,9 +139,21 @@ class gaussian_likelihood(ptmcmc.likelihood):
 
 
 #This will be the callback for a gaussian_prop, so it must be declared outside the class
-def frozen_fisher_check_update(likelihood, s, invtemp, randoms, covarvec):
-  #As it is, we never update. Could do other things for experiments
-  return False
+def fisher_check_update(likelihood, instance, s, invtemp, randoms, covarray):
+  if likelihood.fisher_update_len<=0: return False  #Frozen
+  if randoms[0]*likelihood.fisher_update_len>1:return False #No update this time
+  cov=np.linalg.inv( likelihood.invcov * invtemp + likelihood.basescale_invcov ) * likelihood.fish_cov_fac
+  np.copyto(covarray,cov)
+  verbose=(likelihood.reporting and randoms[1]<0.1) or randoms[1]<0.01
+  if verbose:
+    print("Fisher Covariance: temp =",1/invtemp)
+    #print(cov)
+    sigs=np.sqrt(np.diag(cov))
+    print("New Fisher, sigmas:",sigs)
+    n=len(sigs)
+    print("Corr:\n"+"\n".join( ('{:6.2f}'*n).format(*[cov[i,j]/sigs[i]/sigs[j] for j in range(n)]) for i in range(n)),'\n') 
+  return True
+def frozen_fisher_check_update(likelihood, s, invtemp, randoms, covarray):return False
 
 #//***************************************************************************************8
 #//main test program

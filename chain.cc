@@ -454,34 +454,99 @@ void chain::compute_effective_samples(vector<bool (*)(const state &,double & val
 //allowing the length of the late part of the chain under consideration to vary
 //to optimize the ESS.
 //Returns (ess,length)
-pair<double,int> chain::report_effective_samples(vector< bool (*)(const state &,double & value) > & features,int width,int nevery){
+pair<double,int> chain::report_effective_samples(vector< bool (*)(const state &,double & value) > & features,int width,int every, double esslimit){
   double ess;
   int nwin;
-  int burn=2;
+  int minburn=2;     //minimum number of windows to take as burn-in
+  int minbin=1000;   //minimum number of samples per window
+  int maxbins=20;    //expand bin width to avoid exceeding this
+  int scalestep=2;
+  double oversmall_aclen_fac=3.0;
   vector<bool (*)(const state &,double & value)> onefeature(1);
 
   int i=1;
+  int istep=getStep();
+  if(every<0)every=int(0.5+((double) istep -Ninit)/(size()-Ninit));//Should yield add_every_N stride (or close) as default
+  if(every<1)every=1;//just in case.
+  //if(reporting)cout<<"every="<<every<<endl;
+  ess=0;
+  nwin=0;
+  double bestwid=0;
+  if(esslimit<0){
+    int burn=minburn;
+    if(width < 0)width=every*minbin;
+    while(width*(maxbins+burn)<istep)width*=2;
+    compute_effective_samples(features, ess, nwin, width, every, burn, true,0,1.1);
+    bestwid=width;
+  }
+  else{
+    //For efficiency, if the chain is long, we first try to estimate the ess with coarser sampling
+    //then, estimate the ess on a shorter part of the chain with finer sampling.
+    //The basic principle is that if the correlation length is long, then there is no point to fine sampling.
+    //In general we can't measure an ess less than the number of samples. Taking esslimit as the maximum ess value
+    //that we will support in the estimate, we then want nevery >= length / esslimit.
+    //We start with the full length of the chain, less the burn-in, then decrease by a factor of scalestep
+    //Here are the constraints:
+    //need full_length - width*burn >= length >= width*bins
+    //with  width >= max( length/maxbins, every*minbin )
+    //and  the ess limit constraint:
+    //  slimit*bins/(1-1/bins)*width >~ length >= min( slimit*bins*width, full_length - width*burn) 
+    //      slimit >~ length/width/(bins+1) >= min ( slimit*(1-1/(bins+1)), (full_length/width - burn)/(bins+1)
+    //Process:
+    //  -- set every = every0*scalestep**nev
+    //  -- set  bins = min( maxbins, full_length/(minbin*every)-minburn, slimit/minbin+1)
+    //  -- set width = min( full_length/(minburn+bins), (slimit*every)/(bins-1))
+    //  -- set  burn = full_length/width - bins
+    double full_length=getStep();
+    double slimit=esslimit*oversmall_aclen_fac;
+    //print('slimit=',slimit)
+    bool done=false;
+    while(true){
+      double burnwidth=full_length/(maxbins+minburn);
+      //note that, we loop, increasing every each time.  We are done once slimit is not limiting in setting width
+      int bins  = (full_length)/(minbin*every);
+      if(bins>maxbins)bins=maxbins;
+      if(bins<1)break;
+      width = int((full_length)/bins);
+      //if(reporting)cout<<"width="<<width<<" = int(("<<full_length<<")/"<<bins<<")"<<endl;
+      if(width*(bins-1) > slimit*every){
+	bins  = slimit/minbin+1;
+	if(bins>maxbins)bins=maxbins;
+	if(bins>1)width=(slimit*every)/(bins-1);
+      	else{
+	  bins=1;
+	  width=minbin*every;
+	}
+      } else done=true;
+      if((full_length-burnwidth)*0.5<bins*width){ 
+	int burn=int(full_length/width-bins);
+	//cout<<"cycle: every="<<every<<" width="<<width<<" lenght="<<bins*width<<endl;
+	int nwinc;
+	double essc;
+	compute_effective_samples(features, essc, nwinc, width, every, burn, true,0,1.1);
+	//cout<<"cycle result: ESS="<<essc<<" ACL="<<width*nwinc/(essc+1e-30)<<endl;
+	if(essc>ess){
+	  ess=essc;
+	  nwin=nwinc;
+	  bestwid=width;
+	}
+      }
+      if(done)break;
+      //prep for next cycle
+      every*=scalestep;
+    }
+  }
+  width=bestwid;
 
-  //static int ic=0;
-  //ic++;
-  //int icstop=200;
-  //if(ic>icstop)for(auto feature:features){
-  //  onefeature[0]=feature;
-  //  compute_effective_samples(onefeature, ess, nwin, width, nevery, burn, false);
-  //  cout<<"Par "<<i<<": ess="<<ess<<"  useful chain length is: "<<width*nwin<<" autocorrlen="<<width*nwin/ess<<endl;
-  //  i++;
-  //}
-  compute_effective_samples(features, ess, nwin, width, nevery, burn, true,0,1.1);
   if(reporting)
     cout<<"Over "<<features.size()<<" pars: ess="<<ess<<"  useful chain length is: "<<width*nwin<<" autocorrlen="<<width*nwin/ess<<endl;
-  //if(ic>icstop)exit(0);
 
   return make_pair(ess,width*nwin);
 }
 
 //Report effective samples
 //This is simplified interface producing effective sample estimates for each parameter
-pair<double,int>  chain::report_effective_samples(int imax,int width, int every){
+pair<double,int>  chain::report_effective_samples(int imax,int width, int every, double esslimit){
   //int width=40000;
   while(width<getStep()*0.05)width*=2;
   //int every=100;
@@ -574,7 +639,7 @@ pair<double,int>  chain::report_effective_samples(int imax,int width, int every)
     cout<<"chain::report_effective_samples(): Currently only supports the first 20 params, by default."<<endl;
   }
   
-  return report_effective_samples(features,width,every);
+  return report_effective_samples(features,width,every,esslimit);
 };
 
 // A markov (or non-Markovian) chain based on some variant of the Metropolis-Hastings algorithm
