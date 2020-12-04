@@ -135,9 +135,9 @@ public:
   ///This routine computes an effect number of chain samples for some feature
   virtual void compute_effective_samples(vector< bool (*)(const state &,double &value) >&features, double & effSampSize, int &best_nwin ,int width=8192,int nevery=1,int burn_windows=1, bool loglag=false, int max_lag=0, double dlag=sqrt(2.0));
   ///Useful interface
-  pair<double,int> report_effective_samples(vector< bool (*)(const state &,double & value) > & features,int width=40000, int nevery=100);
+  pair<double,int> report_effective_samples(vector< bool (*)(const state &,double & value) > & features,int width=40000, int nevery=100, double esslimit=-1);
   ///Testing
-  pair<double,int>  report_effective_samples(int imax=-1,int width=40000, int nevery=100);
+  pair<double,int>  report_effective_samples(int imax=-1,int width=40000, int nevery=100, double esslimit=-1);
   virtual string report_prop(int style=0){return "";};
 };
 

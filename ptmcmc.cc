@@ -408,6 +408,7 @@ void ptmcmc_sampler::addOptions(Options &opt,const string &prefix){
   addOption("prop_test_index","String providing (multi-)index value indicating proposal to test. Append L to loop and +s for more rigor. (eg '.' for all, '0-1L+' for rigorous test looping over sub-proposals below second member of first member of nested set, Default: no test)","");
   addOption("chain_init_file","Specify chain file from which to draw initializtion points, rather than from prior.","");  
   addOption("chain_ess_stop","Stop MCMC sampling the first time the specified effective sample size is reached. (default never)","-1.0");
+  addOption("chain_ess_limit","Look for efficiencies in ESS calculation based on assumed limit. (default -1=no limit, 0=based on ess_limit,or as given)","-1.0");
   addOption("chain_dprior_min","Specify a minimum change in log prior beyond which proposal will be rejected without evaluating the likelihood. (Default=-30)","-30");  
 };
 
@@ -601,8 +602,18 @@ int ptmcmc_sampler::run(const string & base, int ic){
 	  if(reporting())
 	    cout<<"Proposal report:\n"<<cc->report_prop(1)<<"\nacceptance report:\n"<<cc->report_prop(0)<<endl;	  
 	}
-	if(reporting())cout<<"Effective sample size test"<<endl;
-	auto ess_len=cc->report_effective_samples(-1,save_every*1000,save_every);
+	double esslimit;
+	*optValue("chain_ess_limit")>>esslimit;
+	if(esslimit==0){
+	  if(ess_stop>0)esslimit=2.0*ess_stop;
+	  else esslimit=-1;
+	}
+	if(reporting()){
+	  cout<<"Effective sample size test";
+	  if(esslimit>0)cout<<" (assuming ess<"<<esslimit<<" for efficiency).";
+	  cout<<endl;
+	}
+	auto ess_len=cc->report_effective_samples(-1,save_every*1000,save_every,esslimit);
 	if(ess_stop>0 and ess_len.first>ess_stop){
 	  stop=true;
 	  cout<<"ptmcmc_sampler::run: Stopping based on chain_ess_stop Effective Sample Size criterion."<<endl; 
