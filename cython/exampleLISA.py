@@ -509,7 +509,7 @@ def main(argv):
     ##opt.add("nchains","Number of consequtive chain runs. Default 1","1")
     opt.add("seed","Pseudo random number grenerator seed in [0,1). (Default=-1, use clock to seed.)","-1")
     ##opt.add("precision","Set output precision digits. (Default 13).","13")
-    opt.add("outname","Base name for output files (Default 'mcmc_output').","mcmc_output")
+    opt.add("outname","Base name for output files (Default 'mcmc_output_t0').","mcmc_output_t0")
     #int Nlead_args=1;
 
 
