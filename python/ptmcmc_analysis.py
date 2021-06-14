@@ -61,7 +61,7 @@ class chainData:
         if self.filestyle==0: #ptmcmc style
             data=np.loadtxt(chainfilepath,converters={4: lambda s:-1})
             if self.noPost: print("Warning noPost incompatible with ptmcmc chainstyle!")
-            while(data[i0,0]<0):i0+=1
+            while(i0<len(data) and data[i0,0]<0):i0+=1
             data=data[i0:]
             self.dSdN=data[4,0]-data[3,0]
             parnames=["post",]+self.get_par_names(chainfilepath)
@@ -84,23 +84,26 @@ class chainData:
                 self.ipar0=1
             else: #post, like, pars
                 havelike=False
+                i0=0
                 varparnames=self.get_par_names(chainfilepath,startcol=0)
+                if 'samp' in varparnames: 
+                    isamp=varparnames.index('samp')
+                    if isamp>i0-1:i0=isamp+1
+                    data=np.delete(data,[isamp],1)
+                    del varparnames[isamp]
+                    i0-=1
                 if 'like' in varparnames: 
-                    varparnames=varparnames[varparnames.index('like')+1:]
-                    havelike=True
+                    ilike=varparnames.index('like')
+                    if ilike>i0-1:i0=ilike+1
+                    if not self.useLike:
+                        data=np.delete(data,[ilike],1)
+                        del varparnames[ilike]
+                        i0-=1
                 if 'post' in varparnames: 
-                    varparnames=varparnames[varparnames.index('post')+1:]
-                parnames=["samp","post",]
-                if havelike:
-                    if self.useLike:
-                        parnames+=['like']
-                        self.ipar0=3
-                    else:
-                        data=np.delete(data,[1],1)
-                        self.ipar0=2
-                else: 
-                    self.ipar0=2
-                parnames+=varparnames
+                    ipost=varparnames.index('post')
+                    if ipost>i0-1:i0=ipost+1
+                parnames=['samp']+varparnames
+                self.ipar0=i0+1                
         self.npar=len(parnames)-self.ipar0
         self.names=parnames
         self.N=len(data)
@@ -114,6 +117,8 @@ class chainData:
     def get_par_names(self,fname,startcol=5):
         with open(fname) as f:
             names = read_par_names(f,startcol)
+            for i in range(len(names)):
+                if names[i].startswith('#'): names[i]=names[i][1:]            
         if names is None:
             names=['p'+str(i) for i in range(len(line1.split()))]
         return names
@@ -560,6 +565,7 @@ class viewer:
             else: cx=0
             if(self.radioY.value_selected in chain.names):
                 cy=chain.names.index(self.radioY.value_selected)
+                print("have par name '"+self.radioY.value_selected+"' in",chain.names)
             else: includeChain=False
             if includeChain:
                 x,y=get_xydata(chain.data,cx,cy,samps,start)
@@ -584,7 +590,8 @@ class viewer:
                 lim=y.max()
                 if(ymax<lim):ymax=lim
                 plotlabels.append(mpatches.Patch(color=self.cmap(colorval/self.cmap_norm), label=self.labels[ind],hatch='.'))
-                ind=ind+1            
+                ind=ind+1
+            else: ind+=1
 
         self.scat.set_offsets(xy)
         self.scat.set_array(cc)

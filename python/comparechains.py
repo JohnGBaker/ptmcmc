@@ -37,7 +37,7 @@ def readCovar(filename=None):
             elems=np.array(line.split())
             print('elems',elems)
             for j,val in enumerate(elems):
-                covar[iidx,j]=val               
+                covar[iidx,j]=val
     return pars,covar
 
 def get_par_names(fname,par0col=None):
@@ -53,81 +53,25 @@ def get_par_names(fname,par0col=None):
     return names
 
 
-def read_samples(Npar,sample_file,code="bambi",burnfrac=0,keeplen=-1,iskip=1,maxsamps=30000):
-    if(code=="bambi"):
-        print ("Reading BAMBI samples")
-        data=np.loadtxt(sample_file,usecols=range(Npar))
-    else:
-        print ("Reading PTMCMC samples")
-        par0col=5
-        if("resampled.dat" in sample_file):par0col=2
-        if("resampled_phi.dat" in sample_file):par0col=1
-        data=np.loadtxt(sample_file,usecols=[0]+[par0col+x for x in selectedPars])
-        if(iskip>1):
-            print("data[-1]=",data[-1],"data[-2]=",data[-2][0])
-            every=data[-1][0]-data[-2][0]
-        data=data[:,1:]
-        
-        #hack for sign of q
-        if "logq" in parnames:
-            iq=parnames.index("logq")
-            for d in data:
-                if(d[iq]<0):# if logq<0 flip sign and add pi to phi0
-                    d[iq]*=-1
-                    if "phi0" in parnames:
-                        ip=parnames.index("phi0")
-                        d[ip]+=math.pi
-                        if(d[ip]>2*math.pi):d[ip]-=2*math.pi
-                        
-        if(keeplen/iskip>maxsamps):iskip=int(keeplen/maxsamps)
-        if(iskip>1):
-            iev=int(iskip/every)
-            if(iev>1):
-                data=data[::iev]
-                every*=iev
-                print ("every=",every," iev=",iev," iskip=",iskip)            
-        else:
-            every=1
-        #print "shape=",data.shape
-        keeplen=int(keeplen/every)
-
-    print ("code=",code,"  keeplen=",keeplen,"  burnfrac=",burnfrac,"  len=",len(data) )
-
-    if(keeplen>0):
-        data=data[len(data)-keeplen:]
-    else:
-        data=data[int(len(data)*burnfrac):]
-
-    if(code!="bambi"):
-        outfile=re.sub("_t0.dat","_post_samples.dat",sample_file)
-        if(outfile!=sample_file):
-            print("Writing PTMCMC samples to '",outfile,"'")
-            np.savetxt(outfile,data)
-        
-    return data
-
-def cornerFisher(Npar,pars,samples,in_cov,cred_levs,iparmin=0,iparend=None,sample_labels=None):
-    if iparend is None: iparend=Npar
+def cornerFisher(Npar,parnames,parvals,samples,in_cov,cred_levs,selectedPars=None,sample_labels=None):
+    if selectedPars is None: selectedPars=parnames
+    print("selecting pars:",selectedPars,'from',parnames)
+    selection=[parnames.index(par) for par in selectedPars]
+    print('selection=',selection)
     data=[]
     for datum in samples:
-    #Sylvain:Here crop down to a limited parameter set for a smaller plot
-    #the overlaid text is added with the "annotate" commands below
-        #print ("data shape=",datum.shape)
-        istart=iparmin;
-        iend=iparend
-        print('appending: istart=',istart,' iend=',iend)
-        data.append(datum[:,istart:iend])
-    if(pars is not None):
-        pars=pars[istart:iend]
-    names=parnames[istart:iend]
-    if(isinstance(in_cov,list)):
-        cov=[]
-        for ic in in_cov:
-            cov.append(ic[istart:iend,istart:iend])
-    elif in_cov is not None:
-        cov=[in_cov[istart:iend,istart:iend]]
-    else:
-        cov=[]
+        data.append(datum[:,selection])
+    cov=[]
+    if in_cov is not None:
+        if not isinstance(in_cov,list):in_cov=[in_cov] 
+        print('in_cov:',in_cov)
+        for acov in in_cov:
+            cov+=[acov[selection][:,selection]]
+    print('cov:',cov)
+    if parvals is not None:
+        pars=np.array(parvals)[selection]
+    else: pars=None
+    names=[name for name in parnames if name in selectedPars]
     fontscale=0.1+Npar/9.0
     #print "cov=",cov
     # Plot it.
@@ -304,6 +248,7 @@ if(True):
         for fishfile in fishfiles:
             print ("reading covariance from ",fishfile)
             pars,acov=readCovar(fishfile)
+            pars=pars
             allpars+=[pars]
             cov+=[acov]
     else:
@@ -357,6 +302,8 @@ if(True):
         elif("_t0.dat" in chainfile):
             code="ptmcmc"
             do_ess=True
+        else:
+            code="unk"
         lkeep=args.l
         if(len(args.lens)>0):lkeep=lens[i]
         nextch=ptmcmc_analysis.chainData(chainfile)
@@ -369,11 +316,14 @@ if(True):
             nextsamp=nextch.get_samples(nsamp,length)
         else:
             nextsamp=nextch.data
+            print('samp shape=',nextsamp.shape, 'i0=', nextch.ipar0)
+            nextsamp=nextsamp[:,nextch.ipar0:]
         print("nextsamp shape",nextsamp.shape)
         samples.append(nextsamp)
         i+=1
         print("calling cornerFisher: Npar=",Npar," pars=",pars," len(samples)",len(samples),samples[0].shape)
-        cornerFisher(Npar,pars,samples,cov,cred_levs,sample_labels=sample_labels)
+        
+        cornerFisher(Npar,nextch.names[nextch.ipar0:],pars,samples,cov,cred_levs,selectedParNames,sample_labels=sample_labels)
 
     rs=[ math.sqrt(s[1]**2+s[2]**2) for s in samples[0]]
     rs.sort()
