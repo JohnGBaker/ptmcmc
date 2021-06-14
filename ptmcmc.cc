@@ -8,7 +8,7 @@
 #include <mpi.h>
 #endif
 #include "test_proposal.hh"
-
+#include <csignal>
 
 using namespace std;
 
@@ -409,13 +409,16 @@ void ptmcmc_sampler::addOptions(Options &opt,const string &prefix){
   addOption("chain_init_file","Specify chain file from which to draw initializtion points, rather than from prior.","");  
   addOption("chain_ess_stop","Stop MCMC sampling the first time the specified effective sample size is reached. (default never)","-1.0");
   addOption("chain_ess_limit","Look for efficiencies in ESS calculation based on assumed limit. (default -1=no limit, 0=based on ess_limit,or as given)","-1.0");
+  addOption("checkp_on_sigterm_within","Set to n to check every n steps for SIGTERM and checkpoint if recieved. (Default 0, don't checkpoint on SIGTERM","0");  
   addOption("chain_dprior_min","Specify a minimum change in log prior beyond which proposal will be rejected without evaluating the likelihood. (Default=-30)","-30");  
 };
+
 
 void ptmcmc_sampler::processOptions(){
   bayes_sampler::processOptions();
   *optValue("checkp_at_step")>>checkp_at_step;
   *optValue("checkp_at_time")>>checkp_at_time;
+  *optValue("checkp_on_sigterm_within")>>checkp_on_sigterm_every;
   *optValue("restart_dir")>>restart_dir;
   if(not restart_dir.size()==0)restarting=true;
   *optValue("nevery")>>Nevery;
@@ -540,16 +543,28 @@ int ptmcmc_sampler::run(const string & base, int ic){
   if(reporting())cout<<"\nRunning chain "<<ic<<" for up to "<<chain_Nstep<<" steps."<<endl;
   //FIXME: add this function in "likelihood" class
   chain_llike->reset();
+
+  //Trigger processing of SIGTERM (possibly) for checkpointing
+  if(checkp_on_sigterm_every>0)signal(SIGINT, ptmcmc_sampler::handle_sigterm);
   
   for(istep=0;istep<=chain_Nstep;istep++){//istep is member variable to facilitate checkpointing
     if(restarting)restart(restart_dir);
 
     //checkpointing test
     bool checkpoint_now=(istep==checkp_at_step);
+    bool mpichecknow=false;
     if (checkp_at_time>0 and (!checkpoint_now) and istep%100==0){
       //occasionally check time condition
       checkpoint_now=( (omp_get_wtime()-start_time)/3600 > checkp_at_time );
+      mpichecknow=true;
+    }
+    if (checkp_on_sigterm_every>0 and istep%checkp_on_sigterm_every==0){
+      //check if need to stop because a process has recieved SIGTERM
+      checkpoint_now = checkpoint_now or terminate_signaled;
+      mpichecknow=true;
+    }
 #ifdef USE_MPI
+    if(mpichecknow){
       int nproc;
       MPI_Comm_size(MPI_COMM_WORLD, &nproc);
       if(nproc>1){
@@ -599,9 +614,10 @@ int ptmcmc_sampler::run(const string & base, int ic){
 	  if(nproc>1){
 	    if(istep==0 and reporting())cout<<"Limited proposal reports with multiple MPI procs."<<endl;
 	  }
-	  if(reporting())
-	    cout<<"Proposal report:\n"<<cc->report_prop(1)<<"\nacceptance report:\n"<<cc->report_prop(0)<<endl;	  
 	}
+	if(reporting())
+	  cout<<"Proposal report:\n"<<cc->report_prop(1)<<"\nacceptance report:\n"<<cc->report_prop(0)<<endl;	  
+	
 	double esslimit;
 	*optValue("chain_ess_limit")>>esslimit;
 	if(esslimit==0){
@@ -630,6 +646,9 @@ int ptmcmc_sampler::run(const string & base, int ic){
 #endif
     if(stop)break;
   }
+
+  if(checkp_on_sigterm_every>0)signal(SIGINT, SIG_DFL);// resort default signal handling
+
   for(int ich=0;ich<dump_n;ich++)out[ich]<<"\n"<<endl;
   
   if(false and parallel_tempering){ //disabled to reduce output (and deprecated)
@@ -642,6 +661,7 @@ int ptmcmc_sampler::run(const string & base, int ic){
   }
   cout<<"Finished running chain "<<ic<<"."<<endl;
   delete [] out;
+
   return 0;
 };
 
@@ -719,6 +739,12 @@ int ptmcmc_sampler::analyze(const string & base, int ic,int Nsigma,int Nbest, ba
   return 0;
 };
 
+bool ptmcmc_sampler::terminate_signaled=false;
+void ptmcmc_sampler::handle_sigterm(int signum){
+  cout<<"ptmcmc: Recieved termination signal."<<endl;
+  terminate_signaled=true;
+};
+
 void ptmcmc_sampler::read_covariance(const string &file,const stateSpace *ss,Eigen::MatrixXd &covar){
 
   //Do what;
@@ -727,4 +753,5 @@ void ptmcmc_sampler::read_covariance(const string &file,const stateSpace *ss,Eig
 void ptmcmc_sampler::write_covariance(const Eigen::MatrixXd &cov, const stateSpace *ss, const string &file){
   //Do what;
 };
+
 

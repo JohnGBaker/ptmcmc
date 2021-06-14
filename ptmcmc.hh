@@ -35,7 +35,10 @@ private:
   string initialization_file;
   double prop_adapt_rate;
   double dpriormin;
+  static bool terminate_signaled; //indicates SIGTERM recieved; need to terminate after one or more steps
+  int checkp_on_sigterm_every; //how many steps between checks, or 0
 public:
+  static void handle_sigterm(int signum);
   static void read_covariance(const string &file,const stateSpace *ss,Eigen::MatrixXd &covar);
   static void write_covariance(const Eigen::MatrixXd &cov, const stateSpace *ss, const string &file);
   static proposal_distribution* new_proposal_distribution(int Npar, int &Ninit, const Options &opt, const sampleable_probability_function * prior, const valarray<double>*halfwidths);
