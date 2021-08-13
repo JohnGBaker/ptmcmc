@@ -86,5 +86,13 @@ cdef class gaussian_prop(proposal):
     cdef int ndim
     cdef object user_check_update_func
     cdef bool call_check_update(self, void *instance_pointer, const states.state &s, double invtemp, const vector[double] &randoms, vector[double] &covarvec) with gil
-
+    cdef object user_checkpoint
+    cdef void call_checkpoint(self, void *instance_pointer, string path) with gil
+    cdef object user_restart
+    cdef void call_restart(self, void *instance_pointer, string path) with gil
+    cdef object user_accept
+    cdef void call_accept(self, void *instance_pointer) with gil
+    cdef object user_reject
+    cdef void call_reject(self, void *instance_pointer) with gil
+    cdef bool verbose
 

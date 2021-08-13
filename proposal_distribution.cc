@@ -170,7 +170,7 @@ void proposal_distribution_set::checkpoint(string path){
   string dir=ss.str();
   
   if(adapt_rate>0){
-    mkdir(dir.data(),ACCESSPERMS);
+    //mkdir(dir.data(),ACCESSPERMS);//This should never be necessary since this this is only expected to be called by chain::checkpoint which should have done mkdir
     ss<<"proposal="<<id<<".cp";
     ofstream os;
     openWrite(os,ss.str());
@@ -186,7 +186,7 @@ void proposal_distribution_set::checkpoint(string path){
 };
 
 void proposal_distribution_set::restart(string path){
-  //save basic data 
+  //restore basic data 
   ostringstream ss;
   ss<<path;
   string dir=ss.str();
@@ -256,8 +256,11 @@ string proposal_distribution_set::show(){
 ///passed in initially.
 user_gaussian_prop::user_gaussian_prop(const stateSpace &sp,const vector<double> &covarvec, int nrand, const string label,void *user_parent_object,void * (*new_user_instance_object_function)(void*object,int id)):proposal_distribution(user_parent_object,new_user_instance_object_function),nrand(nrand),label(label){
   check_update_registered=false;
+  checkpoint_restart_registered=false;
+  accept_reject_registered=false;
   domainSpace=sp;
   ndim=sp.size();
+  isverbose=false;
   //ostringstream ss; ss<<" Constructing user_gaussian_prop["+label+"]"<<" this="<<this<<" parent_object="<<user_parent_object<<" new_func="<<(void*)new_user_instance_object_function;cout<<ss.str()<<endl;
   dist=nullptr;    
   reset_dist(covarvec);
@@ -276,6 +279,7 @@ user_gaussian_prop* user_gaussian_prop::clone()const{
   valarray<double> zeros(0.0,ndim);
   clone->dist=new gaussian_dist_product(nullptr,zeros, sigmas);
   clone->set_instance();
+  clone->isverbose=isverbose;
   //ostringstream ss;ss<<"this="<<this<<" made clone="<<clone<<", parent_object="<<clone->user_parent_object<<", instance_object="<<clone->user_instance_object;cout<<ss.str()<<endl;
   return clone;
 };
@@ -332,6 +336,7 @@ state user_gaussian_prop::draw(state &s,chain *caller){
 };
 
 void user_gaussian_prop::reset_dist(const vector<double> &covarvec){
+  covar_vec=covarvec;//save for checkpointing
   Eigen::MatrixXd cov(ndim,ndim);
   int ULsize=(ndim*(ndim+1))/2;
   if(covarvec.size()==ndim){ //covarvec is understood as diag of diagonal matrix
@@ -377,11 +382,14 @@ void user_gaussian_prop::reset_dist(const vector<double> &covarvec){
     }
     sigmas[i]=sqrt(evalues(i));
   }
-  if(false or neg){
+  if(isverbose or neg){
     ostringstream ss;
+    ss<<"user_gaussian_prop["<<id<<"]::reset_dist";
+    if(isverbose)ss<<"(verbose)";
+    if(ch)ss<<"[chain_id="<<ch->get_id();
+    ss<<endl;
     ss<<"Scale:"<<scale<<endl;
     ss<<"Covariance:\n"<<cov;
-    
     ss<<"\nCorrelation:\n"<<scale*cov*scale;
     cout<<ss.str()<<endl;
   }
@@ -401,6 +409,7 @@ bool user_gaussian_prop::check_update(const state &s, chain *caller){
   vector<double> covarvec;
   clock_t start = clock();
   double beta=caller->invTemp();
+  //if(isverbose)cout<<"user_gaussian_prop::check_update: Calling back user_check_update. id="<<id<<" caller id="<<caller->get_id()<<" beta="<<beta<<endl;
   bool renewing=user_check_update(user_parent_object, user_instance_object, s, beta, randoms, covarvec);
   if(false and renewing){
     clock_t end = clock();
@@ -427,6 +436,40 @@ bool user_gaussian_prop::check_update(const state &s, chain *caller){
   }
   return true;
 };
+
+void user_gaussian_prop::checkpoint(string path){
+  //save basic data 
+  ostringstream ss;
+  ss<<path;
+  ss<<"user_gaussian_proposal="<<id<<".cp/";
+  string dir=ss.str();
+  mkdir(dir.data(),ACCESSPERMS);
+  path=ss.str();
+  ofstream os;
+  ss<<"core_data.cp";
+  openWrite(os,ss.str());
+  writeDoubleVector(os,covar_vec);
+  os.close();
+  if(checkpoint_restart_registered)user_checkpoint(user_parent_object, user_instance_object, path);
+};
+
+void user_gaussian_prop::restart(string path){
+  //restore basic data 
+  ostringstream ss;
+  ss<<path;
+  string dir=ss.str();
+  ss<<"user_gaussian_proposal="<<id<<".cp/";
+  path=ss.str();
+  if(isverbose)cout<<"user_gaussian_prop:Restoring from checkpoint data in:"+path<<endl;
+  ifstream is;
+  ss<<"core_data.cp";
+  openRead(is,ss.str());
+  readDoubleVector(is,covar_vec);
+  is.close();
+  reset_dist(covar_vec);
+  if(checkpoint_restart_registered)user_restart(user_parent_object, user_instance_object, path);
+};
+
 
 
 //DifferentialEvolution

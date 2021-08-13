@@ -237,14 +237,25 @@ class user_gaussian_prop: public proposal_distribution{
   Eigen::MatrixXd diagTransform;
   valarray<double>sigmas;
   gaussian_dist_product *dist;
+  vector<double>covar_vec;//This is saved only to simplify checkpointing
   int ndim;
   string label;
   typedef bool (*check_update_prototype)(const void *parent_object, void* instance_object, const state &s, double invtemp, const vector<double> &randoms, vector<double> &covarvec);
   check_update_prototype user_check_update;
   bool check_update_registered;
+  ///same function type for both checkpoint and restart
+  typedef void (*checkpoint_restart_prototype)(const void *parent_object, void* instance_object, const string path);
+  checkpoint_restart_prototype user_checkpoint;
+  checkpoint_restart_prototype user_restart;
+  bool checkpoint_restart_registered;
+  typedef void (*accept_reject_prototype)(const void *parent_object, void* instance_object);
+  accept_reject_prototype user_accept;
+  accept_reject_prototype user_reject;
+  bool accept_reject_registered;
   vector<int>idx_map;
   int nrand;
   bool first_draw;
+  bool isverbose;
 protected:
   stateSpace domainSpace; //Note the Transform can be applied as long as this can be identified as a subspace.
 public:
@@ -253,12 +264,23 @@ public:
   virtual ~user_gaussian_prop(){delete dist;};
   user_gaussian_prop* clone()const;
   string get_label()const {return label;};
+  void verbose(bool set_to=false){isverbose=set_to;};
   //void register_reference_object(void *object){
   //  ostringstream ss;ss<<"this="<<this<<" registering reference_object="<<object<<", thread="<<omp_get_thread_num()<<endl;cout<<ss.str()<<endl;
   //   user_object=object;};    
   void register_check_update(check_update_prototype function){
     user_check_update=function;
     check_update_registered=true;
+  };
+  void register_checkpoint_restart(checkpoint_restart_prototype checkpointfn, checkpoint_restart_prototype restartfn){
+    user_checkpoint=checkpointfn;
+    user_restart=restartfn;
+    checkpoint_restart_registered=true;
+  };
+  void register_accept_reject(accept_reject_prototype acceptfn,accept_reject_prototype rejectfn){
+    user_accept=acceptfn;
+    user_reject=rejectfn;
+    accept_reject_registered=true;
   };
   state draw(state &s,chain *caller);
   string show(){
@@ -267,7 +289,18 @@ protected:
   void reset_dist(const vector<double> &covarvec);
   ///This function updates the proposal if user has provided an update callback function
   bool check_update(const state &s, chain *caller);
-
+  ///Because the check_update process allows member data to evolve beyond
+  ///what is set up by the constructor, we need to checkpoint
+  void checkpoint(string path)override;
+  void restart(string path)override;
+  void accept()override{
+    if(accept_reject_registered)user_accept(user_parent_object, user_instance_object);
+    accept_count++;
+  };
+  void reject()override{
+    if(accept_reject_registered)user_reject(user_parent_object, user_instance_object);
+    reject_count++;
+  };
 };
 
 

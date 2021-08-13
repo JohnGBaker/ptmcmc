@@ -486,11 +486,12 @@ cdef class gaussian_prop(proposal):
     #cdef int ndim
     #cdef object check_update_func
 
-    def __cinit__(self, reference_object, check_update_func, stateSpace sp, covarray, nrand=0, str label="", **kwargs):
+    def __cinit__(self, reference_object, check_update_func, stateSpace sp, covarray, nrand=0, str label="", verbose=False, **kwargs):
         #self.label=label
         print("Constructing '"+label+"' proposal with reference=",reference_object)
         cdef string clabel=label.encode('UTF-8')
         self.ndim=sp.size()
+        self.verbose=verbose
         #print("got ndim=",self.ndim,"for space=",sp.show())
         
         cdef int length=(self.ndim*(self.ndim+1))//2
@@ -523,6 +524,7 @@ cdef class gaussian_prop(proposal):
             clabel,
             self.new_instance_func
             )
+        self.cuser_gaussian_prop.verbose(verbose)
         self.cproposal=self.cuser_gaussian_prop
         
     def __dealloc__(self):
@@ -536,9 +538,12 @@ cdef class gaussian_prop(proposal):
             st.cstate=states.state(s)
             covarray=np.empty((self.ndim,self.ndim),dtype=np.float64)
             check_update=self.user_check_update_func
+            #if self.user_parent_object.reporting:print("ptmcmc.gaussian_prop.call_check_update: calling check update. invtemp=",invtemp) ##HACK
             if self.using_instance_data:
+                #if self.user_parent_object.reporting:print("...using instance data. invtemp=",invtemp) ##HACK
                 update=check_update(self.user_parent_object,<object>instance_pointer,st,invtemp,get_vector(randoms),covarray)
             else:
+                #if self.user_parent_object.reporting:print("...NOT using instance data. invtemp=",invtemp) ##HACK
                 update=check_update(self.user_parent_object,st,invtemp,get_vector(randoms),covarray)
             if update:
                 vsize=(self.ndim*(self.ndim+1))//(int(2))
@@ -558,7 +563,83 @@ cdef class gaussian_prop(proposal):
             print("*******")
             sys.exit()
         return update
-    
+
+    def register_checkpoint_restart(self, checkpoint_func, restart_func):
+        if not self.using_instance_data:
+            print("gaussian_prop.register_checkpoint_restart: Seems no sense in registering checkpoint and restart functions without instance_data. Provide these only if setting default_instance_data or new_instance_func in the constructor. Skipping.")
+            return
+        self.user_checkpoint=checkpoint_func
+        self.user_restart=restart_func
+        try:
+            self.cuser_gaussian_prop.register_checkpoint_restart(
+                <void (*)(const void *object, void *instance, string path)> self.call_checkpoint,
+                <void (*)(const void *object, void *instance, string path)> self.call_restart)
+        except:
+            exc_type, exc_value, exc_traceback = sys.exc_info()
+            print("*******")
+            traceback.print_exception(exc_type, exc_value, exc_traceback,
+                                      limit=2, file=sys.stdout)
+            print("*******")
+            sys.exit()
+        
+    cdef void call_checkpoint(self, void *instance_pointer, string path) with gil:
+        try:
+            strpath=path.decode('UTF-8')
+            self.user_checkpoint(self.user_parent_object,<object>instance_pointer,strpath)
+        except:
+            exc_type, exc_value, exc_traceback = sys.exc_info()
+            print("*******")
+            traceback.print_exception(exc_type, exc_value, exc_traceback,
+                                      limit=2, file=sys.stdout)
+            print("*******")
+            sys.exit()
+
+    cdef void call_restart(self, void *instance_pointer, string path) with gil:
+        try:
+            strpath=path.decode('UTF-8')
+            self.user_restart(self.user_parent_object,<object>instance_pointer,strpath)
+        except:
+            exc_type, exc_value, exc_traceback = sys.exc_info()
+            print("*******")
+            traceback.print_exception(exc_type, exc_value, exc_traceback,
+                                      limit=2, file=sys.stdout)
+            print("*******")
+            sys.exit()
+
+    def register_accept_reject(self, accept_func, reject_func):
+        if not self.using_instance_data:
+            print("gaussian_prop.register_accept_reject: Seems no sense in registering accept and reject functions without instance_data. Provide these only if setting default_instance_data or new_instance_func in the constructor. Skipping.")
+            return
+        self.user_accept=accept_func
+        self.user_reject=reject_func
+        self.cuser_gaussian_prop.register_accept_reject(
+            <void (*)(const void *object, void *instance)> self.call_accept,
+            <void (*)(const void *object, void *instance)> self.call_reject)
+        
+    cdef void call_accept(self, void *instance_pointer) with gil:
+        try:
+            self.user_accept(self.user_parent_object,<object>instance_pointer)
+        except:
+            exc_type, exc_value, exc_traceback = sys.exc_info()
+            print("*******")
+            traceback.print_exception(exc_type, exc_value, exc_traceback,
+                                      limit=2, file=sys.stdout)
+            print("*******")
+            sys.exit()
+
+    cdef void call_reject(self, void *instance_pointer) with gil:
+        try:
+            self.user_reject(self.user_parent_object,<object>instance_pointer)
+        except:
+            exc_type, exc_value, exc_traceback = sys.exc_info()
+            print("*******")
+            traceback.print_exception(exc_type, exc_value, exc_traceback,
+                                      limit=2, file=sys.stdout)
+            print("*******")
+            sys.exit()
+
+
+
 #######
 cdef class sampler:
     cdef ptmcmc_sampler *mcmcsampler
