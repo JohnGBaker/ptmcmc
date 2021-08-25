@@ -170,8 +170,11 @@ public:
   virtual void getScales(valarray<double> &outarray)const{
     outarray=halfwidths;
     for(int i=0;i<outarray.size();i++)
-      if(types[i]==log)outarray[i]=centers[i];//halfwidths is taken as multiplicative in this case
-    
+      if(types[i]==log){//halfwidths is taken as multiplicative in this case
+	double fac=(halfwidths[i]-1/halfwidths[i])/2; //fac*center=(max-min)/2
+	if(fac>1)fac=1; //Revert to use center value as scale if that is larger
+	outarray[i]=centers[i]*fac;
+      }
     //outarray=std::move(halfwidths);
   };
 };

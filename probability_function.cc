@@ -240,8 +240,13 @@ mixed_dist_product::mixed_dist_product(const stateSpace *space,const valarray<in
       dists[i]=new UniformPolarDist(centers[i]-halfwidths[i],centers[i]+halfwidths[i]);
     else if(types[i]==copolar)//Uniform polar projection distribution, with polar angle measured to +/- pi/2 from equator
       dists[i]=new UniformCoPolarDist(centers[i]-halfwidths[i],centers[i]+halfwidths[i]);
-    else if(types[i]==log)
+    else if(types[i]==log){
+      if(centers[i]<=0 or halfwidths[i]<=1){
+	cout<<"mixed_dist_product(constructor): Need centers>0 and halfwidths>1 for log-type dimension ["<<i<<"]. Got centers="<<centers[i]<<", halfwidths="<<halfwidths[i]<<endl;
+	exit(1);
+      }
       dists[i]=new UniformLogDist(centers[i]/halfwidths[i],centers[i]*halfwidths[i]);//halfwidths is taken as multiplicative in this case
+    }
     else {
       cout<<"mixed_dist_product(constructor): Unrecognized type. types["<<i<<"]="<<types[i]<<endl;
       exit(1);
