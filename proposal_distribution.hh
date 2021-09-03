@@ -333,7 +333,7 @@ public:
   virtual proposal_distribution_set* clone()const;
   proposal_distribution_set(const vector<proposal_distribution*> &props,const vector<double> &shares,double adapt_rate=0,double Tpow=0,vector<double> hot_shares=vector<double>(),bool take_pointers=true);
   ///For proposals which draw from a chain, we need to know which chain
-  void set_chain(chain *c){ch=c;for(int i=0;i<Nsize;i++)proposals[i]->set_chain(c);};
+  void set_chain(chain *c){ch=c;for(int i=0;i<Nsize;i++)proposals[i]->set_chain(c);reset_bins();};
   ///Randomly select from proposals i in 0..n and draw.
   ///Sets type() value at i+10*proposals[i].type() 
   //state draw(state &s,Random &rng);

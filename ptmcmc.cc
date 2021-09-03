@@ -96,8 +96,8 @@ void ptmcmc_sampler::select_proposal(){
       set.push_back(nullptr);
       shares.push_back(0);
       shares[iprop]=prior_draw_frac;
-      hot_shares[iprop]=1;
       hot_shares.push_back(0);
+      hot_shares[iprop]=1;
       Tpow=prior_draw_Tpow;
       iprop++;
       Nprop_set++;
@@ -142,6 +142,11 @@ void ptmcmc_sampler::select_proposal(){
     else
       cprop=new proposal_distribution_set(set,shares,0,Tpow,hot_shares);
     
+    if(reporting()){
+      cout<<"ptmcmc_sampler::set_proposal: Tpow="<<Tpow<<":"<<endl;
+      cout<<"shares = [ ";for(auto & share:shares)cout<<(&share!=&shares[0]?", ":"")<<share;cout<<" ]"<<endl;
+      cout<<"hot_shares = [ "; for(auto & share:hot_shares)cout<<(&share!=&hot_shares[0]?", ":"")<<share;cout<<" ]"<<endl;
+    }
     //TODO: Incorporate this into the existing top-level set above
     //if(reporting())cout<<"sym_prop_frac="<<sym_prop_frac<<" nsym="<<chain_prior->get_space()->get_potentialSyms().size()<<endl;
     

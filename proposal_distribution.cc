@@ -45,15 +45,17 @@ void proposal_distribution_set::reset_bins(){
       Tfac=1-pow(ch->invTemp(),Tpow);
   }
   double sum=0;
-  for(int i=0;i<Nsize;i++)sum+=shares[i];//make sure the portions total one
+  for(int i=0;i<Nsize;i++)sum+=shares[i];//make sure the portions total one (makes hot_shares concretely meaningful)
+  double last=0;
   for(int i=0;i<Nsize;i++){
-    shares[i]/=sum;
-    if(i==0)bin_max[0]=shares[0];
-    else {
-      bin_max[i]=bin_max[i-1]+shares[i];
-      if(Tpow>0)bin_max[i]+=(hot_shares[i]-shares[i])*Tfac;
-    }
+    shares[i]/=sum; 
+    bin_max[i]=last+shares[i];
+    if(Tpow>0)bin_max[i]+=(hot_shares[i]-shares[i])*Tfac;
+    last=bin_max[i];
   }
+  //renormalize so that bin_max.back()==1
+  //if(Tfac>0){cout<<"proposal_distribution_set::reset_bins: T,Tfac: "<<1/ch->invTemp()<<", "<<Tfac<<" renormalizing by"<<bin_max.back()<<"\n shares=[ ";for(auto & s : shares)cout<<(&s==&shares[0]?"":", ")<<s;cout<<"]\n bin_max=[ ";for(auto & s : bin_max)cout<<(&s==&bin_max[0]?"":", ")<<s;cout<<"]"<<endl;}
+  for(auto & bin : bin_max)bin/=bin_max.back();
 };
 
 proposal_distribution_set::proposal_distribution_set(const vector<proposal_distribution*> &props,const vector<double> &shares_,double adapt_rate,double Tpow, vector<double> hot_shares_,bool take_pointers):shares(shares_),adapt_rate(adapt_rate),Tpow(Tpow),hot_shares(hot_shares_),own_pointers(take_pointers){
@@ -376,13 +378,14 @@ void user_gaussian_prop::reset_dist(const vector<double> &covarvec){
   for(int i=0;i<ndim;i++){
     if(evalues[i]<0){
       cout<<"user_gaussian_prop["+label+"]: Warning. Negative covariance eigenvalue["<<i<<"]="<<evalues[i]<<" set to zero."<<endl;
+      if(ch)cout<<"chain_id="<<ch->get_id()<<endl;
       cout<<"evec="<<diagTransform.col(i).transpose()<<endl;
       neg=true;
       evalues[i]=0;
     }
     sigmas[i]=sqrt(evalues(i));
   }
-  if(isverbose or neg){
+  if(isverbose){
     ostringstream ss;
     ss<<"user_gaussian_prop["<<id<<"]::reset_dist";
     if(isverbose)ss<<"(verbose)";
