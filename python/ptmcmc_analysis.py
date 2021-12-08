@@ -130,14 +130,21 @@ class chainData:
         i=int(idx/self.dSdN)
         return self.data[i,self.ipar0:]
 
-    def get_samples(self,nsamp,good_length):
+    def get_samples(self,nsamp,good_length,nmax=None,return_rows=False):
         ngood=int(good_length/self.dSdN)
         if(nsamp>ngood):nsamp=ngood
-        n0=int(len(self.data)-ngood)
+        if nmax is None:
+            nmax=len(self.data)
+        else:
+            nmax=int(nmax/self.dSdN)
+        n0=int(nmax-ngood)
         rows=n0+np.random.choice(int(ngood),nsamp)
         i0=self.names.index('post')+1
         if self.useLike: i0+=1
-        return self.data[rows,i0:]
+        if return_rows:
+            return rows,self.data[rows,i0:]
+        else:
+            return self.data[rows,i0:]
 
     def readCovar(self,filename=None):
         if filename is None:
