@@ -86,6 +86,8 @@ testKL: testKL.cc ${LIB}/libprobdist.a ${LIB}/libptmcmc.a test_proposal.hh
 poly_example: poly_example.cc ${LIB}/libprobdist.a ${LIB}/libptmcmc.a
 	${CXX} $(CFLAGS) -std=c++11 -o poly_example -lprobdist -lptmcmc -L${LIB} -I${INCDIR} $<
 
+cython-install: export CXXFLAGS := $(CFLAGS)
+cython-install: export CXX := $(CXX)
 cython-install: ${LIB}/libprobdist.a ${LIB}/libptmcmc.a DUMMY
 	python3 cython/setupV2.py install --user
 

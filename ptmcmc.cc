@@ -580,8 +580,8 @@ int ptmcmc_sampler::run(const string & base, int ic){
 	bool checkpoint_now_this_proc=checkpoint_now;
 	MPI_Allreduce(&checkpoint_now_this_proc,&checkpoint_now,1,MPI_C_BOOL,MPI_LOR,MPI_COMM_WORLD);
       }
+    }
 #endif   
-    }   
     if(checkpoint_now){
       if(reporting())cout<<"Checkpointing triggered."<<endl;
       checkpoint(".");

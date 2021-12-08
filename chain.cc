@@ -1335,7 +1335,7 @@ void parallel_tempering_chains::initialize( probability_function *log_likelihood
     //MPI Ntemps in these loops should be NLocalChains or such
     int ith=omp_get_thread_num();
     ostringstream oss;oss<<"PTchain: initializing chain "<<i<<" on thread "<<ith<<endl;
-#pragma opm critical    
+    //#pragma omp critical    
     cout<<oss.str()<<endl;
     chains[i].invtemp=1/temps[i];
     if(initialization_file!="")chains[i].initialize(n,initialization_file);

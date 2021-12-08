@@ -4,7 +4,8 @@ import os
 import numpy
 
 here=os.path.dirname(os.path.abspath(__file__))+'/'
-locale='discover'
+#locale='discover'
+locale=None
 
 #defaults
 compiler=None
@@ -17,8 +18,10 @@ if locale=="laptop":
 elif locale=="discover":
     compiler="mpicxx"
     usempi=True
-
-if compiler is not None:
+else:
+    locale=None
+    
+if locale is not None:
     os.environ["CC"] = compiler
     os.environ["CXX"] = compiler
     os.environ['LD'] = compiler
