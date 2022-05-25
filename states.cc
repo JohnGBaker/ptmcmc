@@ -160,18 +160,27 @@ bool stateSpace::addSymmetry(stateSpaceInvolution &involution){
       
 void state::enforce(bool verbose){
   if(!space)valid=false;
-  if(!valid)return;
+  if(!valid){
+    if(verbose){
+      cout<<"state::enforce:State already marked invalid."<<endl;
+      space->enforce(params,verbose);
+    }
+    return;
+  }
   valid=space->enforce(params,verbose);
   //cout<<"state::enforce:State was "<<(valid?"":"not ")<<"valid."<<endl;//debug
 };
 
 state::state(const stateSpace *space,int n):space(space){
+  //With this constructor, we don't enforce statespace limits since the
+  //state is arbitrarily initialized to 0 which may be outside the domain
+  //User should call enforce() once meaningful values are provided.
   params.resize(n,0);
   valid=false;
   //cout<<"state::state():space="<<this->space<<endl;    
   if(space){
     valid=true;
-    enforce();
+    //enforce(); 
   }
 };
 ///build state from provided valarray params

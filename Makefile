@@ -87,6 +87,9 @@ poly_example: poly_example.cc ${LIB}/libprobdist.a ${LIB}/libptmcmc.a
 	${CXX} $(CFLAGS) -std=c++11 -o poly_example -lprobdist -lptmcmc -L${LIB} -I${INCDIR} $<
 
 cython-install: ${LIB}/libprobdist.a ${LIB}/libptmcmc.a DUMMY
+	python3 cython/setupV2.py install
+
+cython-install-user: ${LIB}/libprobdist.a ${LIB}/libptmcmc.a DUMMY
 	python3 cython/setupV2.py install --user
 
 .SUFFIXES: .c .cc .o

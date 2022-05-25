@@ -36,7 +36,10 @@ public:
   static const int limit=1;
   static const int reflect=2;
   static const int wrap=3;
-  boundary(int lowertype=open,int uppertype=open,double min=-INFINITY,double max=INFINITY):lowertype(lowertype),uppertype(uppertype),xmin(min),xmax(max){};
+  boundary(int lowertype=open,int uppertype=open,double min=-INFINITY,double max=INFINITY):lowertype(lowertype),uppertype(uppertype),xmin(min),xmax(max){
+    //if(lowertype==open)xmin=-INFINITY; //Should be cosmetic since no checking will be done
+    //if(uppertype==open)xmax=-INFINITY; //but not fully cosmetic because effect of getDomainLimits changes... what TODO?
+};
   ///enforce boundary condition. If consistent enforcement was achieved return true.
   bool enforce(double &x)const;
   ///Show structural info

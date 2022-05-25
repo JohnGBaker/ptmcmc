@@ -318,7 +318,7 @@ cdef class likelihood:
         self.like.evaluate_log(s.cstate)
         return self.like.bestPost()
         
-    cpdef void basic_setup( self, stateSpace space, list types, list centers, list priorScales, list reScales=None,bool check_posterior=True,double lprior_cut=0):
+    cpdef void basic_setup( self, stateSpace space, list types, list centers, list priorScales, list reScales=None,bool check_posterior=True,double lprior_cut=0, bool verbose=False):
         cdef int n=space.size()
         self.space=space #We hold on to this so it doesn't go out of scope
         cdef vector[string] typesvec
@@ -338,7 +338,7 @@ cdef class likelihood:
             else:
                 rescalesvec[i]=1.0
         if self.like==NULL: raise UnboundLocalError
-        else: self.like.basic_setup(space.spaceptr, typesvec, centersvec, scalesvec, rescalesvec)
+        else: self.like.basic_setup(space.spaceptr, typesvec, centersvec, scalesvec, rescalesvec, verbose)
         self.like.check_posterior=check_posterior
         self.like.lprior_cut=lprior_cut
         #else: self.like.basic_setup(space.spaceptr, typesvec, centersvec, scalesvec)
@@ -351,6 +351,7 @@ cdef class likelihood:
     cpdef void addProposal(self, proposal prop, double share=1):
         self.proposals.append(prop)#we need to reserve reference to these for callback
         self.like.addProposal(<proposal_distribution.proposal_distribution *> prop.cproposal,share)
+
 
     cpdef stateSpace getObjectStateSpace(self):
        sp=stateSpace()
@@ -559,7 +560,7 @@ cdef class gaussian_prop(proposal):
             exc_type, exc_value, exc_traceback = sys.exc_info()
             print("*******")
             traceback.print_exception(exc_type, exc_value, exc_traceback,
-                                      limit=2, file=sys.stdout)
+                                      limit=20, file=sys.stdout)
             print("*******")
             sys.exit()
         return update

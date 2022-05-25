@@ -20,7 +20,7 @@ void ptmcmc_sampler::select_proposal(){
     if(reporting())cout<<"Selecting proposal for stateSpace:\n"<<chain_prior->get_space()->show()<<endl;
     int Npar=chain_prior->get_space()->size();
     int proposal_option,SpecNinit;
-    double tmixfac,reduce_gamma_by,de_g1_frac,de_eps,gauss_1d_frac,prior_draw_frac,prior_draw_Tpow,gauss_draw_frac,gauss_step_fac,cov_draw_frac,sym_prop_frac,like_prop_frac,unlikely_alpha;
+    double tmixfac,reduce_gamma_by,de_g1_frac,de_eps,gauss_1d_frac,prior_draw_frac,prior_draw_Tpow,gauss_draw_frac,gauss_step_fac,gauss_share_fac,cov_draw_frac,sym_prop_frac,like_prop_frac,unlikely_alpha;
     bool de_mixing=false;
     bool gauss_temp_scaled=false;
     string covariance_file;
@@ -30,6 +30,7 @@ void ptmcmc_sampler::select_proposal(){
     (*optValue("gauss_1d_frac"))>>gauss_1d_frac;
     (*optValue("gauss_draw_frac"))>>gauss_draw_frac;
     (*optValue("gauss_step_fac"))>>gauss_step_fac;
+    (*optValue("gauss_share_fac"))>>gauss_share_fac;
     (*optValue("cov_draw_frac"))>>cov_draw_frac;
     (*optValue("sym_prop_frac"))>>sym_prop_frac;
     (*optValue("like_prop_frac"))>>like_prop_frac;
@@ -124,7 +125,7 @@ void ptmcmc_sampler::select_proposal(){
       for(int i=0;i<Ng;i++){
 	fac*=stepfac;
 	gset[i]=new gaussian_prop(scales/100.0/fac,gauss_1d_frac,gauss_temp_scaled);
-	sharefac*=2;
+	sharefac*=gauss_share_fac;
 	gshares[i]=sharefac/sum;
       }
       set[iprop]=new proposal_distribution_set(gset,gshares,prop_adapt_rate);
@@ -133,7 +134,7 @@ void ptmcmc_sampler::select_proposal(){
       for(int i=iprop;i<Nprop_set;i++){
 	fac*=stepfac;
 	set[i]=new gaussian_prop(scales/100.0/fac,gauss_1d_frac,gauss_temp_scaled);
-	sharefac*=2;
+	sharefac*=gauss_share_fac;
 	shares[i]=sharefac/sum*gshare;
       }
     }
@@ -267,6 +268,12 @@ void ptmcmc_sampler::Quit(){
   exit(0);
 };
 
+void ptmcmc_sampler::Barrier(){
+#ifdef USE_MPI
+  MPI_Barrier(MPI_COMM_WORLD);
+#endif
+};
+
 bool ptmcmc_sampler::reporting(){return ptmcmc_sampler::static_reporting();};
 
 bool ptmcmc_sampler::static_reporting(){
@@ -395,6 +402,7 @@ void ptmcmc_sampler::addOptions(Options &opt,const string &prefix){
   addOption("prior_draw_frac","Add prior draws to general proposal (prop7). Default=0","0");
   addOption("prior_draw_Tpow","Power for thermal_weighting of any prior draws in proposal. Default=0","0");
   addOption("gauss_step_fac","With Gaussian proposal distribution variants, specify scale-spacing of Gaussian components. Default=2","2");
+  addOption("gauss_share_fac","With Gaussian proposal distribution variants, specify scale-spacing of Gaussian component fractional shares. Default=2","2");
   addOption("gauss_temp_scaled","With Gaussian proposal distribution variants, scale (co)variance with chain-temp. Default=not");
   addOption("cov_draw_frac","With Gaussian proposal dist variants and a covariance file set, specify a fraction of Gaussian draws with defined covariance. Default=0.50","0.50");
   addOption("covariance_file","Specify file with covariance data for relevant proposal distribution optoins.Default=none","");
@@ -474,7 +482,8 @@ void ptmcmc_sampler::setup(int Ninit,bayes_likelihood &llike, const sampleable_p
 }
 
 void ptmcmc_sampler::setup(bayes_likelihood &llike, const sampleable_probability_function &prior, int output_precision_){
-  //cout<<"SETUP("<<this<<")"<<endl;
+  Barrier();
+  if(reporting())cout<<"ptmcmc_sampler: Setting up with prior:\n"<<prior.show()<<endl;
   processOptions();
   chain_Nstep=Nstep;
   chain_nburn=Nstep*nburn_frac;
@@ -482,18 +491,18 @@ void ptmcmc_sampler::setup(bayes_likelihood &llike, const sampleable_probability
   chain_prior=&prior;
   chain_llike = &llike;
   have_setup=true;
+  Barrier();
 }
 
 ///Initialization for the ptmcmc sampler
 ///
 int ptmcmc_sampler::initialize(){
-  //cout<<"INIT("<<this<<")"<<endl;
-  
+  Barrier();
+
   if(!have_setup or !have_cprop){
     cout<<"ptmcmc_sampler::initialize.  Must call setup() and set proposal before initialization!"<<endl;
     exit(1);
   }
-  if(reporting())cout<<"ptmcmc_sampler: Initializing with prior:\n"<<chain_prior->show()<<endl;
   int Ninit=chain_Ninit;
   if(restarting or Nstep<=0)Ninit=0;
   //Create the Chain 
@@ -520,6 +529,7 @@ int ptmcmc_sampler::initialize(){
 };
 
 int ptmcmc_sampler::run(const string & base, int ic){
+  Barrier();
   if(reporting())cout<<"ptmcmc_sampler:running with omp_num_threads="<<omp_get_num_threads()<<endl;
   
   if(!have_cc&&chain_Nstep>0){

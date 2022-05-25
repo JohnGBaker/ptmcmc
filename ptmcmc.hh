@@ -38,6 +38,7 @@ private:
   static bool terminate_signaled; //indicates SIGTERM recieved; need to terminate after one or more steps
   int checkp_on_sigterm_every; //how many steps between checks, or 0
 public:
+  static void Barrier();
   static void handle_sigterm(int signum);
   static void read_covariance(const string &file,const stateSpace *ss,Eigen::MatrixXd &covar);
   static void write_covariance(const Eigen::MatrixXd &cov, const stateSpace *ss, const string &file);

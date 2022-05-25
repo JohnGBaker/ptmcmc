@@ -342,14 +342,17 @@ public:
     }
   };
   //This is a simplified interface for applications which only provide an indep. likelihood 
-  void basic_setup(const stateSpace *sp, sampleable_probability_function *prior ){
+  void basic_setup(const stateSpace *sp, sampleable_probability_function *prior, bool verbose=false ){
     haveSetup();
     ///Set up the output stateSpace for this object
     nativeSpace=*sp;
     setPrior(prior);
     best=state(&nativeSpace,nativeSpace.size());
     //cout<<"bayes_likelihood::basic_setup:this="<<this<<endl;
-    //cout<<"bayes_likelihood::basic_setup: space="<<nativeSpace.show()<<endl;
+    if(verbose){
+      cout<<"bayes_likelihood::basic_setup: space="<<nativeSpace.show()<<endl;
+      cout<<"bayes_likelihood::basic_setup: prior="<<nativePrior->show()<<endl;
+    }
     //cout<<"bayes_likelihood::basic_setup: best="<<best.show()<<endl;
 
     //Unless otherwise externally specified, assume nativeSpace as the parameter space
@@ -357,7 +360,7 @@ public:
   };
   ///This is a more simplified interface for applications which only provide an indep.
   ///which assumes does not depend on access to probability_function.hh (or valarray) 
-  void basic_setup(const stateSpace *sp,const vector<string> &types, const vector<double> &centers,const vector<double> &priorScales,const vector<double> &reScales=vector<double>()){			   
+  void basic_setup(const stateSpace *sp,const vector<string> &types, const vector<double> &centers,const vector<double> &priorScales,const vector<double> &reScales=vector<double>(),bool verbose=false){			   
     const valarray<double> centers_va(centers.data(), centers.size());
     const valarray<double> scales_va(priorScales.data(), priorScales.size());
     valarray<int> types_va(types.size());
@@ -370,7 +373,7 @@ public:
       else if(types[i]=="log")types_va[i]=log;
     }
     nativeSpace=*sp;//have to set this first so prior can reference
-    basic_setup(sp, new mixed_dist_product(&nativeSpace,types_va,centers_va,scales_va));
+    basic_setup(sp, new mixed_dist_product(&nativeSpace,types_va,centers_va,scales_va),verbose);
     //basic_setup(sp, new mixed_dist_product(&nativeSpace,types_va,centers_va,scales_va,true));//Verbose
     if(reScales.size()==priorScales.size()){
       getScales(likelyScales);

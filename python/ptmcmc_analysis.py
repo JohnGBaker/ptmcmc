@@ -10,16 +10,10 @@ import numpy as np
 import math
 import subprocess
 import argparse
-import matplotlib
-import matplotlib.pyplot as plt
-import matplotlib.colors as colors
-import matplotlib.cm as cm
 import ess as esspy
 #import matplotlib
 #matplotlib.use('TkAgg')
 
-#from matplotlib.backends.backend_pdf import PdfPages
-from matplotlib.widgets import Slider, Button, RadioButtons
 filestyle=0
 
 useLikeDefault=False
@@ -440,10 +434,17 @@ def get_xydata(data,i,j,dens,samps):
 ##################
 #Widget functions
 ##################
-import matplotlib.patches as mpatches
 
 class viewer:
     def __init__(self,fnames,selectX=False):
+        import matplotlib
+        import matplotlib.pyplot as plt
+        import matplotlib.colors as colors
+        import matplotlib.cm as cm
+        #from matplotlib.backends.backend_pdf import PdfPages
+        from matplotlib.widgets import Slider, Button, RadioButtons
+        import matplotlib.patches as mpatches
+
         self.fnames=fnames
         self.labels=make_short_labels(fnames)
         self.allchains=read_all_chains(self.fnames)
