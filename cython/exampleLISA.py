@@ -1,22 +1,4 @@
-#Simplified likelihood for LISA example based on python interface.  The simplified likelihood covers only
-#extrinsic parameters based on  low-f limit, and short-duration observation
-#as occurs for merger of ~1e6 Msun binaries. 
-
-
-#include <valarray>
-#include <vector>
-#include <iostream>
-#include <iomanip>
-#include <fstream>
-#include <ctime>
-#include <complex>
-#include "omp.h"
-#include "options.hh"
-#include "bayesian.hh"
-#include "proposal_distribution.hh"
-#include "ptmcmc.hh"
-
-#using namespace std;
+#Simplified likelihood for LISA example based on python interface.  The simplified likelihood covers only extrinsic parameters based on  low-f limit, and short-duration observation as occurs for merger of ~1e6 Msun binaries. 
 
 import numpy as np
 import ptmcmc
@@ -106,249 +88,6 @@ LISAsymmetries.ibeta=ibeta
 LISAsymmetries.ipsi=ipsi
 LISAsymmetries.reverse_phi_sign=True
 
-"""
-def LISA_quarter_rotation_symmetry_transf(s, randoms): 
-    #print("applying quarter rotation")
-    #sp=s.getSpace()
-    #ilamb=sp.requireIndex("lambda")
-    #ipsi=sp.requireIndex("psi")   #Takes an extra us to do this step, slows testing
-    parvals=s.get_params()
-    nrot=randoms[0]
-    nrot=int(abs(randoms[0])*2)+1
-    if(randoms[0]<0):nrot=-nrot;
-    lamb=parvals[ilamb]
-    psi=parvals[ipsi]
-    lamb+=nrot*halfpi;
-    if(abs(nrot)%2==1):psi+=halfpi;
-    parvals[ilamb]=lamb
-    parvals[ipsi]=psi
-    #print("applied quarter rotation")
-    return ptmcmc.state(s,parvals);
-
-def source_quarter_rotation_symmetry_transf(s, randoms): 
-    #sp=s.getSpace()
-    #ilamb=sp.requireIndex("lambda")
-    #ipsi=sp.requireIndex("psi")   #Takes an extra us to do this step, slows testing
-    iphi=1
-    ipsi=5
-    param=s.get_params()
-    nrot=randoms[0]
-    nrot=int(abs(randoms[0])*2)+1
-    if(randoms[0]<0):nrot=-nrot;
-    phi=param[iphi]
-    psi=param[ipsi]
-    phi+=nrot*halfpi;
-    if(abs(nrot)%2==1):psi+=halfpi;
-    param[iphi]=phi
-    param[ipsi]=psi
-    return ptmcmc.state(s,param);
-
-#TDI A/E symmetric (in stationary/low-freq limit) relection through constellation plane, simultaneous with source plane reflection and polarization flip
-#Uses 0 random vars
-def LISA_plane_reflection_symmetry_transf(s, randoms): 
-    param=s.get_params()
-    beta=param[ibeta]
-    psi=param[ipsi]
-    inc=param[iinc]
-    inc=PI-inc;
-    beta=-beta;
-    psi=PI-psi;
-    param[iinc]=inc
-    param[ibeta]=beta
-    param[ipsi]=psi
-    return ptmcmc.state(s,param);
-
-def transmit_receive_inc_swap_symmetry_transf(s, randoms): 
-    param=s.get_params()
-    phi=param[iphi]
-    inc=param[iinc]
-    lamb=param[ilamb]
-    beta=param[ibeta]
-    psi=param[ipsi]
-    theta=halfpi-beta
-    twopsi=2*psi
-    ti4=math.tan(inc/2)**4;
-    tt4=math.tan(theta/2)**4;
-    Phi=math.atan2(math.sin(twopsi)*(ti4-tt4),math.cos(twopsi)*(ti4+tt4))/2;
-    param[iinc]=theta
-    param[ibeta]=halfpi-inc
-    param[iphi]=phi-Phi#sign differs from that in notes
-    param[ilamb]=lamb-Phi
-    return ptmcmc.state(s,param);
-
-#Approximate distance inclination symmetry
-#uses 2 random var
-dist_inc_jump_size=0.1;
-def dist_inc_scale_symmetry_transf(s, randoms): 
-    #We apply a symmetry to preserve d'*F(x')=d*F(x) where F(x)=1/cos(x)^2
-    #Depending on the sign of the second random number, x is either the source inclination, or the
-    #line-of-sight inclination relative to the LISA plane, theta=pi/2-beta;
-    #To avoid issues at the edges we make sure that the transformation of the inclination
-    #never crosses its limits.
-    #Note that f:x->ln(pi/x-1) has range (inf,-inf) on domain (0,pi) with f(pi-x)=-f(x)
-    #and inverse pi/(exp(f(x))+1)=x
-    #We then step uniformly in f(x). So, for random number y,
-    # x'=finv(f(x)+y)
-    param=s.get_params()
-    use_theta=False;
-    if(abs(randoms[1]*2)<1): #Half of the time we apply the transformation to theta (LISA includination) rather than source inclination
-      use_theta=True
-      oldalt=halfpi-param[ibeta]
-    else:
-      oldalt=param[iinc]
-    dist=param[idist]
-    df=randoms[0]*dist_inc_jump_size #Uniformly transform reparameterized inc
-    oldf=math.log(PI/oldalt-1);
-    newf=oldf+df;
-    newalt=PI/(math.exp(newf)+1);
-    cosold=math.cos(oldalt)
-    cosnew=math.cos(newalt)
-    fac=cosnew/cosold;
-    #double fac=(cosnew*cosnew+1)/(cosold*cosold+1);
-    dist=dist*fac;
-    param[idist]=dist
-    if(use_theta):
-      param[ibeta]=halfpi-newalt #convert back to beta
-    else:
-      param[iinc]=newalt
-    return ptmcmc.state(s,param);
-
-#Approximate distance inclination symmetry jacobian
-#uses 1 random var
-def dist_inc_scale_symmetry_jac(s, randoms): 
-    #The transformation has the form:
-    #  d' = d F(x)/F'(x')
-    #  x' = finv( f(x) + y )
-    #  y' = -y
-    #where x is the selected inclination variable and y is the random number.
-    #The Jacobian is then -F(x)f'(x) / (F(x')f'(x'))
-    #Because the random step is performed on the rescaled inclination f(x)=ln(pi/x-1)
-    #we have 1/f'(x) = x(1-x/pi)
-    param=s.get_params()
-    use_theta=False
-    if(abs(randoms[1]*2)<1): #Half of the time we apply the transformation to theta (LISA includination) rather than source inclination
-      use_theta=True
-      oldalt=halfpi-param[ibeta]
-    else:
-      oldalt=param[iinc]
-    dist=param[idist]
-    df=randoms[0]*dist_inc_jump_size #Uniformly transform reparameterized inc
-    oldf=math.log(PI/oldalt-1);
-    newf=oldf+df;
-    newalt=PI/(math.exp(newf)+1);
-    cosold=math.cos(oldalt)
-    cosnew=math.cos(newalt)
-    fac=cosnew/cosold;
-    fac*=(PI-newalt)*newalt/(PI-oldalt)/oldalt;
-    return fac; 
-
-#Exact-in-limit distance-altitude-polarization 2-D symmetry
-dist_alt_pol_size=0.1;
-Tlimit=1e15
-def dist_alt_pol_symmetry_jac(s, randoms): 
-    '''
-    This transform exercizes the an exact version of the distance-altitude-polarization symmetry
-    Which exists exactly for signals from a quadrupolar rotatoring source detected by a full
-    polarization non-accelerating detector that is small compared to the wavelength. It uses 
-    2 random vars. 
-
-    The symmetry is realized by a random step in two variables in a transformed coordinate system.
-    '''
-    
-    param=s.get_params()
-
-    #params
-    iota=param[iinc]
-    theta=halfpi-param[ibeta]
-    psi=param[ipsi]
-    dist=param[idist]
-    
-    #intermediates
-    x=math.tan(theta/2)**4
-    y=math.tan(iota/2)**4
-    x2=x*x
-    y2=y*y
-    twoc4psi=2*math.cos(4*psi)
-    ztwoc4psi=x*y*twoc4psi
-    R=(x2+y2+ztwoc4psi)/(1+x2*y2+ztwoc4psi)
-    Delta=(1-x2)*(1-y2)/(dist*(1+math.sqrt(x))*(1+math.sqrt(y)))**2
-
-    #The notes (currently) apply when R<=1, we extend to R>1 noting that
-    #R->1/R when z<->w:
-    #Thus in the case R>1 we need to swap the definitions of z and w, meaning wee change y->1/y in these exprs
-    ypow=1
-    if R>1: ypow=-1
-
-    z=x*y**ypow
-    #z2=z*z
-    if z<1:sgn=-1
-    else: sgn=1
-    s2psi=math.sin(2*psi)
-    c2psi=math.cos(2*psi)
-    
-    #forward reparameterization
-    w=x/y**ypow
-    
-    #transform
-    psit=psi+dist_alt_pol_size*randoms[0]
-    c4psit=math.cos(4*psit)
-    wt=sgn*w+dist_alt_pol_size*randoms[0]
-    if wt>0:sgn=1
-    else:sgn=-1
-    wt=abs(wt)
-
-    #reverse reparameterization and intermediates    
-    T  = ( (wt+1/wt)/2 + c4psit*(1-R**ypow) )/R**ypow
-    if True and  T>Tlimit: #limiting case near poles
-        rootr=math.sqrt(R)
-        if sgn>0:
-            zt=1/(2*T)
-            if wt>1:
-                xt=1/rootr
-                yt=2*T*rootr
-            else:
-                xt=2*T*rootr
-                yt=1/rootr
-        else:
-            zt=2*T
-            if wt>1:
-                xt=rootr/2/T
-                yt=1/rootr
-            else:
-                xt=1/rootr
-                yt=rootr/2/T
-        zt=xt*yt**sgn
-        
-    else:
-        zt = T+sgn*math.sqrt(T*T-1)
-        xt = math.sqrt(zt*wt)
-        if xt<wt*1e-60: yt=R  #handle pathological case
-        else: yt = (xt/wt)**ypow
-    distt = math.sqrt((1-xt*xt)*(1-yt*yt)/Delta) / ((1+math.sqrt(xt))*(1+math.sqrt(yt)))
-
-    #test
-    #Rt=(xt**2+yt**2+xt*yt*2*c4psit)/(1+xt**2*yt**2+xt*yt*2*c4psit)
-    #Deltat=(1-xt**2)*(1-yt**2)/(distt*(1+math.sqrt(xt))*(1+math.sqrt(yt)))**2
-    #print("check: ",x,y,z,w,dist,T,R,Delta)
-    #print("checkt:",xt,yt,xt*yt,wt,distt,T)
-
-    #Jacobian
-    #Ratio of the forward transformation to the directly transformed coords at old point over new point
-    #theta->x: dx/dtheta ~ x*(x^1/4+x^-1/4)
-    #iota->y:  dy/diota  ~ y*(y^1/4+y^-1/4)
-    #(x,y,d)->(w,R,Delta): ~ w*(1-z2)/(z*d*(1+z2+2zcos4psi))
-    #combined: w/d*(x^1/4+x^-1/4)*(y^1/4+y^-1/4)*(1-z2)/(1+z2+2zcos4psi)
-    eps=1e-60
-    x4th=x**0.25+eps
-    y4th=y**0.25+eps
-    xt4th=xt**0.25+eps
-    yt4th=yt**0.25+eps
-    
-    jac=w/dist*(x4th+1/x4th)*(y4th+1/y4th)*(z-1/z)/(z+1/z+twoc4psi)
-    jact=wt/distt*(xt4th+1/xt4th)*(yt4th+1/yt4th)*(zt-1/zt)/(zt+1/zt+2*c4psit)
-
-    return abs(jac/jact)
-"""
     
 def trivial_transf(s, randoms): 
     return s
@@ -363,8 +102,6 @@ class simple_likelihood(ptmcmc.likelihood):
         names=["d","phi","inc","lambda","beta","psi"];
         space.set_names(names);
         space.set_bound('phi',ptmcmc.boundary('wrap','wrap',0,2*PI));#set 2-pi-wrapped space for phi. 
-        #if(not narrowband):space.set_bound('lambda',ptmcmc.boundary('wrap','wrap',0,2*PI))
-        #else: space.set_bound('beta',ptmcmc.boundary('limit','limit',0.2,0.6))
         space.set_bound('psi',ptmcmc.boundary('wrap','wrap',0,PI))
         if(not narrowband):
             space.set_bound("d",ptmcmc.boundary("limit","limit",0,30)) #set 2-pi limited space for lambda.
@@ -497,26 +234,13 @@ count=0
 def main(argv):
 
     ptmcmc.Init() 
-    #//prep command-line options
-    #Options opt(true);
     opt=ptmcmc.Options()
-    #s0->addOptions(opt);
-    #//data->addOptions(opt);
-    #//signal->addOptions(opt);
-    #like->addOptions(opt); #There are no options for this or it might be  more complicated
-    
-    #//Add some command more line options
-    ##opt.add("nchains","Number of consequtive chain runs. Default 1","1")
     opt.add("seed","Pseudo random number grenerator seed in [0,1). (Default=-1, use clock to seed.)","-1")
-    ##opt.add("precision","Set output precision digits. (Default 13).","13")
     opt.add("outname","Base name for output files (Default 'mcmc_output_t0').","mcmc_output_t0")
-    #int Nlead_args=1;
 
-
-    #//Create the sampler
-    #ptmcmc_sampler mcmc;
+    #Create the sampler
     s0=ptmcmc.sampler(opt)
-    #//Create the likelihood
+    #Create the likelihood
     like=simple_likelihood(opt)  
 
 
@@ -524,97 +248,32 @@ def main(argv):
     opt.parse(argv)
     print("flags=\n"+opt.report())
 
-    #bool parseBAD=opt.parse(argc,argv);
-    #if(parseBAD) {
-    #  cout << "Usage:\n mcmc [-options=vals] " << endl;
-    #  cout <<opt.print_usage()<<endl;
-    #  return 1;
-    #}
-    #cout<<"flags=\n"<<opt.report()<<endl;
-    
-    #//Setup likelihood
-    #//data->setup();  
-    #//signal->setup();  
+    #Setup likelihood
     like.setup();
+    space=like.getObjectStateSpace();
        
-    #double seed;
-    #int Nchain,output_precision;
-    #int Nsigma=1;
-    #int Nbest=10;
-    #string outname;
-    #ostringstream ss("");
-    #istringstream(opt.value("nchains"))>>Nchain;
-    #istringstream(opt.value("seed"))>>seed;
-    #//if seed<0 set seed from clock
-    #if(seed<0)seed=fmod(time(NULL)/3.0e7,1);
     seed=float(opt.value('seed'))
     if seed<0:seed=random.random();
-    #istringstream(opt.value("precision"))>>output_precision;
-    #istringstream(opt.value("outname"))>>outname;
     outname=opt.value('outname')
     
-    #//report
-    #cout.precision(output_precision);
-    print("\noutname = '"+outname+"'")
-    #cout<<"seed="<<seed<<endl; 
-    #cout<<"Running on "<<omp_get_max_threads()<<" thread"<<(omp_get_max_threads()>1?"s":"")<<"."<<endl;
-    
-    #//Should probably move this to ptmcmc/bayesian
+    #Should probably move this to ptmcmc/bayesian
     ptmcmc.resetRNGseed(seed);
     
-    #globalRNG.reset(ProbabilityDist::getPRNG());//just for safety to keep us from deleting main RNG in debugging.
-          
-    #//Get the space/prior for use here
-    #stateSpace space;
-    #shared_ptr<const sampleable_probability_function> prior;  
-    space=like.getObjectStateSpace();
+    #report
+    print("\noutname = '"+outname+"'")
     print("like.nativeSpace=\n"+space.show())
-    #prior=like->getObjectPrior();
-    #cout<<"Prior is:\n"<<prior->show()<<endl;
-    #valarray<double> scales;prior->getScales(scales);
-    
-    #//Read Params
     Npar=space.size();
     print("Npar=",Npar)
     
-    #//Bayesian sampling [assuming mcmc]:
-    #//Set the proposal distribution 
-    #int Ninit;
-    #proposal_distribution *prop=ptmcmc_sampler::new_proposal_distribution(Npar,Ninit,opt,prior.get(),&scales);
-    #cout<<"Proposal distribution is:\n"<<prop->show()<<endl;
-    #//set up the mcmc sampler (assuming mcmc)
-    #//mcmc.setup(Ninit,*like,*prior,*prop,output_precision);
-    #mcmc.setup(*like,*prior,output_precision);
-    #mcmc.select_proposal();
+    #Bayesian sampler setup
     s0.setup(like)
 
-    #//Testing (will break testsuite)
-    #s=like.draw_from_prior();
-    #print("test state:",s.get_string())
-    #print("logL=",like.evaluate_log(s))
-  
-    
-    #//Prepare for chain output
-    #ss<<outname;
-    #string base=ss.str();
-    
-    #//Loop over Nchains
-    #for(int ic=0;ic<Nchain;ic++){
+    #Do Sampling
     s=s0.clone();
     s.initialize();
     print('initialization done')
     s.run(outname,0);
-    #  //s->analyze(base,ic,Nsigma,Nbest,*like);
-    #del s;
-    #}
     
-    #//Dump summary info
-    #cout<<"best_post "<<like->bestPost()<<", state="<<like->bestState().get_string()<<endl;
-    #//delete data;
-    #//delete signal;
-    #delete like;
-    #}
-
 if __name__ == "__main__":
     import sys
     argv=sys.argv[:]
