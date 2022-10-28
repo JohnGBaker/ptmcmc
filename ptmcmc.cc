@@ -260,6 +260,14 @@ void ptmcmc_sampler::Init(){
 #endif
 };
 
+void ptmcmc_sampler::setRNGseed(double seed){
+#ifdef USE_MPI
+  //copy seed from proc 0 to all 
+  MPI_Bcast(&seed, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+#endif
+  ProbabilityDist::setSeed(seed);
+};
+
 void ptmcmc_sampler::Quit(){
 #ifdef USE_MPI
   MPI_Finalize();

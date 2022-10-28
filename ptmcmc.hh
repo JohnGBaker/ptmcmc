@@ -90,6 +90,7 @@ private:
 public:
   static void Init();
   static void Init(int &argc, char*argv[]);
+  static void setRNGseed(double seed);
   static void Quit();
   static bool static_reporting();
   bool reporting();

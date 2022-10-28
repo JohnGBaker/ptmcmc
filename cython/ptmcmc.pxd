@@ -28,6 +28,7 @@ cdef extern from "../ptmcmc.hh":
         bool reporting();
 
     void ptmcmc_sampler_Init "ptmcmc_sampler::Init" ()
+    void ptmcmc_sampler_setRNGseed "ptmcmc_sampler::setRNGseed" (double seed)
     void ptmcmc_sampler_Quit "ptmcmc_sampler::Quit" ();
 
 cdef class boundary:

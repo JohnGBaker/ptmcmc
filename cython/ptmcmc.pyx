@@ -31,24 +31,26 @@ from libc.stdio cimport printf
 #    cdef void PyEval_InitThreads()
 #    cdef int PyEval_ThreadsInitialized()nogil
 
-cdef extern from '../ProbabilityDist/ProbabilityDist.h' :
-    cdef cppclass ProbabilityDist:
-        #static Random *getPRNG()
-        @staticmethod
-        void setSeed(double)
+#cdef extern from '../ProbabilityDist/ProbabilityDist.h' :
+#    cdef cppclass ProbabilityDist:
+#        #static Random *getPRNG()
+#        @staticmethod
+#        void setSeed(double)
 
 cpdef resetRNGseed(double seed):
-    ProbabilityDist.setSeed(seed)
+    #ProbabilityDist.setSeed(seed)
+    ptmcmc_sampler_setRNGseed(seed)
 
 cpdef Init():
     ptmcmc_sampler_Init()
-        
+    resetRNGseed(random.random())
+    
 cpdef Quit():
     ptmcmc_sampler_Quit()
         
 #Some initialization
 random.seed()
-resetRNGseed(random.random())
+
 
 #General purpose
 #cdef np.ndarray[np.npy_double, ndim=1, mode='c'] get_vector(vector[double] vals):
