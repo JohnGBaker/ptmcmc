@@ -3,11 +3,11 @@ from Cython.Build import cythonize
 import os
 import numpy
 
-locale='discover'
+locale=None
 
 #defaults
 compiler=None
-usempi=False
+usempi=True
 
 if locale=="laptop":
     #compiler="g++-mp-8"
@@ -16,12 +16,17 @@ if locale=="laptop":
 elif locale=="discover":
     compiler="mpicxx"
     usempi=True
+elif locale is None:
+    compiler=os.environ.get("CXX","")
+    if "mpic" in compiler: usempi=True
+    print("Generic locale: compiler:",compiler,"usempi:",usempi)
 
-if compiler is not None:
+if locale is not None:
     os.environ["CC"] = compiler
     os.environ["CXX"] = compiler
     os.environ['LD'] = compiler
-    os.environ["CXXFLAGS"] = "-mmacosx-version-min=10.14"
+    
+    #os.environ["CXXFLAGS"] = "-mmacosx-version-min=10.14"
 
 comp_args=["-fopenmp","--std=c++11"]
 if usempi:comp_args.append("-DUSE_MPI")

@@ -18,8 +18,10 @@ if locale=="laptop":
 elif locale=="discover":
     compiler="mpicxx"
     usempi=True
-else:
-    locale=None
+elif locale is None:
+    compiler=os.environ.get("CXX","")
+    if "mpic" in compiler: usempi=True
+    print("Generic locale: compiler:",compiler,"usempi:",usempi)
     
 if locale is not None:
     os.environ["CC"] = compiler

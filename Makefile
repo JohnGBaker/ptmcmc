@@ -2,11 +2,12 @@
 MCMC_OFILES = states.o chain.o probability_function.o proposal_distribution.o  ptmcmc.o
 EIGEN=$(CURDIR)/eigen-eigen-323c052e1731/Eigen #version 3.3.7
 
-ifeq ($(CFLAGS),)
-	include Makefile.ac
-else
-	INCDIR = ${INCLUDE}
-endif
+include Makefile.ac
+#ifeq ($(CFLAGS),)
+#	include Makefile.ac
+#else
+#	INCDIR = ${INCLUDE}
+#endif
 INCDIR ?= ${CURDIR}/include
 LIB ?= ${CURDIR}/lib
 
@@ -89,7 +90,7 @@ poly_example: poly_example.cc ${LIB}/libprobdist.a ${LIB}/libptmcmc.a
 cython-install: export CXXFLAGS := $(CFLAGS)
 cython-install: export CXX := $(CXX)
 cython-install: ${LIB}/libprobdist.a ${LIB}/libptmcmc.a DUMMY
-	python3 cython/setupV2.py install --user
+	CC="$(CXX)" python3 cython/setupV2.py install --user
 
 .SUFFIXES: .c .cc .o
 
