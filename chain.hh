@@ -259,7 +259,8 @@ class parallel_tempering_chains: public chain{
   int myproc,nproc,interproc_stride;
   vector<int> mychains,interproc_unpack_index;
   vector<bool> is_my_chain;
-  
+  state current_state;
+
  public:
   virtual ~parallel_tempering_chains(){  };//assure correct deletion of any child
   parallel_tempering_chains(int Ntemps,double Tmax,double swap_rate=0.01,int add_every_N=1,bool do_evid=false, bool verbose_evid=true,double dpriormin=-30);
@@ -275,7 +276,7 @@ class parallel_tempering_chains: public chain{
   //MPI otherwise (for getStep?) it might make senst to track some info independently of the subchains
   MH_chain & c0(){return chains[0];};
   int getStep()override{return c0().getStep();};
-  state getState(int elem=-1,bool raw_indexing=false)override{return c0().getState(elem,raw_indexing);};
+  state getState(int elem=-1,bool raw_indexing=false)override;
   double getLogPost(int elem=-1,bool raw_indexing=false)override{return c0().getLogPost(elem,raw_indexing);};
   double getLogLike(int elem=-1,bool raw_indexing=false)override{return c0().getLogLike(elem,raw_indexing);};
   //double getLogPrior(int elem=-1,bool raw_indexing=false)override{return c0().getLogPrior(elem,raw_indexing);};

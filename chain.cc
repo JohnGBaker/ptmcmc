@@ -1571,6 +1571,10 @@ void parallel_tempering_chains::step(){
   MAPstate=c0().getMAPstate();
   //cout<<status()<<endl;
   
+  //New 2022: For consistent getState func, with MPI, we (inefficiently) regather all state info [reusing a nice tested function] and extract the state from global chain[0]
+  states=gather_states();
+  current_state=states[0];
+  
   //diagnostics and steering:
   icount++;
 
@@ -1759,6 +1763,16 @@ void parallel_tempering_chains::step(){
   }
 
 };
+
+
+state parallel_tempering_chains::getState(int elem,bool raw_indexing){
+  if(use_mpi){
+    if(elem==-1)return current_state;
+    else if(myproc==0)cout<<"parallel_tempering_chains::getState: State history not properly supported with MPI. Result will be from the MPI process's first chain."<<endl;
+  }  
+  return c0().getState(elem,raw_indexing);
+};
+
 
 
 ///A scheme for evolving the temperatures to encourage mixing:
