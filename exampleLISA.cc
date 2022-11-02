@@ -203,7 +203,6 @@ void show_test(const state s){
 //uses 0 random vars
 state LISA_plane_reflection_symmetry(void *object, const state &s, const vector<double> &randoms){
   state result=s;
-  int nrot=1;if(randoms[0]<0)nrot=-1;
   int iinc=2,ibeta=4,ipsi=5;
   double beta=s.get_param(ibeta);
   double psi=s.get_param(ipsi);
@@ -696,6 +695,7 @@ shared_ptr<Random> globalRNG;//used for some debugging...
 //***************************************************************************************8
 //main test program
 int main(int argc, char*argv[]){
+
   ptmcmc_sampler::Init(argc,argv);
   Options opt(true);
   //Create the sampler
@@ -826,5 +826,6 @@ int main(int argc, char*argv[]){
   //delete data;
   //delete signal;
   delete like;
+  ptmcmc_sampler::Quit();
 }
 
