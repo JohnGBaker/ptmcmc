@@ -377,9 +377,11 @@ void user_gaussian_prop::reset_dist(const vector<double> &covarvec){
   bool neg=false;
   for(int i=0;i<ndim;i++){
     if(evalues[i]<0){
-      cout<<"user_gaussian_prop["+label+"]: Warning. Negative covariance eigenvalue["<<i<<"]="<<evalues[i]<<" set to zero."<<endl;
-      if(ch)cout<<"chain_id="<<ch->get_id()<<endl;
-      cout<<"evec="<<diagTransform.col(i).transpose()<<endl;
+      if (isverbose){
+	cout<<"user_gaussian_prop["+label+"]: Warning. Negative covariance eigenvalue["<<i<<"]="<<evalues[i]<<" set to zero."<<endl;
+	if(ch)cout<<"chain_id="<<ch->get_id()<<endl;
+	cout<<"evec="<<diagTransform.col(i).transpose()<<endl;
+      }
       neg=true;
       evalues[i]=0;
     }
@@ -563,8 +565,8 @@ state differential_evolution::draw_snooker(state &s, chain *caller){
     //cout<<"|s-z|^2="<<smznorm2<<endl;
     isafe++;
     if(isafe>1000){
-      cout<<"differential_evolution::draw_snooker: We seem to be stuck in an infinite loop.  Bailing out!"<<endl;
-      exit(1);
+      cout<<"differential_evolution::draw_snooker: We seem to be stuck in an infinite loop.  Bailing out by reverting to draw_standard!"<<endl;
+      return draw_standard(s,caller);
     }
   }
   //#pragma omp critical(gleamout)
