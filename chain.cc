@@ -1322,6 +1322,7 @@ void parallel_tempering_chains::initialize( probability_function *log_likelihood
   //MPI For thread-safe set-up, to avoid some issues are with the global indexing of chains, and the initialization of chain RNGs, we instantiate all chains, though most will not be used.
   for(int i=0;i<Ntemps;i++){
     MH_chain c(log_likelihood, log_prior,dpriormin,add_every_N);
+    c.reporting=this->reporting;
     chains.push_back(c);
   }
   //#pragma omp parallel for schedule (guided, 1)  ///try big chunks first, then specialize
@@ -2106,6 +2107,16 @@ string parallel_tempering_chains::status(){
   if(do_evid)s<<"Best evidence stderr="<<best_evidence_stderr<<endl; 
   return s.str();
 };
+
+//We override the base-class version only to ensure that, with MPI, we are accesssing the t=1 chain.
+pair<double,int> parallel_tempering_chains::report_effective_samples(vector< bool (*)(const state &,double & value) > & features,int width,int every, double esslimit){
+  auto T1chain=c0();
+  if(T1chain.invtemp>1){
+    //Fail quietly if we don't have the T=1 chain
+    return make_pair(0,-1);
+  }
+  return T1chain.report_effective_samples(features, width, every, esslimit);
+};
  
 string parallel_tempering_chains::report_prop(int style){//Not yet MPI aware
   ostringstream result("");
@@ -2116,7 +2127,7 @@ string parallel_tempering_chains::report_prop(int style){//Not yet MPI aware
   }
   return result.str();
 };
-
+    
 
   
     
